@@ -73,6 +73,7 @@ func (h *httpHandler) sceneRatingHandler(w http.ResponseWriter, r *http.Request)
 		h.redirectBack(w, r, "rating update failed")
 		return
 	}
+	h.refreshSceneCache(r, id)
 	h.redirectBack(w, r, "")
 }
 
@@ -107,6 +108,7 @@ func (h *httpHandler) sceneFavoriteHandler(w http.ResponseWriter, r *http.Reques
 		h.redirectBack(w, r, "favorite toggle failed")
 		return
 	}
+	h.refreshSceneCache(r, id)
 	h.redirectBack(w, r, "")
 }
 
@@ -149,6 +151,7 @@ func (h *httpHandler) sceneTagAddHandler(w http.ResponseWriter, r *http.Request)
 		h.redirectBack(w, r, "tag add failed")
 		return
 	}
+	h.refreshSceneCache(r, id)
 	h.redirectBack(w, r, "")
 }
 
@@ -186,6 +189,7 @@ func (h *httpHandler) sceneTagRemoveHandler(w http.ResponseWriter, r *http.Reque
 		h.redirectBack(w, r, "tag remove failed")
 		return
 	}
+	h.refreshSceneCache(r, id)
 	h.redirectBack(w, r, "")
 }
 
@@ -196,6 +200,7 @@ func (h *httpHandler) sceneOIncrementHandler(w http.ResponseWriter, r *http.Requ
 		h.redirectBack(w, r, "O increment failed")
 		return
 	}
+	h.refreshSceneCache(r, id)
 	h.redirectBack(w, r, "")
 }
 
@@ -206,6 +211,7 @@ func (h *httpHandler) sceneODecrementHandler(w http.ResponseWriter, r *http.Requ
 		h.redirectBack(w, r, "O decrement failed")
 		return
 	}
+	h.refreshSceneCache(r, id)
 	h.redirectBack(w, r, "")
 }
 
@@ -222,5 +228,16 @@ func (h *httpHandler) sceneOrganizedHandler(w http.ResponseWriter, r *http.Reque
 		h.redirectBack(w, r, "organized toggle failed")
 		return
 	}
+	h.refreshSceneCache(r, id)
 	h.redirectBack(w, r, "")
+}
+
+// refreshSceneCache forceFetches the scene to refresh the in-memory cache.
+// Called after a successful mutation so that the next read (typically the
+// post-redirect detail page) reflects the new state. Errors are logged but
+// not surfaced — the mutation itself already succeeded.
+func (h *httpHandler) refreshSceneCache(r *http.Request, id string) {
+	if _, err := h.libraryService.GetScene(r.Context(), id, true); err != nil {
+		log.Ctx(r.Context()).Warn().Err(err).Str("id", id).Msg("browse: refresh scene cache after mutation")
+	}
 }
