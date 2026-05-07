@@ -307,6 +307,49 @@ func (v *FindAllSceneIdsResponse) GetFindScenes() *FindAllSceneIdsFindScenesFind
 	return v.FindScenes
 }
 
+// FindAllStudiosWithCountFindStudiosFindStudiosResultType includes the requested fields of the GraphQL type FindStudiosResultType.
+type FindAllStudiosWithCountFindStudiosFindStudiosResultType struct {
+	Studios []*FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio `json:"studios"`
+}
+
+// GetStudios returns FindAllStudiosWithCountFindStudiosFindStudiosResultType.Studios, and is useful for accessing the field via an interface.
+func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultType) GetStudios() []*FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio {
+	return v.Studios
+}
+
+// FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio includes the requested fields of the GraphQL type Studio.
+type FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio struct {
+	Id          string `json:"id"`
+	Name        string `json:"name"`
+	Scene_count int    `json:"scene_count"`
+}
+
+// GetId returns FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio.Id, and is useful for accessing the field via an interface.
+func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio) GetId() string {
+	return v.Id
+}
+
+// GetName returns FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio.Name, and is useful for accessing the field via an interface.
+func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio) GetName() string {
+	return v.Name
+}
+
+// GetScene_count returns FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio.Scene_count, and is useful for accessing the field via an interface.
+func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio) GetScene_count() int {
+	return v.Scene_count
+}
+
+// FindAllStudiosWithCountResponse is returned by FindAllStudiosWithCount on success.
+type FindAllStudiosWithCountResponse struct {
+	// A function which queries Studio objects
+	FindStudios *FindAllStudiosWithCountFindStudiosFindStudiosResultType `json:"findStudios"`
+}
+
+// GetFindStudios returns FindAllStudiosWithCountResponse.FindStudios, and is useful for accessing the field via an interface.
+func (v *FindAllStudiosWithCountResponse) GetFindStudios() *FindAllStudiosWithCountFindStudiosFindStudiosResultType {
+	return v.FindStudios
+}
+
 // FindAllTagsFindTagsFindTagsResultType includes the requested fields of the GraphQL type FindTagsResultType.
 type FindAllTagsFindTagsFindTagsResultType struct {
 	Tags []*FindAllTagsFindTagsFindTagsResultTypeTagsTag `json:"tags"`
@@ -723,8 +766,12 @@ func (v *FindSavedSceneFiltersResponse) GetFindSavedFilters() []*FindSavedSceneF
 
 // FindSceneIdsByFilterFindScenesFindScenesResultType includes the requested fields of the GraphQL type FindScenesResultType.
 type FindSceneIdsByFilterFindScenesFindScenesResultType struct {
+	Count  int                                                              `json:"count"`
 	Scenes []*FindSceneIdsByFilterFindScenesFindScenesResultTypeScenesScene `json:"scenes"`
 }
+
+// GetCount returns FindSceneIdsByFilterFindScenesFindScenesResultType.Count, and is useful for accessing the field via an interface.
+func (v *FindSceneIdsByFilterFindScenesFindScenesResultType) GetCount() int { return v.Count }
 
 // GetScenes returns FindSceneIdsByFilterFindScenesFindScenesResultType.Scenes, and is useful for accessing the field via an interface.
 func (v *FindSceneIdsByFilterFindScenesFindScenesResultType) GetScenes() []*FindSceneIdsByFilterFindScenesFindScenesResultTypeScenesScene {
@@ -4422,6 +4469,40 @@ func FindAllSceneIds(
 	return data_, err_
 }
 
+// The query executed by FindAllStudiosWithCount.
+const FindAllStudiosWithCount_Operation = `
+query FindAllStudiosWithCount {
+	findStudios(filter: {sort:"scenes_count",direction:DESC,per_page:-1}) {
+		studios {
+			id
+			name
+			scene_count
+		}
+	}
+}
+`
+
+func FindAllStudiosWithCount(
+	ctx_ context.Context,
+	client_ graphql.Client,
+) (data_ *FindAllStudiosWithCountResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindAllStudiosWithCount",
+		Query:  FindAllStudiosWithCount_Operation,
+	}
+
+	data_ = &FindAllStudiosWithCountResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The query executed by FindAllTags.
 const FindAllTags_Operation = `
 query FindAllTags {
@@ -4689,6 +4770,7 @@ func FindSavedSceneFilters(
 const FindSceneIdsByFilter_Operation = `
 query FindSceneIdsByFilter ($scene_filter: SceneFilterType, $filterOpts: FindFilterType) {
 	findScenes(scene_filter: $scene_filter, filter: $filterOpts) {
+		count
 		scenes {
 			id
 		}
