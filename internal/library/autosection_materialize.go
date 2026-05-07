@@ -60,11 +60,7 @@ func materializePerformerSection(ctx context.Context, client graphql.Client, rec
 		ids[i] = s.Id
 	}
 
-	name := rec.Name
-	if name == "" {
-		name = "Performer " + performerID
-	}
-	return Section{Name: name, Ids: ids}, nil
+	return Section{Name: resolveName(rec.Name, "Performer "+performerID), Ids: ids}, nil
 }
 
 func materializeTagSection(ctx context.Context, client graphql.Client, rec config.Filter, tagID string) (Section, error) {
@@ -93,11 +89,7 @@ func materializeTagSection(ctx context.Context, client graphql.Client, rec confi
 		ids[i] = s.Id
 	}
 
-	name := rec.Name
-	if name == "" {
-		name = "Tag " + tagID
-	}
-	return Section{Name: name, Ids: ids}, nil
+	return Section{Name: resolveName(rec.Name, "Tag "+tagID), Ids: ids}, nil
 }
 
 func materializeAggregateSection(ctx context.Context, client graphql.Client, rec config.Filter, slug string) (Section, error) {
@@ -124,6 +116,8 @@ func materializeAggregateSection(ctx context.Context, client graphql.Client, rec
 		sort = "rating"
 		threshold := cfg.HighlyRatedThreshold
 		hundred := 100
+		// BETWEEN [threshold, 100] is used because the genqlient enum has no
+		// GREATER_THAN_OR_EQUAL; both ends are inclusive, matching the spec.
 		sceneFilter.Rating100 = &gql.IntCriterionInput{
 			Modifier: gql.CriterionModifierBetween,
 			Value:    threshold,

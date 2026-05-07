@@ -18,13 +18,12 @@ type Section struct {
 }
 
 // filterEntry is the typed result of getFilters: each entry is either a
-// saved Stash filter (use SavedFilter) or an auto-section record (use
-// AutoID + DefaultName). Disabled and Name come from UserConfig.Filter.
+// saved Stash filter (SavedFilter set) or an auto-section record (AutoID set).
+// Name and Disabled come from the corresponding UserConfig.Filter override.
 type filterEntry struct {
 	SavedFilter *gql.SavedFilterParts
 	AutoID      string // empty if SavedFilter is set
-	DefaultName string // resolved entity name, used when Name is empty
-	Name        string // user override
+	Name        string // user override; materializer resolves a fallback if empty
 	Disabled    bool
 }
 
