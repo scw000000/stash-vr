@@ -504,6 +504,49 @@ func (v *FindPerformerByNameResponse) GetFindPerformers() *FindPerformerByNameFi
 	return v.FindPerformers
 }
 
+// FindPerformersWithSceneCountFindPerformersFindPerformersResultType includes the requested fields of the GraphQL type FindPerformersResultType.
+type FindPerformersWithSceneCountFindPerformersFindPerformersResultType struct {
+	Performers []*FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer `json:"performers"`
+}
+
+// GetPerformers returns FindPerformersWithSceneCountFindPerformersFindPerformersResultType.Performers, and is useful for accessing the field via an interface.
+func (v *FindPerformersWithSceneCountFindPerformersFindPerformersResultType) GetPerformers() []*FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer {
+	return v.Performers
+}
+
+// FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer includes the requested fields of the GraphQL type Performer.
+type FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer struct {
+	Id          string `json:"id"`
+	Name        string `json:"name"`
+	Scene_count int    `json:"scene_count"`
+}
+
+// GetId returns FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer.Id, and is useful for accessing the field via an interface.
+func (v *FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer) GetId() string {
+	return v.Id
+}
+
+// GetName returns FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer.Name, and is useful for accessing the field via an interface.
+func (v *FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer) GetName() string {
+	return v.Name
+}
+
+// GetScene_count returns FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer.Scene_count, and is useful for accessing the field via an interface.
+func (v *FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer) GetScene_count() int {
+	return v.Scene_count
+}
+
+// FindPerformersWithSceneCountResponse is returned by FindPerformersWithSceneCount on success.
+type FindPerformersWithSceneCountResponse struct {
+	// A function which queries Performer objects
+	FindPerformers *FindPerformersWithSceneCountFindPerformersFindPerformersResultType `json:"findPerformers"`
+}
+
+// GetFindPerformers returns FindPerformersWithSceneCountResponse.FindPerformers, and is useful for accessing the field via an interface.
+func (v *FindPerformersWithSceneCountResponse) GetFindPerformers() *FindPerformersWithSceneCountFindPerformersFindPerformersResultType {
+	return v.FindPerformers
+}
+
 // FindSampleSceneCoverFindScenesFindScenesResultType includes the requested fields of the GraphQL type FindScenesResultType.
 type FindSampleSceneCoverFindScenesFindScenesResultType struct {
 	Scenes []*FindSampleSceneCoverFindScenesFindScenesResultTypeScenesScene `json:"scenes"`
@@ -4022,6 +4065,18 @@ type __FindPerformerByNameInput struct {
 // GetName returns __FindPerformerByNameInput.Name, and is useful for accessing the field via an interface.
 func (v *__FindPerformerByNameInput) GetName() string { return v.Name }
 
+// __FindPerformersWithSceneCountInput is used internally by genqlient
+type __FindPerformersWithSceneCountInput struct {
+	Min_scene_count int `json:"min_scene_count"`
+	Per_page        int `json:"per_page"`
+}
+
+// GetMin_scene_count returns __FindPerformersWithSceneCountInput.Min_scene_count, and is useful for accessing the field via an interface.
+func (v *__FindPerformersWithSceneCountInput) GetMin_scene_count() int { return v.Min_scene_count }
+
+// GetPer_page returns __FindPerformersWithSceneCountInput.Per_page, and is useful for accessing the field via an interface.
+func (v *__FindPerformersWithSceneCountInput) GetPer_page() int { return v.Per_page }
+
 // __FindSceneIdsByFilterInput is used internally by genqlient
 type __FindSceneIdsByFilterInput struct {
 	Scene_filter *SceneFilterType `json:"scene_filter,omitempty"`
@@ -4383,6 +4438,46 @@ func FindPerformerByName(
 	}
 
 	data_ = &FindPerformerByNameResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by FindPerformersWithSceneCount.
+const FindPerformersWithSceneCount_Operation = `
+query FindPerformersWithSceneCount ($min_scene_count: Int!, $per_page: Int!) {
+	findPerformers(performer_filter: {scene_count:{value:$min_scene_count,modifier:GREATER_THAN}}, filter: {sort:"scenes_count",direction:DESC,per_page:$per_page}) {
+		performers {
+			id
+			name
+			scene_count
+		}
+	}
+}
+`
+
+func FindPerformersWithSceneCount(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	min_scene_count int,
+	per_page int,
+) (data_ *FindPerformersWithSceneCountResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindPerformersWithSceneCount",
+		Query:  FindPerformersWithSceneCount_Operation,
+		Variables: &__FindPerformersWithSceneCountInput{
+			Min_scene_count: min_scene_count,
+			Per_page:        per_page,
+		},
+	}
+
+	data_ = &FindPerformersWithSceneCountResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(

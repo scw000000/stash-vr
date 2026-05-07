@@ -113,6 +113,19 @@ query FindSampleSceneCover{
     }
 }
 
+query FindPerformersWithSceneCount(
+    $min_scene_count: Int!, $per_page: Int!){
+    findPerformers(
+        performer_filter: {scene_count: {value: $min_scene_count, modifier: GREATER_THAN}} # GREATER_THAN_OR_EQUAL not in schema; caller passes min_scene_count - 1
+        filter: {sort: "scenes_count", direction: DESC, per_page: $per_page}
+    ){
+        performers {
+            id, name
+            scene_count
+        }
+    }
+}
+
 fragment SavedFilterParts on SavedFilter{
     id, name, mode, find_filter {sort, direction}, object_filter
 }
