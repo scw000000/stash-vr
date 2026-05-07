@@ -208,3 +208,63 @@ func computeExpectedAutoSections(ctx context.Context, client graphql.Client) []e
 	out = append(out, tags...)
 	return out
 }
+
+// reconcileAutoSections merges the current expected auto-section set into
+// UserConfig.Filters with hard-prune semantics:
+//   - Each expected ID already in UserConfig.Filters is preserved verbatim
+//     (so user rename / disabled / order is kept).
+//   - Each expected ID NOT in UserConfig.Filters is appended at the end of
+//     its kind group (which on a fresh install is just the end of the list,
+//     since no auto records exist yet).
+//   - Each existing auto:* record whose ID is NOT in the expected set is
+//     hard-pruned.
+//
+// Saved-filter records (numeric IDs) are never touched.
+// Returns true if UserConfig was mutated (caller may persist).
+func reconcileAutoSections(ctx context.Context, client graphql.Client) bool {
+	expected := computeExpectedAutoSections(ctx, client)
+	expectedByID := make(map[string]struct{}, len(expected))
+	for _, e := range expected {
+		expectedByID[e.ID] = struct{}{}
+	}
+
+	cur := config.User(ctx)
+	out := make([]config.Filter, 0, len(cur.Filters)+len(expected))
+	keptAuto := make(map[string]struct{})
+	mutated := false
+
+	// Pass 1: keep saved-filter records and still-expected auto records as-is.
+	for _, f := range cur.Filters {
+		if !isAutoID(f.ID) {
+			out = append(out, f)
+			continue
+		}
+		if _, ok := expectedByID[f.ID]; ok {
+			out = append(out, f)
+			keptAuto[f.ID] = struct{}{}
+		} else {
+			// Hard-prune: not in expected set anymore.
+			mutated = true
+			log.Ctx(ctx).Debug().Str("id", f.ID).Msg("auto-sections: pruning record")
+		}
+	}
+
+	// Pass 2: append newly-expected auto records that weren't already present,
+	// preserving the kind-group order from computeExpectedAutoSections.
+	for _, e := range expected {
+		if _, ok := keptAuto[e.ID]; ok {
+			continue
+		}
+		out = append(out, config.Filter{ID: e.ID})
+		mutated = true
+		log.Ctx(ctx).Debug().Str("id", e.ID).Str("name", e.DefaultName).Msg("auto-sections: adding record")
+	}
+
+	if !mutated {
+		return false
+	}
+
+	cur.Filters = out
+	config.Save(ctx, cur)
+	return true
+}
