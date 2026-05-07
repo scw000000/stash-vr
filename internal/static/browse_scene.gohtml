@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} — stash-vr browse</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee; }
+.wrap { max-width: 800px; margin: 0 auto; padding: 16px; }
+.back { color: #9cf; text-decoration: none; display: inline-block; margin-bottom: 12px; }
+.errbanner { background: #5a1a1a; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; }
+.thumb { width: 100%; max-height: 480px; object-fit: contain; background: #000; border-radius: 6px; margin-bottom: 16px; }
+h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
+.meta { color: #aaa; margin-bottom: 24px; }
+.section { margin-bottom: 20px; }
+.section h2 { font-size: 0.85rem; text-transform: uppercase; color: #888; margin: 0 0 8px 0; letter-spacing: 0.05em; }
+
+.stars { display: inline-flex; gap: 4px; }
+.stars button { background: transparent; border: none; font-size: 1.5rem; color: #555; cursor: pointer; padding: 0 2px; }
+.stars button.on { color: #f7b500; }
+.stars button:hover { color: #f7b500; }
+
+.fav button { background: transparent; border: 1px solid #555; color: #ccc; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+.fav button.on { background: #c11; border-color: #c11; color: #fff; }
+
+.tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { background: #2a2a2a; padding: 4px 4px 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
+.chip button { background: transparent; border: none; color: #aaa; cursor: pointer; padding: 2px 6px; }
+.chip button:hover { color: #f55; }
+.addtag { display: inline-flex; gap: 4px; }
+.addtag input { background: #1a1a1a; border: 1px solid #333; color: #eee; padding: 4px 8px; border-radius: 4px; }
+.addtag button { background: #2c5282; border: none; color: #fff; padding: 4px 12px; border-radius: 4px; cursor: pointer; }
+
+.ocount { display: inline-flex; align-items: center; gap: 8px; }
+.ocount button { background: #2a2a2a; border: none; color: #eee; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1.1rem; }
+.ocount span { font-size: 1.1rem; min-width: 24px; text-align: center; }
+
+.org button { background: transparent; border: 1px solid #555; color: #ccc; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+.org button.on { background: #2c5282; border-color: #2c5282; color: #fff; }
+
+.play { display: block; text-align: center; background: #2c5282; color: #fff; padding: 14px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 24px; }
+.play:hover { background: #3776c2; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="back" href="{{.BackURL}}">← Back</a>
+{{if .ErrMessage}}<div class="errbanner">{{.ErrMessage}}</div>{{end}}
+{{if .ThumbnailURL}}<img class="thumb" src="{{.ThumbnailURL}}" alt="">{{end}}
+<h1>{{.Title}}</h1>
+<p class="meta">{{if .Performers}}{{.Performers}}{{end}}{{if and .Performers .Studio}} · {{end}}{{.Studio}}{{if .Date}} · {{.Date}}{{end}}{{if .Duration}} · {{.Duration}}{{end}}</p>
+
+<div class="section">
+<h2>Rating</h2>
+<form method="post" action="/browse/scene/{{.ID}}/rating" class="stars" style="display:inline-flex">
+{{range $i, $_ := .StarSlice}}
+<button name="value" value="{{add $i 1}}"{{if le (add $i 1) $.Rating1to5}} class="on"{{end}}>★</button>
+{{end}}
+</form>
+</div>
+
+<div class="section">
+<h2>Favorite</h2>
+<form method="post" action="/browse/scene/{{.ID}}/favorite" class="fav" style="display:inline-flex">
+<button class="{{if .IsFavorite}}on{{end}}">♥ {{if .IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
+</form>
+</div>
+
+<div class="section">
+<h2>Tags</h2>
+<div class="tags">
+{{range .Tags}}
+<span class="chip">{{.}}<form method="post" action="/browse/scene/{{$.ID}}/tags/remove" style="display:inline"><button name="tag" value="{{.}}">✕</button></form></span>
+{{end}}
+<form method="post" action="/browse/scene/{{.ID}}/tags/add" class="addtag">
+<input list="all-tags" name="tag" placeholder="Add tag…" autocomplete="off">
+<datalist id="all-tags">
+{{range .AllTagNames}}<option value="{{.}}">{{end}}
+</datalist>
+<button>Add</button>
+</form>
+</div>
+</div>
+
+<div class="section">
+<h2>O-Counter</h2>
+<form method="post" action="/browse/scene/{{.ID}}/o/decrement" style="display:inline-flex" class="ocount">
+<button>−</button>
+</form>
+<span style="display:inline-flex;align-items:center;padding:0 12px">{{.OCounter}}</span>
+<form method="post" action="/browse/scene/{{.ID}}/o/increment" style="display:inline-flex" class="ocount">
+<button>+</button>
+</form>
+</div>
+
+<div class="section">
+<h2>Organized</h2>
+<form method="post" action="/browse/scene/{{.ID}}/organized" class="org" style="display:inline-flex">
+<button class="{{if .Organized}}on{{end}}">{{if .Organized}}✓ Organized{{else}}Mark organized{{end}}</button>
+</form>
+</div>
+
+<a class="play" href="{{.DeoVRPlayURL}}">▶  Play in DeoVR</a>
+</div>
+</body>
+</html>
