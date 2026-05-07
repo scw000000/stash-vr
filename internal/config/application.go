@@ -8,18 +8,18 @@ import (
 )
 
 const (
-	envKeyListenAddress      = "LISTEN_ADDRESS"
-	envKeyStashGraphQLUrl    = "STASH_GRAPHQL_URL"
-	envKeyStashApiKey        = "STASH_API_KEY"
-	envKeyFavoriteTag        = "FAVORITE_TAG"
-	envKeyLogLevel           = "LOG_LEVEL"
-	envKeyDisableLogColor    = "DISABLE_LOG_COLOR"
-	envKeyDisableRedact      = "DISABLE_REDACT"
-	envKeyForceHTTPS         = "FORCE_HTTPS"
-	envKeyHeatmapHeightPx    = "HEATMAP_HEIGHT_PX"
-	envKeyExcludeSortName    = "EXCLUDE_SORT_NAME"
-	envKeyUserConfigPath     = "CONFIG_PATH"
-	envKeyGenerateSummaryIds = "GENERATE_SUMMARY_IDS"
+	envKeyListenAddress          = "LISTEN_ADDRESS"
+	envKeyStashGraphQLUrl        = "STASH_GRAPHQL_URL"
+	envKeyStashApiKey            = "STASH_API_KEY"
+	envKeyFavoriteTag            = "FAVORITE_TAG"
+	envKeyLogLevel               = "LOG_LEVEL"
+	envKeyDisableLogColor        = "DISABLE_LOG_COLOR"
+	envKeyDisableRedact          = "DISABLE_REDACT"
+	envKeyForceHTTPS             = "FORCE_HTTPS"
+	envKeyHeatmapHeightPx        = "HEATMAP_HEIGHT_PX"
+	envKeyExcludeSortName        = "EXCLUDE_SORT_NAME"
+	envKeyUserConfigPath         = "CONFIG_PATH"
+	envKeyGenerateSummaryIds     = "GENERATE_SUMMARY_IDS"
 	envKeyAutoSectionsPerformers = "AUTO_SECTIONS_PERFORMERS"
 	envKeyMinScenesPerPerformer  = "MIN_SCENES_PER_PERFORMER"
 	envKeyMaxPerformerSections   = "MAX_PERFORMER_SECTIONS"
@@ -35,18 +35,18 @@ const (
 )
 
 type ApplicationConfig struct {
-	ListenAddress      string
-	StashGraphQLUrl    string
-	StashApiKey        string
-	FavoriteTag        string
-	LogLevel           string
-	DisableLogColor    bool
-	IsRedactDisabled   bool
-	ForceHTTPS         bool
-	HeatmapHeightPx    int
-	ExcludeSortName    string
-	ConfigPath         string
-	GenerateSummaryIds bool
+	ListenAddress          string
+	StashGraphQLUrl        string
+	StashApiKey            string
+	FavoriteTag            string
+	LogLevel               string
+	DisableLogColor        bool
+	IsRedactDisabled       bool
+	ForceHTTPS             bool
+	HeatmapHeightPx        int
+	ExcludeSortName        string
+	ConfigPath             string
+	GenerateSummaryIds     bool
 	AutoSectionsPerformers bool
 	MinScenesPerPerformer  int
 	MaxPerformerSections   int
