@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strconv"
 
+	"stash-vr/internal/config"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -72,10 +74,41 @@ func (h *httpHandler) sceneRatingHandler(w http.ResponseWriter, r *http.Request)
 	h.redirectBack(w, r, "")
 }
 
-// Stubs — replaced in Tasks 9-12.
 func (h *httpHandler) sceneFavoriteHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not yet implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+
+	favTag := config.Application().FavoriteTag
+	if favTag == "" {
+		h.redirectBack(w, r, "FAVORITE_TAG not configured")
+		return
+	}
+
+	vd, err := h.libraryService.GetScene(r.Context(), id, true)
+	if err != nil || vd == nil || vd.SceneParts == nil {
+		h.redirectBack(w, r, "scene not found")
+		return
+	}
+
+	currentlyFav := false
+	for _, t := range vd.SceneParts.Tags {
+		if t == nil {
+			continue
+		}
+		if t.TagParts.Name == favTag {
+			currentlyFav = true
+			break
+		}
+	}
+
+	if err := h.libraryService.UpdateFavorite(r.Context(), id, !currentlyFav); err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: toggle favorite")
+		h.redirectBack(w, r, "favorite toggle failed")
+		return
+	}
+	h.redirectBack(w, r, "")
 }
+
+// Stubs — replaced in Tasks 10-12.
 func (h *httpHandler) sceneTagAddHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "not yet implemented", http.StatusNotImplemented)
 }
