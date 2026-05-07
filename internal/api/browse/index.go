@@ -11,6 +11,7 @@ import (
 	apiinternal "stash-vr/internal/api/internal"
 	"stash-vr/internal/stash/gql"
 	"stash-vr/internal/static"
+	"stash-vr/internal/util"
 )
 
 var browseTmpl = template.Must(template.ParseFS(static.Fs, "browse.gohtml"))
@@ -96,21 +97,23 @@ func (h *httpHandler) entityHandler(kind string) http.HandlerFunc {
 			sceneFilter = &gql.SceneFilterType{
 				Performers: &gql.MultiCriterionInput{
 					Value:    []string{id},
-					Modifier: gql.CriterionModifierIncludesAll,
+					Modifier: gql.CriterionModifierIncludes,
 				},
 			}
 		case "studio":
 			sceneFilter = &gql.SceneFilterType{
 				Studios: &gql.HierarchicalMultiCriterionInput{
 					Value:    []string{id},
-					Modifier: gql.CriterionModifierIncludesAll,
+					Modifier: gql.CriterionModifierIncludes,
+					Depth:    util.Ptr(-1),
 				},
 			}
 		case "tag":
 			sceneFilter = &gql.SceneFilterType{
 				Tags: &gql.HierarchicalMultiCriterionInput{
 					Value:    []string{id},
-					Modifier: gql.CriterionModifierIncludesAll,
+					Modifier: gql.CriterionModifierIncludes,
+					Depth:    util.Ptr(-1),
 				},
 			}
 		default:
