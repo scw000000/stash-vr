@@ -19,7 +19,8 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .card { background: #1a1a1a; border-radius: 6px; overflow: hidden; transition: transform 0.1s; }
 .card:hover { transform: translateY(-2px); }
-.card a.thumb-link { display: block; position: relative; }
+.card .thumb-wrap { position: relative; }
+.card a.thumb-link { display: block; }
 .card .thumb { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #222; }
 .card .duration { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; }
 .card .quickplay { position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 3px; font-size: 0.9rem; text-decoration: none; color: #eee; }
@@ -58,11 +59,13 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
 <div class="grid">
 {{range .Cards}}
 <div class="card">
+<div class="thumb-wrap">
 <a class="thumb-link" href="{{.DetailURL}}">
 <img class="thumb" src="{{.ThumbnailURL}}" alt="" loading="lazy">
-<a class="quickplay" href="{{.DeoVRPlayURL}}">▶</a>
 <span class="duration">{{.Duration}}</span>
 </a>
+<a class="quickplay" href="{{.DeoVRPlayURL}}">▶</a>
+</div>
 <div class="body">
 <p class="title">{{.Title}}</p>
 <p class="meta">{{if .Performers}}{{.Performers}}{{end}}{{if and .Performers .Studio}} · {{end}}{{.Studio}}</p>
