@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stash-vr browse</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #eee; }
+.layout { display: flex; min-height: 100vh; }
+.main { flex: 1; padding: 16px; min-width: 0; }
+.sidebar { width: 280px; border-left: 1px solid #333; background: #161616; padding: 12px; }
+.header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.header h1 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+.header .subhead { color: #999; font-size: 0.9rem; }
+.header a { color: #9cf; text-decoration: none; }
+.errbanner { background: #5a1a1a; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.card { background: #1a1a1a; border-radius: 6px; overflow: hidden; transition: transform 0.1s; }
+.card:hover { transform: translateY(-2px); }
+.card a.thumb-link { display: block; position: relative; }
+.card .thumb { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #222; }
+.card .duration { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; }
+.card .quickplay { position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 3px; font-size: 0.9rem; text-decoration: none; color: #eee; }
+.card .body { padding: 8px 10px; }
+.card .title { font-size: 0.95rem; line-height: 1.2; margin: 0 0 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .meta { font-size: 0.8rem; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pager { display: flex; justify-content: center; gap: 16px; margin-top: 24px; }
+.pager a, .pager span { padding: 6px 12px; background: #1a1a1a; border-radius: 4px; color: #eee; text-decoration: none; }
+.pager a:hover { background: #2a2a2a; }
+.pager .disabled { opacity: 0.4; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.tabs a { flex: 1; text-align: center; padding: 6px 4px; background: #222; border-radius: 4px; color: #ccc; text-decoration: none; font-size: 0.85rem; }
+.tabs a.active { background: #2c5282; color: #fff; }
+.filterinput { width: 100%; padding: 6px 8px; background: #222; border: 1px solid #333; color: #eee; border-radius: 4px; margin-bottom: 8px; }
+.entitylist { list-style: none; padding: 0; margin: 0; max-height: calc(100vh - 140px); overflow-y: auto; }
+.entitylist li { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; gap: 8px; }
+.entitylist li a { color: #ccc; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entitylist li a:hover { color: #fff; }
+.entitylist li.active { background: #2c5282; border-radius: 3px; }
+.entitylist li.active a { color: #fff; }
+.entitylist li .count { color: #888; font-size: 0.8rem; }
+.empty { color: #777; text-align: center; padding: 32px 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+<div class="main">
+{{if .ErrMessage}}<div class="errbanner">{{.ErrMessage}}</div>{{end}}
+<div class="header">
+{{if .BackURL}}<a href="{{.BackURL}}">← All scenes</a>{{end}}
+<h1>{{.Header}}</h1>
+{{if .SubHead}}<span class="subhead">{{.SubHead}}</span>{{end}}
+</div>
+{{if .Cards}}
+<div class="grid">
+{{range .Cards}}
+<div class="card">
+<a class="thumb-link" href="{{.DetailURL}}">
+<img class="thumb" src="{{.ThumbnailURL}}" alt="" loading="lazy">
+<a class="quickplay" href="{{.DeoVRPlayURL}}">▶</a>
+<span class="duration">{{.Duration}}</span>
+</a>
+<div class="body">
+<p class="title">{{.Title}}</p>
+<p class="meta">{{if .Performers}}{{.Performers}}{{end}}{{if and .Performers .Studio}} · {{end}}{{.Studio}}</p>
+</div>
+</div>
+{{end}}
+</div>
+{{if or .PrevURL .NextURL}}
+<div class="pager">
+{{if .PrevURL}}<a href="{{.PrevURL}}">‹ Prev</a>{{else}}<span class="disabled">‹ Prev</span>{{end}}
+<span>Page {{.PageNum}} / {{.PageMax}}</span>
+{{if .NextURL}}<a href="{{.NextURL}}">Next ›</a>{{else}}<span class="disabled">Next ›</span>{{end}}
+</div>
+{{end}}
+{{else}}
+<div class="empty">No scenes.</div>
+{{end}}
+</div>
+
+<aside class="sidebar">
+<div class="tabs">
+<a href="?tab=perf{{if .Sidebar.ActiveTab}}{{end}}" class="{{if eq .Sidebar.ActiveTab "perf"}}active{{end}}">Performers</a>
+<a href="?tab=studio" class="{{if eq .Sidebar.ActiveTab "studio"}}active{{end}}">Studios</a>
+<a href="?tab=tag" class="{{if eq .Sidebar.ActiveTab "tag"}}active{{end}}">Tags</a>
+</div>
+
+{{if eq .Sidebar.ActiveTab "perf"}}
+<input class="filterinput" placeholder="Filter performers..." oninput="filterList(this, 'perfs')">
+<ul class="entitylist" id="perfs">
+{{range .Sidebar.Performers}}
+<li class="{{if eq $.Sidebar.ActiveID .ID}}active{{end}}"><a href="/browse/perf/{{.ID}}?tab=perf">{{.Name}}</a><span class="count">{{.SceneCount}}</span></li>
+{{else}}
+<li class="empty">No performers yet.</li>
+{{end}}
+</ul>
+{{else if eq .Sidebar.ActiveTab "studio"}}
+<input class="filterinput" placeholder="Filter studios..." oninput="filterList(this, 'studios')">
+<ul class="entitylist" id="studios">
+{{range .Sidebar.Studios}}
+<li class="{{if eq $.Sidebar.ActiveID .ID}}active{{end}}"><a href="/browse/studio/{{.ID}}?tab=studio">{{.Name}}</a><span class="count">{{.SceneCount}}</span></li>
+{{else}}
+<li class="empty">No studios yet.</li>
+{{end}}
+</ul>
+{{else}}
+<input class="filterinput" placeholder="Filter tags..." oninput="filterList(this, 'tags')">
+<ul class="entitylist" id="tags">
+{{range .Sidebar.Tags}}
+<li class="{{if eq $.Sidebar.ActiveID .ID}}active{{end}}"><a href="/browse/tag/{{.ID}}?tab=tag">{{.Name}}</a><span class="count">{{.SceneCount}}</span></li>
+{{else}}
+<li class="empty">No tags yet.</li>
+{{end}}
+</ul>
+{{end}}
+</aside>
+</div>
+
+<script>
+function filterList(input, listId) {
+  const q = input.value.toLowerCase().trim();
+  const items = document.getElementById(listId).children;
+  for (const li of items) {
+    const a = li.querySelector('a');
+    if (!a) continue;
+    li.style.display = (q === '' || a.textContent.toLowerCase().includes(q)) ? '' : 'none';
+  }
+}
+</script>
+</body>
+</html>

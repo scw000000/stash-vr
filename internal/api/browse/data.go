@@ -19,3 +19,29 @@ type SidebarData struct {
 	// empty if no entity is selected.
 	ActiveID string
 }
+
+// Card is one scene tile in the grid.
+type Card struct {
+	ID           string
+	Title        string
+	ThumbnailURL string
+	Duration     string // already-formatted "HH:MM:SS" or "MM:SS"
+	Performers   string // comma-joined names
+	Studio       string
+	DeoVRPlayURL string // direct play URL for the quick-play overlay
+	DetailURL    string // /browse/scene/{id}
+}
+
+// PageData is what browse.gohtml expects.
+type PageData struct {
+	Sidebar SidebarData
+	Header  string // e.g. "All scenes — newest first"
+	SubHead string // e.g. "Page 3 / 27" or "23 scenes"
+	BackURL string // empty on /browse, "/browse" on entity-filtered routes
+	Cards   []Card
+	PrevURL string
+	NextURL string
+	PageNum int
+	PageMax int
+	ErrMessage string
+}
