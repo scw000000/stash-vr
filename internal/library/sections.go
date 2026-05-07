@@ -17,8 +17,24 @@ type Section struct {
 	Ids  []string
 }
 
+// filterEntry is the typed result of getFilters: each entry is either a
+// saved Stash filter (use SavedFilter) or an auto-section record (use
+// AutoID + DefaultName). Disabled and Name come from UserConfig.Filter.
+type filterEntry struct {
+	SavedFilter *gql.SavedFilterParts
+	AutoID      string // empty if SavedFilter is set
+	DefaultName string // resolved entity name, used when Name is empty
+	Name        string // user override
+	Disabled    bool
+}
+
 func (libraryService *Service) GetSections(ctx context.Context) ([]Section, error) {
 	res, err, _ := libraryService.single.Do("sections", func() (interface{}, error) {
+		// Reconcile auto-section records into UserConfig.Filters before reading.
+		// This adds new entries for entities that crossed the threshold and
+		// hard-prunes records whose entities no longer qualify.
+		reconcileAutoSections(ctx, libraryService.StashClient)
+
 		filters, err := libraryService.getFilters(ctx)
 		if err != nil {
 			return nil, err
@@ -81,44 +97,26 @@ func (libraryService *Service) getDefaultSections(ctx context.Context) ([]Sectio
 	return []Section{allScenesSection}, nil
 }
 
-func (libraryService *Service) getSectionsByFilters(ctx context.Context, filters []gql.SavedFilterParts) ([]Section, error) {
-	sections := make([]Section, len(filters))
+func (libraryService *Service) getSectionsByFilters(ctx context.Context, entries []filterEntry) ([]Section, error) {
+	sections := make([]Section, len(entries))
 
 	wg := sync.WaitGroup{}
-	wg.Add(len(filters))
+	wg.Add(len(entries))
 
-	for i, f := range filters {
-		go func(i int, f gql.SavedFilterParts) {
+	for i, e := range entries {
+		go func(i int, e filterEntry) {
 			defer wg.Done()
-			flog := log.Ctx(ctx).With().Str("filterId", f.Id).Str("name", f.Name).Logger()
-
-			sceneFilter, err := filter.SavedFilterToSceneFilter(ctx, f)
-			if err != nil {
-				flog.Warn().Err(err).Interface("savedFilter", f).Msg("Failed to convert filter, skipping")
+			if e.Disabled {
 				return
 			}
-
-			resp, err := gql.FindSceneIdsByFilter(ctx, libraryService.StashClient, &sceneFilter.SceneFilter, &sceneFilter.FilterOpts)
-			if err != nil {
-				flog.Err(err).Interface("savedFilter", f).Interface("sceneFilter", sceneFilter).Msg("Failed to find scenes by filter, skipping")
+			if e.SavedFilter != nil {
+				libraryService.buildSavedFilterSection(ctx, i, sections, *e.SavedFilter, e.Name)
 				return
 			}
-
-			if len(resp.FindScenes.Scenes) == 0 {
-				flog.Debug().Msg("Filter skipped: 0 scenes")
-				return
+			if e.AutoID != "" {
+				libraryService.buildAutoSection(ctx, i, sections, config.Filter{ID: e.AutoID, Name: e.Name})
 			}
-
-			sections[i] = Section{
-				Name: f.Name,
-				Ids:  make([]string, len(resp.FindScenes.Scenes)),
-			}
-			for j, v := range resp.FindScenes.Scenes {
-				sections[i].Ids[j] = v.Id
-			}
-
-			flog.Debug().Int("scenes", len(sections[i].Ids)).Msg("Section built")
-		}(i, f)
+		}(i, e)
 	}
 	wg.Wait()
 	sections = slices.DeleteFunc(sections, func(s Section) bool {
@@ -127,25 +125,115 @@ func (libraryService *Service) getSectionsByFilters(ctx context.Context, filters
 	return sections, nil
 }
 
-func (libraryService *Service) getFilters(ctx context.Context) ([]gql.SavedFilterParts, error) {
-	savedFilters, err := gql.FindSavedSceneFilters(ctx, libraryService.StashClient)
+func (libraryService *Service) buildSavedFilterSection(ctx context.Context, idx int, out []Section, f gql.SavedFilterParts, nameOverride string) {
+	flog := log.Ctx(ctx).With().Str("filterId", f.Id).Str("name", f.Name).Logger()
+
+	sceneFilter, err := filter.SavedFilterToSceneFilter(ctx, f)
+	if err != nil {
+		flog.Warn().Err(err).Interface("savedFilter", f).Msg("Failed to convert filter, skipping")
+		return
+	}
+	resp, err := gql.FindSceneIdsByFilter(ctx, libraryService.StashClient, &sceneFilter.SceneFilter, &sceneFilter.FilterOpts)
+	if err != nil {
+		flog.Err(err).Interface("savedFilter", f).Interface("sceneFilter", sceneFilter).Msg("Failed to find scenes by filter, skipping")
+		return
+	}
+	if len(resp.FindScenes.Scenes) == 0 {
+		flog.Debug().Msg("Filter skipped: 0 scenes")
+		return
+	}
+
+	name := f.Name
+	if nameOverride != "" {
+		name = nameOverride
+	}
+	out[idx] = Section{Name: name, Ids: make([]string, len(resp.FindScenes.Scenes))}
+	for j, v := range resp.FindScenes.Scenes {
+		out[idx].Ids[j] = v.Id
+	}
+	flog.Debug().Int("scenes", len(out[idx].Ids)).Msg("Section built")
+}
+
+func (libraryService *Service) buildAutoSection(ctx context.Context, idx int, out []Section, rec config.Filter) {
+	flog := log.Ctx(ctx).With().Str("autoId", rec.ID).Logger()
+	sec, err := materializeAutoSection(ctx, libraryService.StashClient, rec)
+	if err != nil {
+		flog.Warn().Err(err).Msg("auto-section materialize failed, skipping")
+		return
+	}
+	if len(sec.Ids) == 0 {
+		flog.Debug().Msg("auto-section skipped: 0 scenes")
+		return
+	}
+	if sec.Name == "" {
+		flog.Warn().Msg("auto-section produced empty name; skipping")
+		return
+	}
+	out[idx] = sec
+	flog.Debug().Int("scenes", len(sec.Ids)).Msg("auto-section built")
+}
+
+func (libraryService *Service) getFilters(ctx context.Context) ([]filterEntry, error) {
+	savedFiltersResp, err := gql.FindSavedSceneFilters(ctx, libraryService.StashClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find saved filters: %w", err)
 	}
 
-	if len(savedFilters.FindSavedFilters) == 0 {
-		return nil, nil
+	userCfg := config.User(ctx)
+
+	// Split user config: saved-filter overrides (numeric ids) drive ordering;
+	// auto records always come from user config in their stored order.
+	var savedOverrides []config.Filter
+	autoRecords := make(map[string]config.Filter)
+	autoOrder := make([]string, 0)
+	for _, f := range userCfg.Filters {
+		if isAutoID(f.ID) {
+			autoRecords[f.ID] = f
+			autoOrder = append(autoOrder, f.ID)
+			continue
+		}
+		savedOverrides = append(savedOverrides, f)
 	}
 
-	var out []gql.SavedFilterParts
-
-	userConfigFilters := config.User(ctx).Filters
-
-	if len(userConfigFilters) == 0 {
-		out, err = libraryService.buildFiltersByFrontpage(ctx, savedFilters)
+	// Resolve saved-filter ordering using existing logic.
+	var savedSlice []gql.SavedFilterParts
+	if len(savedOverrides) == 0 {
+		savedSlice, err = libraryService.buildFiltersByFrontpage(ctx, savedFiltersResp)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		out = buildFiltersByUserConfig(ctx, savedFilters, userConfigFilters)
+		savedSlice = buildFiltersByUserConfig(ctx, savedFiltersResp, savedOverrides)
 	}
+	out := make([]filterEntry, 0, len(savedSlice)+len(autoOrder))
+	for i := range savedSlice {
+		// Honor name override / disabled flag from UserConfig if present.
+		var override config.Filter
+		for _, ov := range savedOverrides {
+			if ov.ID == savedSlice[i].Id {
+				override = ov
+				break
+			}
+		}
+		out = append(out, filterEntry{
+			SavedFilter: &savedSlice[i],
+			Name:        override.Name,
+			Disabled:    override.Disabled,
+		})
+	}
+
+	// Append auto records in their UserConfig.Filters order. DefaultName
+	// resolution happens in the materializer; the entry just carries IDs and
+	// user override fields here.
+	for _, id := range autoOrder {
+		f := autoRecords[id]
+		out = append(out, filterEntry{
+			AutoID:   f.ID,
+			Name:     f.Name,
+			Disabled: f.Disabled,
+		})
+	}
+
 	return out, nil
 }
 
