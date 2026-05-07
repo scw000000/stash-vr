@@ -4,27 +4,33 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 )
 
 // redirectBack issues a 303 to Referer (or /browse/scene/{id} fallback),
-// optionally appending an `err` query param when err != "".
-func (h *httpHandler) redirectBack(w http.ResponseWriter, r *http.Request, err string) {
+// setting (or clearing) the `err` query param. Using url.Values.Set avoids
+// stacking multiple err= entries on consecutive failed POSTs.
+func (h *httpHandler) redirectBack(w http.ResponseWriter, r *http.Request, errMsg string) {
 	target := r.Header.Get("Referer")
 	if target == "" {
 		target = "/browse/scene/" + chi.URLParam(r, "id")
 	}
-	if err != "" {
-		sep := "?"
-		if strings.Contains(target, "?") {
-			sep = "&"
-		}
-		target += sep + "err=" + url.QueryEscape(err)
+	u, parseErr := url.Parse(target)
+	if parseErr != nil {
+		// Fallback: ignore broken Referer; redirect to the scene page without err param.
+		http.Redirect(w, r, "/browse/scene/"+chi.URLParam(r, "id"), http.StatusSeeOther)
+		return
 	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	q := u.Query()
+	if errMsg == "" {
+		q.Del("err")
+	} else {
+		q.Set("err", errMsg)
+	}
+	u.RawQuery = q.Encode()
+	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
 func (h *httpHandler) sceneRatingHandler(w http.ResponseWriter, r *http.Request) {
