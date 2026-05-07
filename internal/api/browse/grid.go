@@ -43,27 +43,30 @@ func fetchSceneIDs(ctx context.Context, client graphql.Client, sceneFilter *gql.
 // through the library service so the existing cache and decorateTags apply.
 // IDs that fail to fetch are skipped with a warning log entry.
 func buildCards(ctx context.Context, lib *library.Service, baseURL string, ids []string) ([]Card, error) {
-	cards := make([]Card, 0, len(ids))
-	for _, id := range ids {
-		vd, err := lib.GetScene(ctx, id, false)
-		if err != nil {
-			log.Ctx(ctx).Warn().Err(err).Str("id", id).Msg("browse: skip scene (fetch error)")
+	vds, err := lib.GetScenesByIds(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("GetScenesByIds: %w", err)
+	}
+	cards := make([]Card, 0, len(vds))
+	for i, vd := range vds {
+		if vd == nil {
+			log.Ctx(ctx).Warn().Str("id", ids[i]).Msg("browse: skip scene (not found)")
 			continue
 		}
-		if vd == nil || vd.SceneParts == nil || len(vd.SceneParts.Files) == 0 {
+		if vd.SceneParts == nil || len(vd.SceneParts.Files) == 0 || vd.SceneParts.Files[0] == nil {
 			continue
 		}
 		c := Card{
-			ID:           id,
+			ID:           ids[i],
 			Title:        vd.Title(),
 			Duration:     formatDuration(vd.SceneParts.Files[0].Duration),
-			DetailURL:    "/browse/scene/" + url.PathEscape(id),
-			DeoVRPlayURL: "/deovr/videoData/" + url.PathEscape(id),
+			DetailURL:    "/browse/scene/" + url.PathEscape(ids[i]),
+			DeoVRPlayURL: "/deovr/videoData/" + url.PathEscape(ids[i]),
 		}
 		// Thumbnail: heatmap composite for interactive scenes; screenshot otherwise.
 		if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Screenshot != nil {
 			if vd.SceneParts.Interactive && vd.SceneParts.Paths.Interactive_heatmap != nil {
-				c.ThumbnailURL = heatmap.GetCoverUrl(baseURL, id)
+				c.ThumbnailURL = heatmap.GetCoverUrl(baseURL, ids[i])
 			} else {
 				c.ThumbnailURL = stash.ApiKeyed(*vd.SceneParts.Paths.Screenshot)
 			}

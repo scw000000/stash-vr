@@ -69,6 +69,51 @@ func (libraryService *Service) GetScene(ctx context.Context, id string, forceFet
 	return vds[0], nil
 }
 
+func (libraryService *Service) GetScenesByIds(ctx context.Context, ids []string) ([]*VideoData, error) {
+	out := make([]*VideoData, len(ids))
+	var missingIDs []int
+	var missingIdxs []int
+
+	libraryService.muVdCache.RLock()
+	for i, id := range ids {
+		if vd := libraryService.vdCache[id]; vd != nil {
+			out[i] = vd
+		} else {
+			iid, _ := strconv.Atoi(id)
+			missingIDs = append(missingIDs, iid)
+			missingIdxs = append(missingIdxs, i)
+		}
+	}
+	libraryService.muVdCache.RUnlock()
+
+	if len(missingIDs) == 0 {
+		return out, nil
+	}
+
+	fetched, err := libraryService.fetchVideoData(ctx, missingIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	byID := make(map[string]*VideoData, len(fetched))
+	for _, vd := range fetched {
+		byID[vd.Id()] = vd
+	}
+
+	libraryService.muVdCache.Lock()
+	for _, vd := range fetched {
+		libraryService.vdCache[vd.Id()] = vd
+	}
+	libraryService.muVdCache.Unlock()
+
+	for _, idx := range missingIdxs {
+		out[idx] = byID[ids[idx]]
+	}
+
+	log.Ctx(ctx).Trace().Int("requested", len(ids)).Int("fetched", len(missingIDs)).Msg("GetScenesByIds")
+	return out, nil
+}
+
 func (libraryService *Service) fetchVideoData(ctx context.Context, sceneIds []int) ([]*VideoData, error) {
 	resp, err := gql.FindScenes(ctx, libraryService.StashClient, sceneIds)
 	if err != nil {
