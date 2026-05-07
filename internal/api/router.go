@@ -5,6 +5,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"stash-vr/internal/api/browse"
 	"stash-vr/internal/api/deovr"
 	"stash-vr/internal/api/heatmap"
 	"stash-vr/internal/api/heresphere"
@@ -27,6 +28,7 @@ func Router(libraryService *library.Service) *chi.Mux {
 
 	router.Mount("/heresphere", logMod("heresphere", heresphere.Router(libraryService)))
 	router.Mount("/deovr", logMod("deovr", deovr.Router(libraryService)))
+	router.Mount("/browse", logMod("browse", browse.Router(libraryService)))
 
 	router.Post("/filters", logMod("filters", web.FiltersUpdateHandler()).ServeHTTP)
 	router.Get("/cover/{videoId}", logMod("heatmap", heatmap.CoverHandler(libraryService)).ServeHTTP)
