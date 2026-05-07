@@ -189,13 +189,38 @@ func (h *httpHandler) sceneTagRemoveHandler(w http.ResponseWriter, r *http.Reque
 	h.redirectBack(w, r, "")
 }
 
-// Stubs — replaced in Tasks 11-12.
 func (h *httpHandler) sceneOIncrementHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not yet implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+	if err := h.libraryService.IncrementO(r.Context(), id); err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: increment O")
+		h.redirectBack(w, r, "O increment failed")
+		return
+	}
+	h.redirectBack(w, r, "")
 }
+
 func (h *httpHandler) sceneODecrementHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not yet implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+	if err := h.libraryService.DecrementO(r.Context(), id); err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: decrement O")
+		h.redirectBack(w, r, "O decrement failed")
+		return
+	}
+	h.redirectBack(w, r, "")
 }
+
 func (h *httpHandler) sceneOrganizedHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not yet implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+	vd, err := h.libraryService.GetScene(r.Context(), id, true)
+	if err != nil || vd == nil || vd.SceneParts == nil {
+		h.redirectBack(w, r, "scene not found")
+		return
+	}
+	newState := !vd.SceneParts.Organized
+	if err := h.libraryService.SetOrganized(r.Context(), id, newState); err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: toggle organized")
+		h.redirectBack(w, r, "organized toggle failed")
+		return
+	}
+	h.redirectBack(w, r, "")
 }
