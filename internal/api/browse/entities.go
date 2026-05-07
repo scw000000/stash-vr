@@ -20,13 +20,10 @@ var entitiesGroup singleflight.Group
 // fetchPerformers returns all performers with at least one scene.
 func fetchPerformers(ctx context.Context, client graphql.Client) ([]Entity, error) {
 	v, err, _ := entitiesGroup.Do("browse:performers", func() (interface{}, error) {
-		// min_scene_count=1 -> performers with > 1 scene? The query uses
-		// modifier GREATER_THAN, so we pass 0 to mean "scene_count > 0".
-		// However the plan calls for passing 1. Honor the plan signature; the
-		// underlying GraphQL operator is GREATER_THAN, so passing 0 yields
-		// "at least 1 scene". The plan says "1 means at-least-1-scene"; trust
-		// the plan literal.
-		resp, ferr := gql.FindPerformersWithSceneCount(ctx, client, 1, -1)
+		// The FindPerformersWithSceneCount query uses modifier GREATER_THAN
+		// on min_scene_count, so passing 0 -> Stash filters scene_count > 0,
+		// i.e. performers with >=1 scene. (Caller passes min_scene_count - 1.)
+		resp, ferr := gql.FindPerformersWithSceneCount(ctx, client, 0, -1)
 		if ferr != nil {
 			return nil, fmt.Errorf("FindPerformersWithSceneCount: %w", ferr)
 		}
