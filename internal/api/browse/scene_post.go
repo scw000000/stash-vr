@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"stash-vr/internal/config"
+	"stash-vr/internal/prefix"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -108,13 +110,86 @@ func (h *httpHandler) sceneFavoriteHandler(w http.ResponseWriter, r *http.Reques
 	h.redirectBack(w, r, "")
 }
 
-// Stubs — replaced in Tasks 10-12.
 func (h *httpHandler) sceneTagAddHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not yet implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+	if err := r.ParseForm(); err != nil {
+		h.redirectBack(w, r, "bad form")
+		return
+	}
+	tagName := strings.TrimSpace(r.PostForm.Get("tag"))
+	if tagName == "" {
+		h.redirectBack(w, r, "empty tag")
+		return
+	}
+	vd, err := h.libraryService.GetScene(r.Context(), id, true)
+	if err != nil || vd == nil || vd.SceneParts == nil {
+		h.redirectBack(w, r, "scene not found")
+		return
+	}
+	current := make([]string, 0, len(vd.SceneParts.Tags)+1)
+	exists := false
+	for _, t := range vd.SceneParts.Tags {
+		if t == nil {
+			continue
+		}
+		// Skip ancestor-only tags injected by decorateTags.
+		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
+			continue
+		}
+		current = append(current, t.TagParts.Name)
+		if strings.EqualFold(t.TagParts.Name, tagName) {
+			exists = true
+		}
+	}
+	if !exists {
+		current = append(current, tagName)
+	}
+	if err := h.libraryService.UpdateTags(r.Context(), id, current); err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Str("tag", tagName).Msg("browse: add tag")
+		h.redirectBack(w, r, "tag add failed")
+		return
+	}
+	h.redirectBack(w, r, "")
 }
+
 func (h *httpHandler) sceneTagRemoveHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not yet implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+	if err := r.ParseForm(); err != nil {
+		h.redirectBack(w, r, "bad form")
+		return
+	}
+	tagName := strings.TrimSpace(r.PostForm.Get("tag"))
+	if tagName == "" {
+		h.redirectBack(w, r, "empty tag")
+		return
+	}
+	vd, err := h.libraryService.GetScene(r.Context(), id, true)
+	if err != nil || vd == nil || vd.SceneParts == nil {
+		h.redirectBack(w, r, "scene not found")
+		return
+	}
+	remaining := make([]string, 0, len(vd.SceneParts.Tags))
+	for _, t := range vd.SceneParts.Tags {
+		if t == nil {
+			continue
+		}
+		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
+			continue
+		}
+		if strings.EqualFold(t.TagParts.Name, tagName) {
+			continue
+		}
+		remaining = append(remaining, t.TagParts.Name)
+	}
+	if err := h.libraryService.UpdateTags(r.Context(), id, remaining); err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Str("tag", tagName).Msg("browse: remove tag")
+		h.redirectBack(w, r, "tag remove failed")
+		return
+	}
+	h.redirectBack(w, r, "")
 }
+
+// Stubs — replaced in Tasks 11-12.
 func (h *httpHandler) sceneOIncrementHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "not yet implemented", http.StatusNotImplemented)
 }
