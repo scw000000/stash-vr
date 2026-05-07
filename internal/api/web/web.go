@@ -82,11 +82,12 @@ func stashFilters(ctx context.Context, stashClient graphql.Client) ([]filterData
 	return fd, nil
 }
 
-func filterOverrideRows(ctx context.Context, stashFilters []filterData) []filterOverride {
+func filterOverrideRows(ctx context.Context, stashClient graphql.Client, stashFilters []filterData) []filterOverride {
 	cfg := config.User(ctx)
 
-	rows := make([]filterOverride, 0, len(stashFilters))
-	seen := map[string]struct{}{}
+	// Build saved-filter rows (existing behavior).
+	rows := make([]filterOverride, 0, len(stashFilters)+len(cfg.Filters))
+	seenSaved := map[string]struct{}{}
 	for _, cf := range cfg.Filters {
 		for _, sf := range stashFilters {
 			if sf.Id == cf.ID {
@@ -95,19 +96,102 @@ func filterOverrideRows(ctx context.Context, stashFilters []filterData) []filter
 					name = sf.Name
 				}
 				rows = append(rows, filterOverride{ID: sf.Id, SourceName: sf.Name, Name: name, Disabled: cf.Disabled})
-				seen[sf.Id] = struct{}{}
+				seenSaved[sf.Id] = struct{}{}
 				break
 			}
 		}
 	}
 	for _, s := range stashFilters {
-		if _, ok := seen[s.Id]; ok {
+		if _, ok := seenSaved[s.Id]; ok {
 			continue
 		}
 		rows = append(rows, filterOverride{ID: s.Id, SourceName: s.Name, Name: s.Name, Disabled: false})
 	}
 
+	// Append auto-record rows in their UserConfig order.
+	autoNames := resolveAutoSectionNames(ctx, stashClient, cfg.Filters)
+	for _, cf := range cfg.Filters {
+		if !isWebAutoID(cf.ID) {
+			continue
+		}
+		source := autoNames[cf.ID]
+		if source == "" {
+			source = cf.ID // last-resort fallback
+		}
+		display := cf.Name
+		if display == "" {
+			display = source
+		}
+		rows = append(rows, filterOverride{ID: cf.ID, SourceName: source, Name: display, Disabled: cf.Disabled})
+	}
+
 	return rows
+}
+
+// isWebAutoID is a duplicate of library.isAutoID kept package-local to avoid
+// importing the library package here. The auto: prefix is stable per the spec.
+func isWebAutoID(id string) bool {
+	const prefix = "auto:"
+	return len(id) > len(prefix) && id[:len(prefix)] == prefix
+}
+
+// resolveAutoSectionNames resolves display names for auto:* records by
+// looking up the corresponding Stash entity. Performer / tag names come
+// from a single batch query each; aggregate slugs map to fixed labels.
+// On any Stash error we fall back to the slug or stash id, so the UI still
+// renders.
+func resolveAutoSectionNames(ctx context.Context, client graphql.Client, filters []config.Filter) map[string]string {
+	out := make(map[string]string, len(filters))
+
+	const (
+		perfPrefix = "auto:perf:"
+		tagPrefix  = "auto:tag:"
+		aggPrefix  = "auto:agg:"
+	)
+	var performerIDs, tagIDs []string
+	for _, f := range filters {
+		switch {
+		case len(f.ID) > len(perfPrefix) && f.ID[:len(perfPrefix)] == perfPrefix:
+			performerIDs = append(performerIDs, f.ID[len(perfPrefix):])
+		case len(f.ID) > len(tagPrefix) && f.ID[:len(tagPrefix)] == tagPrefix:
+			tagIDs = append(tagIDs, f.ID[len(tagPrefix):])
+		case len(f.ID) > len(aggPrefix) && f.ID[:len(aggPrefix)] == aggPrefix:
+			slug := f.ID[len(aggPrefix):]
+			out[f.ID] = aggregateLabel(slug)
+		}
+	}
+
+	if len(performerIDs) > 0 {
+		resp, err := gql.FindPerformersByIDs(ctx, client, performerIDs)
+		if err == nil {
+			for _, p := range resp.FindPerformers.Performers {
+				out["auto:perf:"+p.Id] = p.Name
+			}
+		}
+	}
+	if len(tagIDs) > 0 {
+		resp, err := gql.FindTagsByIDs(ctx, client, tagIDs)
+		if err == nil {
+			for _, t := range resp.FindTags.Tags {
+				out["auto:tag:"+t.Id] = t.Name
+			}
+		}
+	}
+	return out
+}
+
+func aggregateLabel(slug string) string {
+	switch slug {
+	case "recent_added":
+		return "Recently Added"
+	case "recent_played":
+		return "Recently Played"
+	case "highly_rated":
+		return "Highly Rated"
+	case "unwatched":
+		return "Unwatched"
+	}
+	return slug
 }
 
 func IndexHandler(libraryService *library.Service) http.HandlerFunc {
@@ -146,7 +230,7 @@ func IndexHandler(libraryService *library.Service) http.HandlerFunc {
 				if err != nil {
 					log.Ctx(r.Context()).Warn().Err(err).Msg("Failed to retrieve stash filters")
 				} else {
-					data.StashData.FilterOverrides = filterOverrideRows(r.Context(), data.StashData.FilterData)
+					data.StashData.FilterOverrides = filterOverrideRows(r.Context(), libraryService.StashClient, data.StashData.FilterData)
 				}
 				data.StashData.SampleSceneCoverUrl, err = sampleSceneCoverUrl(r.Context(), libraryService.StashClient)
 				if err != nil {

@@ -504,6 +504,43 @@ func (v *FindPerformerByNameResponse) GetFindPerformers() *FindPerformerByNameFi
 	return v.FindPerformers
 }
 
+// FindPerformersByIDsFindPerformersFindPerformersResultType includes the requested fields of the GraphQL type FindPerformersResultType.
+type FindPerformersByIDsFindPerformersFindPerformersResultType struct {
+	Performers []*FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer `json:"performers"`
+}
+
+// GetPerformers returns FindPerformersByIDsFindPerformersFindPerformersResultType.Performers, and is useful for accessing the field via an interface.
+func (v *FindPerformersByIDsFindPerformersFindPerformersResultType) GetPerformers() []*FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer {
+	return v.Performers
+}
+
+// FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer includes the requested fields of the GraphQL type Performer.
+type FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetId returns FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer.Id, and is useful for accessing the field via an interface.
+func (v *FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer) GetId() string {
+	return v.Id
+}
+
+// GetName returns FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer.Name, and is useful for accessing the field via an interface.
+func (v *FindPerformersByIDsFindPerformersFindPerformersResultTypePerformersPerformer) GetName() string {
+	return v.Name
+}
+
+// FindPerformersByIDsResponse is returned by FindPerformersByIDs on success.
+type FindPerformersByIDsResponse struct {
+	// A function which queries Performer objects
+	FindPerformers *FindPerformersByIDsFindPerformersFindPerformersResultType `json:"findPerformers"`
+}
+
+// GetFindPerformers returns FindPerformersByIDsResponse.FindPerformers, and is useful for accessing the field via an interface.
+func (v *FindPerformersByIDsResponse) GetFindPerformers() *FindPerformersByIDsFindPerformersFindPerformersResultType {
+	return v.FindPerformers
+}
+
 // FindPerformersWithSceneCountFindPerformersFindPerformersResultType includes the requested fields of the GraphQL type FindPerformersResultType.
 type FindPerformersWithSceneCountFindPerformersFindPerformersResultType struct {
 	Performers []*FindPerformersWithSceneCountFindPerformersFindPerformersResultTypePerformersPerformer `json:"performers"`
@@ -1144,6 +1181,38 @@ type FindTagByNameResponse struct {
 
 // GetFindTags returns FindTagByNameResponse.FindTags, and is useful for accessing the field via an interface.
 func (v *FindTagByNameResponse) GetFindTags() *FindTagByNameFindTagsFindTagsResultType {
+	return v.FindTags
+}
+
+// FindTagsByIDsFindTagsFindTagsResultType includes the requested fields of the GraphQL type FindTagsResultType.
+type FindTagsByIDsFindTagsFindTagsResultType struct {
+	Tags []*FindTagsByIDsFindTagsFindTagsResultTypeTagsTag `json:"tags"`
+}
+
+// GetTags returns FindTagsByIDsFindTagsFindTagsResultType.Tags, and is useful for accessing the field via an interface.
+func (v *FindTagsByIDsFindTagsFindTagsResultType) GetTags() []*FindTagsByIDsFindTagsFindTagsResultTypeTagsTag {
+	return v.Tags
+}
+
+// FindTagsByIDsFindTagsFindTagsResultTypeTagsTag includes the requested fields of the GraphQL type Tag.
+type FindTagsByIDsFindTagsFindTagsResultTypeTagsTag struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetId returns FindTagsByIDsFindTagsFindTagsResultTypeTagsTag.Id, and is useful for accessing the field via an interface.
+func (v *FindTagsByIDsFindTagsFindTagsResultTypeTagsTag) GetId() string { return v.Id }
+
+// GetName returns FindTagsByIDsFindTagsFindTagsResultTypeTagsTag.Name, and is useful for accessing the field via an interface.
+func (v *FindTagsByIDsFindTagsFindTagsResultTypeTagsTag) GetName() string { return v.Name }
+
+// FindTagsByIDsResponse is returned by FindTagsByIDs on success.
+type FindTagsByIDsResponse struct {
+	FindTags *FindTagsByIDsFindTagsFindTagsResultType `json:"findTags"`
+}
+
+// GetFindTags returns FindTagsByIDsResponse.FindTags, and is useful for accessing the field via an interface.
+func (v *FindTagsByIDsResponse) GetFindTags() *FindTagsByIDsFindTagsFindTagsResultType {
 	return v.FindTags
 }
 
@@ -4065,6 +4134,14 @@ type __FindPerformerByNameInput struct {
 // GetName returns __FindPerformerByNameInput.Name, and is useful for accessing the field via an interface.
 func (v *__FindPerformerByNameInput) GetName() string { return v.Name }
 
+// __FindPerformersByIDsInput is used internally by genqlient
+type __FindPerformersByIDsInput struct {
+	Ids []string `json:"ids"`
+}
+
+// GetIds returns __FindPerformersByIDsInput.Ids, and is useful for accessing the field via an interface.
+func (v *__FindPerformersByIDsInput) GetIds() []string { return v.Ids }
+
 // __FindPerformersWithSceneCountInput is used internally by genqlient
 type __FindPerformersWithSceneCountInput struct {
 	Min_scene_count int `json:"min_scene_count"`
@@ -4128,6 +4205,14 @@ type __FindTagByNameInput struct {
 
 // GetName returns __FindTagByNameInput.Name, and is useful for accessing the field via an interface.
 func (v *__FindTagByNameInput) GetName() string { return v.Name }
+
+// __FindTagsByIDsInput is used internally by genqlient
+type __FindTagsByIDsInput struct {
+	Ids []string `json:"ids"`
+}
+
+// GetIds returns __FindTagsByIDsInput.Ids, and is useful for accessing the field via an interface.
+func (v *__FindTagsByIDsInput) GetIds() []string { return v.Ids }
 
 // __FindTagsInput is used internally by genqlient
 type __FindTagsInput struct {
@@ -4438,6 +4523,43 @@ func FindPerformerByName(
 	}
 
 	data_ = &FindPerformerByNameResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by FindPerformersByIDs.
+const FindPerformersByIDs_Operation = `
+query FindPerformersByIDs ($ids: [ID!]!) {
+	findPerformers(ids: $ids) {
+		performers {
+			id
+			name
+		}
+	}
+}
+`
+
+func FindPerformersByIDs(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	ids []string,
+) (data_ *FindPerformersByIDsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindPerformersByIDs",
+		Query:  FindPerformersByIDs_Operation,
+		Variables: &__FindPerformersByIDsInput{
+			Ids: ids,
+		},
+	}
+
+	data_ = &FindPerformersByIDsResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -4922,6 +5044,43 @@ func FindTags(
 	}
 
 	data_ = &FindTagsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by FindTagsByIDs.
+const FindTagsByIDs_Operation = `
+query FindTagsByIDs ($ids: [ID!]!) {
+	findTags(ids: $ids) {
+		tags {
+			id
+			name
+		}
+	}
+}
+`
+
+func FindTagsByIDs(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	ids []string,
+) (data_ *FindTagsByIDsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindTagsByIDs",
+		Query:  FindTagsByIDs_Operation,
+		Variables: &__FindTagsByIDsInput{
+			Ids: ids,
+		},
+	}
+
+	data_ = &FindTagsByIDsResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
