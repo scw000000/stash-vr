@@ -61,10 +61,10 @@ type SceneDetailData struct {
 	IsFavorite   bool
 	Tags         []string // tag names currently on the scene (chips), excluding favorite tag and ancestor-injected tags
 	AllTagNames  []string // for the <datalist> autocomplete
-	OCounter     int
-	Organized    bool
-	DeoVRPlayURL string
-	ErrMessage   string
+	OCounter        int
+	Organized       bool
+	DirectStreamURL string
+	ErrMessage      string
 
 	// StarSlice is a 5-element placeholder used purely so the template can
 	// {{range $i, $_ := .StarSlice}} 0..4 to render the five star buttons.

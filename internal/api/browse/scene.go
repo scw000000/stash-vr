@@ -3,7 +3,6 @@ package browse
 import (
 	"html/template"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -36,15 +35,18 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 	baseURL := apiinternal.GetBaseUrl(r)
 
 	data := SceneDetailData{
-		ID:           id,
-		Title:        vd.Title(),
-		BackURL:      backURL(r),
-		DeoVRPlayURL: "/deovr/" + url.PathEscape(id),
-		ErrMessage:   r.URL.Query().Get("err"),
+		ID:         id,
+		Title:      vd.Title(),
+		BackURL:    backURL(r),
+		ErrMessage: r.URL.Query().Get("err"),
 	}
 
 	if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Screenshot != nil {
 		data.ThumbnailURL = heatmap.GetCoverUrl(baseURL, id)
+	}
+
+	if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Stream != nil {
+		data.DirectStreamURL = *vd.SceneParts.Paths.Stream
 	}
 
 	performerNames := make([]string, 0, len(vd.SceneParts.Performers))
