@@ -73,6 +73,35 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
             geometry="primitive:plane;width:4;height:2.25"
             position="0 1.6 -3"></a-entity>
 {{end}}
+
+  <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
+  <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
+    <a-plane width="1.6" height="0.4" color="#000" material="opacity:0.65"></a-plane>
+    <a-entity class="vr-btn" data-action="playpause" position="-0.55 0 0.01"
+              geometry="primitive:plane;width:0.32;height:0.28"
+              material="color:#2c5282;opacity:0.95">
+      <a-text value="Play/Pause" align="center" color="#fff" width="2" position="0 0 0.005"></a-text>
+    </a-entity>
+    <a-entity class="vr-btn" data-action="seek-back" position="-0.18 0 0.01"
+              geometry="primitive:plane;width:0.32;height:0.28"
+              material="color:#2c5282;opacity:0.95">
+      <a-text value="-10s" align="center" color="#fff" width="2" position="0 0 0.005"></a-text>
+    </a-entity>
+    <a-entity class="vr-btn" data-action="seek-fwd" position="0.18 0 0.01"
+              geometry="primitive:plane;width:0.32;height:0.28"
+              material="color:#2c5282;opacity:0.95">
+      <a-text value="+10s" align="center" color="#fff" width="2" position="0 0 0.005"></a-text>
+    </a-entity>
+    <a-entity class="vr-btn" data-action="exit" position="0.55 0 0.01"
+              geometry="primitive:plane;width:0.32;height:0.28"
+              material="color:#a01010;opacity:0.95">
+      <a-text value="Exit VR" align="center" color="#fff" width="2" position="0 0 0.005"></a-text>
+    </a-entity>
+  </a-entity>
+
+  <!-- Laser controllers for raycast-clicking the panel buttons. -->
+  <a-entity laser-controls="hand: right" raycaster="objects: .vr-btn; far: 5"></a-entity>
+  <a-entity laser-controls="hand: left"  raycaster="objects: .vr-btn; far: 5"></a-entity>
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
@@ -147,6 +176,35 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     ['vrSphere', 'vrFlat'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('object3dset', applyAll);
+    });
+
+    // In-VR control panel: raycast clicks fire on .vr-btn entities (via
+    // A-Frame's laser-controls + cursor pipeline). Each button has a
+    // data-action attribute that maps to a vrTex playback verb.
+    function vrAction(action) {
+      if (action === 'playpause') {
+        if (vrTex.paused) {
+          const p = vrTex.play();
+          if (p && p.catch) p.catch(err => console.warn('stash-vr: vrTex play failed', err));
+        } else {
+          vrTex.pause();
+        }
+      } else if (action === 'seek-back') {
+        if (vrTex && !isNaN(vrTex.currentTime)) {
+          vrTex.currentTime = Math.max(0, vrTex.currentTime - 10);
+        }
+      } else if (action === 'seek-fwd') {
+        if (vrTex && !isNaN(vrTex.currentTime) && !isNaN(vrTex.duration) && vrTex.duration > 0) {
+          vrTex.currentTime = Math.min(vrTex.duration - 0.1, vrTex.currentTime + 10);
+        }
+      } else if (action === 'exit') {
+        try { scene.exitVR(); } catch (e) { console.warn('stash-vr: exitVR failed', e); }
+      }
+    }
+    document.querySelectorAll('.vr-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        vrAction(btn.dataset.action || btn.getAttribute('data-action'));
+      });
     });
 
     function show2D() {
