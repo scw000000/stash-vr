@@ -1,0 +1,78 @@
+package browse
+
+import (
+	"io"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
+	"stash-vr/internal/stash"
+)
+
+// sceneStreamHandler proxies the Stash direct stream so the browser fetches
+// from the same origin as the /browse page. Without this, A-Frame's WebGL
+// texture upload taints on cross-origin video and the headset's browser may
+// fail to reach the Stash host directly. Forwards the Range header to keep
+// byte-range scrubbing working.
+var streamCopiedHeaders = []string{
+	"Content-Type",
+	"Content-Length",
+	"Content-Range",
+	"Accept-Ranges",
+	"Last-Modified",
+	"ETag",
+	"Cache-Control",
+}
+
+func (h *httpHandler) sceneStreamHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.NotFound(w, r)
+		return
+	}
+	vd, err := h.libraryService.GetScene(r.Context(), id, false)
+	if err != nil || vd == nil || vd.SceneParts == nil ||
+		vd.SceneParts.Paths == nil || vd.SceneParts.Paths.Stream == nil {
+		log.Ctx(r.Context()).Warn().Err(err).Str("id", id).Msg("stream: scene or stream URL missing")
+		http.NotFound(w, r)
+		return
+	}
+
+	upstreamURL := stash.ApiKeyed(*vd.SceneParts.Paths.Stream)
+
+	method := r.Method
+	if method != http.MethodGet && method != http.MethodHead {
+		method = http.MethodGet
+	}
+	req, err := http.NewRequestWithContext(r.Context(), method, upstreamURL, nil)
+	if err != nil {
+		http.Error(w, "stream: build upstream request", http.StatusInternalServerError)
+		return
+	}
+	if rng := r.Header.Get("Range"); rng != "" {
+		req.Header.Set("Range", rng)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("stream: upstream request failed")
+		http.Error(w, "stream: upstream", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	for _, key := range streamCopiedHeaders {
+		if v := resp.Header.Get(key); v != "" {
+			w.Header().Set(key, v)
+		}
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(resp.StatusCode)
+
+	if r.Method == http.MethodHead {
+		return
+	}
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Ctx(r.Context()).Debug().Err(err).Str("id", id).Msg("stream: copy interrupted")
+	}
+}

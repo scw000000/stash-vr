@@ -3,6 +3,7 @@ package browse
 import (
 	"html/template"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -52,7 +53,11 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Stream != nil {
-		data.DirectStreamURL = *vd.SceneParts.Paths.Stream
+		// Proxy the stream through stash-vr so the browser fetches it from the
+		// same origin as the page. Same-origin avoids CORS issues for WebGL
+		// texture upload and works around Stash hosts that aren't reachable
+		// from every device's browser context.
+		data.DirectStreamURL = "/browse/scene/" + url.PathEscape(id) + "/stream"
 	}
 
 	performerNames := make([]string, 0, len(vd.SceneParts.Performers))

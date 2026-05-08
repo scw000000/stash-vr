@@ -21,6 +21,7 @@ func Router(libraryService *library.Service) http.Handler {
 	r.Get("/tag/{id}", h.entityHandler("tag"))
 
 	r.Get("/scene/{id}", h.sceneDetailHandler)
+	r.Get("/scene/{id}/stream", h.sceneStreamHandler)
 	r.Post("/scene/{id}/rating", h.sceneRatingHandler)
 	r.Post("/scene/{id}/favorite", h.sceneFavoriteHandler)
 	r.Post("/scene/{id}/tags/add", h.sceneTagAddHandler)

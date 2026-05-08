@@ -62,20 +62,22 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 
 <a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false">
   <a-assets timeout="5000">
-    <video id="vrTex" src="{{.DirectStreamURL}}" preload="auto" muted playsinline crossorigin="anonymous" loop></video>
+    <video id="vrTex" src="{{.DirectStreamURL}}" preload="auto" muted playsinline loop></video>
   </a-assets>
   <a-entity camera position="0 1.6 0"></a-entity>
 {{if eq .VRMode "180sbs"}}
-  <a-entity stereo="eye:left;mode:half"
+  <a-entity id="vrSphereL"
+            stereo="eye:left;mode:half"
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            material="src:#vrTex;shader:flat;side:back"
+            material="shader:flat;side:back;color:#000"
             rotation="0 90 0"></a-entity>
-  <a-entity stereo="eye:right;mode:half"
+  <a-entity id="vrSphereR"
+            stereo="eye:right;mode:half"
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            material="src:#vrTex;shader:flat;side:back"
+            material="shader:flat;side:back;color:#000"
             rotation="0 90 0"></a-entity>
 {{else}}
-  <a-video src="#vrTex" position="0 1.6 -3" width="4" height="2.25"></a-video>
+  <a-video id="vrFlat" src="#vrTex" position="0 1.6 -3" width="4" height="2.25"></a-video>
 {{end}}
 </a-scene>
 
@@ -90,6 +92,34 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     const vrTex = document.getElementById('vrTex');
     if (!btn || !scene || !wrap) return;
 
+    // Bind the vrTex video as a Three.js VideoTexture on the meshes.
+    // Done programmatically because aframe-stereo-component v1.4.0 reads
+    // material.src as a string (before A-Frame parses material to an
+    // object), throwing TypeError when src is declared inline.
+    // Idempotent: cached texture, only updates meshes that don't have it yet.
+    let cachedTex = null;
+    function bindTexture() {
+      if (!vrTex || !window.AFRAME || !AFRAME.THREE) return;
+      const targets = scene.querySelectorAll('#vrSphereL, #vrSphereR, #vrFlat');
+      if (targets.length === 0) return;
+      if (!cachedTex) {
+        cachedTex = new AFRAME.THREE.VideoTexture(vrTex);
+        if (AFRAME.THREE.SRGBColorSpace) cachedTex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+      }
+      targets.forEach(el => {
+        const mesh = el.getObject3D('mesh');
+        if (mesh && mesh.material && mesh.material.map !== cachedTex) {
+          mesh.material.map = cachedTex;
+          mesh.material.color = new AFRAME.THREE.Color(0xffffff);
+          mesh.material.needsUpdate = true;
+        }
+      });
+    }
+    scene.addEventListener('loaded', bindTexture);
+    scene.querySelectorAll('a-entity, a-video').forEach(el => {
+      el.addEventListener('object3dset', bindTexture);
+    });
+
     function show2D() {
       scene.style.display = 'none';
       [...wrap.children].forEach(el => {
@@ -101,6 +131,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       }
     }
     function hide2D() {
+      bindTexture();
       [...wrap.children].forEach(el => {
         if (el !== scene && el !== video) el.style.display = 'none';
       });
