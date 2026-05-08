@@ -9,6 +9,7 @@ import (
 
 const (
 	envKeyListenAddress          = "LISTEN_ADDRESS"
+	envKeyHTTPSListenAddress     = "HTTPS_LISTEN_ADDRESS"
 	envKeyStashGraphQLUrl        = "STASH_GRAPHQL_URL"
 	envKeyStashApiKey            = "STASH_API_KEY"
 	envKeyFavoriteTag            = "FAVORITE_TAG"
@@ -36,6 +37,7 @@ const (
 
 type ApplicationConfig struct {
 	ListenAddress          string
+	HTTPSListenAddress     string
 	StashGraphQLUrl        string
 	StashApiKey            string
 	FavoriteTag            string
@@ -66,6 +68,9 @@ var applicationConfig ApplicationConfig
 func Init() {
 	pflag.String(envKeyListenAddress, ":9666", "Local address for Stash-VR to listen on")
 	_ = viper.BindPFlag(envKeyListenAddress, pflag.Lookup(envKeyListenAddress))
+
+	pflag.String(envKeyHTTPSListenAddress, "", "Local address for Stash-VR to listen on for HTTPS (auto-generates self-signed cert; empty disables — recommended unless you can install custom CAs on your headset)")
+	_ = viper.BindPFlag(envKeyHTTPSListenAddress, pflag.Lookup(envKeyHTTPSListenAddress))
 
 	pflag.String(envKeyStashGraphQLUrl, "http://localhost:9999/graphql", "Url to Stash graphql")
 	_ = viper.BindPFlag(envKeyStashGraphQLUrl, pflag.Lookup(envKeyStashGraphQLUrl))
@@ -149,6 +154,7 @@ func Init() {
 	viper.AutomaticEnv()
 
 	applicationConfig.ListenAddress = viper.GetString(envKeyListenAddress)
+	applicationConfig.HTTPSListenAddress = viper.GetString(envKeyHTTPSListenAddress)
 	applicationConfig.StashGraphQLUrl = viper.GetString(envKeyStashGraphQLUrl)
 	applicationConfig.StashApiKey = viper.GetString(envKeyStashApiKey)
 	applicationConfig.FavoriteTag = viper.GetString(envKeyFavoriteTag)

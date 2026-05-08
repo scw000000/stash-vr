@@ -32,6 +32,49 @@
 </style>
 <body>
 <h1><img src="icon.png" style="vertical-align: middle;">Stash-VR</h1>
+{{if .HTTPSEnabled}}
+<aside id="httpsBanner" style="background: #f0f8ff; border-left: 4px solid #2c5282; padding: 8px 12px; margin: 8px 0;">
+    <strong>HTTPS available.</strong>
+    <span class="httpsCertNeeded" style="display:none">
+        Detecting cert install status&hellip;
+        <a id="httpsCertDownload" href="/ca.crt" download="stash-vr-ca.crt">Download cert manually</a>
+    </span>
+    <span class="httpsCertOk" style="display:none; background: lime;">Cert installed &mdash; HTTPS works on this device.</span>
+    <ol>
+        <li>If not already, install the root cert on this headset (Settings &rarr; Security &rarr; Install CA certificate).</li>
+        <li>Switch your DeoVR/HereSphere library URL to <code>https://{{.HTTPSHost}}/&hellip;</code></li>
+    </ol>
+</aside>
+<script>
+(function () {
+    var banner = document.getElementById('httpsBanner');
+    var needed = banner.querySelector('.httpsCertNeeded');
+    var ok = banner.querySelector('.httpsCertOk');
+    var httpsHost = {{.HTTPSHost}};
+    if (!httpsHost) return;
+
+    var probe = new Image();
+    var done = false;
+    var timer = setTimeout(function () { if (!done) handleFail(); }, 4000);
+    probe.onload = function () { done = true; clearTimeout(timer); ok.style.display = 'inline'; };
+    probe.onerror = function () { done = true; clearTimeout(timer); handleFail(); };
+    probe.src = 'https://' + httpsHost + '/icon.png?_=' + Date.now();
+
+    function handleFail() {
+        needed.style.display = 'inline';
+        if (!localStorage.getItem('stashvr_cert_offered')) {
+            localStorage.setItem('stashvr_cert_offered', '1');
+            var a = document.createElement('a');
+            a.href = '/ca.crt';
+            a.download = 'stash-vr-ca.crt';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+    }
+})();
+</script>
+{{end}}
 <samp>
     <table>
         <tr>

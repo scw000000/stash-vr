@@ -19,6 +19,36 @@ import (
 
 var indexTmpl = template.Must(template.ParseFS(static.Fs, "index.gohtml"))
 
+// httpsHostForRequest returns "<host>:<httpsPort>" derived from r.Host and the
+// configured HTTPS listen address. Returns "" if HTTPS is disabled.
+func httpsHostForRequest(r *http.Request) string {
+	addr := config.Application().HTTPSListenAddress
+	if addr == "" {
+		return ""
+	}
+	_, port, err := splitHostPort(addr)
+	if err != nil || port == "" {
+		return ""
+	}
+	host, _, err := splitHostPort(r.Host)
+	if err != nil || host == "" {
+		host = r.Host
+	}
+	return host + ":" + port
+}
+
+func splitHostPort(addr string) (host, port string, err error) {
+	for i := len(addr) - 1; i >= 0; i-- {
+		if addr[i] == ':' {
+			return addr[:i], addr[i+1:], nil
+		}
+		if addr[i] < '0' || addr[i] > '9' {
+			break
+		}
+	}
+	return addr, "", nil
+}
+
 const (
 	statusOk           = "OK"
 	statusError        = "ERROR"
@@ -49,6 +79,8 @@ type indexData struct {
 	Version                 string
 	LogLevel                string
 	ForceHTTPS              bool
+	HTTPSEnabled            bool
+	HTTPSHost               string
 	IsSyncMarkersAllowed    bool
 	StashGraphQLUrl         string
 	IsApiKeyProvided        bool
@@ -205,6 +237,8 @@ func IndexHandler(libraryService *library.Service) http.HandlerFunc {
 			Version:                 build.FullVersion(),
 			LogLevel:                config.Application().LogLevel,
 			ForceHTTPS:              config.Application().ForceHTTPS,
+			HTTPSEnabled:            config.Application().HTTPSListenAddress != "",
+			HTTPSHost:               httpsHostForRequest(r),
 			StashGraphQLUrl:         config.Application().StashGraphQLUrl,
 			IsApiKeyProvided:        config.Application().StashApiKey != "",
 			StashConnectionResponse: statusError,

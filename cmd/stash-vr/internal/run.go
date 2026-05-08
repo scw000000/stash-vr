@@ -26,7 +26,7 @@ func Run(ctx context.Context) error {
 
 	libraryService := library.NewService(stashClient)
 
-	err := server.Listen(ctx, config.Application().ListenAddress, libraryService)
+	err := server.Listen(ctx, config.Application().ListenAddress, config.Application().HTTPSListenAddress, libraryService)
 	if err != nil {
 		return fmt.Errorf("server: %w", err)
 	}
