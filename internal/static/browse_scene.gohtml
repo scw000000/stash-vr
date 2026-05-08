@@ -67,22 +67,19 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
   <a-entity camera position="0 1.6 0"></a-entity>
 {{if eq .VRMode "180sbs"}}
   <a-entity id="vrSphereL"
-            stereo="eye:left;mode:half"
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            material="shader:flat;side:back;color:#000"
             rotation="0 90 0"></a-entity>
   <a-entity id="vrSphereR"
-            stereo="eye:right;mode:half"
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            material="shader:flat;side:back;color:#000"
             rotation="0 90 0"></a-entity>
 {{else}}
-  <a-video id="vrFlat" src="#vrTex" position="0 1.6 -3" width="4" height="2.25"></a-video>
+  <a-entity id="vrFlat"
+            geometry="primitive:plane;width:4;height:2.25"
+            position="0 1.6 -3"></a-entity>
 {{end}}
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
-<script src="/vendor/aframe-stereo-component.min.js"></script>
 <script>
   (function() {
     const btn   = document.getElementById('enterVR');
@@ -92,32 +89,54 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     const vrTex = document.getElementById('vrTex');
     if (!btn || !scene || !wrap) return;
 
-    // Bind the vrTex video as a Three.js VideoTexture on the meshes.
-    // Done programmatically because aframe-stereo-component v1.4.0 reads
-    // material.src as a string (before A-Frame parses material to an
-    // object), throwing TypeError when src is declared inline.
-    // Idempotent: cached texture, only updates meshes that don't have it yet.
-    let cachedTex = null;
-    function bindTexture() {
-      if (!vrTex || !window.AFRAME || !AFRAME.THREE) return;
-      const targets = scene.querySelectorAll('#vrSphereL, #vrSphereR, #vrFlat');
-      if (targets.length === 0) return;
-      if (!cachedTex) {
-        cachedTex = new AFRAME.THREE.VideoTexture(vrTex);
-        if (AFRAME.THREE.SRGBColorSpace) cachedTex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+    // Bind material + texture programmatically. The vendored
+    // aframe-stereo-component@1.4.0 doesn't work on A-Frame 1.7 (reads
+    // material as a raw string at init), so we skip it and handle stereo
+    // via UV transforms + Three.js layers ourselves. Each eye gets its
+    // own VideoTexture (sharing the underlying <video> element) with
+    // offset/repeat for the SBS half it should sample.
+    const meshConfigs = [
+      { id: 'vrSphereL', layer: 1, offsetX: 0,   side: 'back' },
+      { id: 'vrSphereR', layer: 2, offsetX: 0.5, side: 'back' },
+      { id: 'vrFlat',    layer: 0, offsetX: 0,   side: 'front', mono: true }
+    ];
+    function applyMaterial(cfg) {
+      const el = document.getElementById(cfg.id);
+      if (!el) return;
+      const mesh = el.getObject3D('mesh');
+      if (!mesh || !vrTex || !window.AFRAME || !AFRAME.THREE) return;
+      if (mesh.userData.boundVR) return;
+      const tex = new AFRAME.THREE.VideoTexture(vrTex);
+      if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+      if (!cfg.mono) {
+        tex.repeat.set(0.5, 1);
+        tex.offset.set(cfg.offsetX, 0);
       }
-      targets.forEach(el => {
-        const mesh = el.getObject3D('mesh');
-        if (mesh && mesh.material && mesh.material.map !== cachedTex) {
-          mesh.material.map = cachedTex;
-          mesh.material.color = new AFRAME.THREE.Color(0xffffff);
-          mesh.material.needsUpdate = true;
-        }
+      mesh.material = new AFRAME.THREE.MeshBasicMaterial({
+        map: tex,
+        side: cfg.side === 'back' ? AFRAME.THREE.BackSide : AFRAME.THREE.FrontSide
       });
+      mesh.layers.set(cfg.layer);
+      mesh.userData.boundVR = true;
     }
-    scene.addEventListener('loaded', bindTexture);
-    scene.querySelectorAll('a-entity, a-video').forEach(el => {
-      el.addEventListener('object3dset', bindTexture);
+    function applyAll() {
+      meshConfigs.forEach(applyMaterial);
+    }
+    scene.addEventListener('loaded', applyAll);
+    meshConfigs.forEach(cfg => {
+      const el = document.getElementById(cfg.id);
+      if (el) el.addEventListener('object3dset', () => applyMaterial(cfg));
+    });
+    // WebXR cameras default to layer 0 — without this, layer-1/2 meshes are
+    // invisible. Enable per-eye layers when the WebXR session starts.
+    scene.addEventListener('enter-vr', () => {
+      const renderer = scene.renderer;
+      if (!renderer || !renderer.xr) return;
+      const cam = renderer.xr.getCamera();
+      if (cam && cam.cameras && cam.cameras.length >= 2) {
+        cam.cameras[0].layers.enable(1);
+        cam.cameras[1].layers.enable(2);
+      }
     });
 
     function show2D() {
@@ -131,7 +150,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       }
     }
     function hide2D() {
-      bindTexture();
+      applyAll();
       [...wrap.children].forEach(el => {
         if (el !== scene && el !== video) el.style.display = 'none';
       });

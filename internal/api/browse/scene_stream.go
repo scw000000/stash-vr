@@ -2,7 +2,10 @@ package browse
 
 import (
 	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -15,13 +18,27 @@ import (
 // fail to reach the Stash host directly. Forwards the Range header to keep
 // byte-range scrubbing working.
 var streamCopiedHeaders = []string{
-	"Content-Type",
 	"Content-Length",
 	"Content-Range",
 	"Accept-Ranges",
 	"Last-Modified",
 	"ETag",
 	"Cache-Control",
+}
+
+// pickContentType prefers the file-extension-derived MIME type because Stash
+// frequently mis-labels MP4 files as video/mpeg, which most browsers refuse
+// to play.
+func pickContentType(basename, upstream string) string {
+	if ext := strings.ToLower(filepath.Ext(basename)); ext != "" {
+		if mt := mime.TypeByExtension(ext); mt != "" && strings.HasPrefix(mt, "video/") {
+			return mt
+		}
+	}
+	if upstream != "" && upstream != "video/mpeg" && upstream != "application/octet-stream" {
+		return upstream
+	}
+	return "video/mp4"
 }
 
 func (h *httpHandler) sceneStreamHandler(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +83,11 @@ func (h *httpHandler) sceneStreamHandler(w http.ResponseWriter, r *http.Request)
 			w.Header().Set(key, v)
 		}
 	}
+	basename := ""
+	if len(vd.SceneParts.Files) > 0 && vd.SceneParts.Files[0] != nil {
+		basename = vd.SceneParts.Files[0].Basename
+	}
+	w.Header().Set("Content-Type", pickContentType(basename, resp.Header.Get("Content-Type")))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(resp.StatusCode)
 
