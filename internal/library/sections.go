@@ -99,6 +99,8 @@ func (libraryService *Service) getDefaultSections(ctx context.Context) ([]Sectio
 func (libraryService *Service) getSectionsByFilters(ctx context.Context, entries []filterEntry) ([]Section, error) {
 	sections := make([]Section, len(entries))
 
+	autoNames := libraryService.resolveAutoSectionNames(ctx, entries)
+
 	wg := sync.WaitGroup{}
 	wg.Add(len(entries))
 
@@ -113,7 +115,11 @@ func (libraryService *Service) getSectionsByFilters(ctx context.Context, entries
 				return
 			}
 			if e.AutoID != "" {
-				libraryService.buildAutoSection(ctx, i, sections, config.Filter{ID: e.AutoID, Name: e.Name})
+				name := e.Name
+				if name == "" {
+					name = autoNames[e.AutoID]
+				}
+				libraryService.buildAutoSection(ctx, i, sections, config.Filter{ID: e.AutoID, Name: name})
 			}
 		}(i, e)
 	}
@@ -122,6 +128,53 @@ func (libraryService *Service) getSectionsByFilters(ctx context.Context, entries
 		return len(s.Ids) == 0
 	})
 	return sections, nil
+}
+
+// resolveAutoSectionNames batch-fetches display names for all auto-section
+// entries lacking a user override, so the materializer doesn't fall back to
+// "Performer 123" / "Tag 456" placeholders. Returns auto-id -> resolved name.
+func (libraryService *Service) resolveAutoSectionNames(ctx context.Context, entries []filterEntry) map[string]string {
+	out := map[string]string{}
+
+	const (
+		perfPrefix = "auto:perf:"
+		tagPrefix  = "auto:tag:"
+		aggPrefix  = "auto:agg:"
+	)
+	var performerIDs, tagIDs []string
+	for _, e := range entries {
+		if e.AutoID == "" || e.Name != "" {
+			continue
+		}
+		switch {
+		case len(e.AutoID) > len(perfPrefix) && e.AutoID[:len(perfPrefix)] == perfPrefix:
+			performerIDs = append(performerIDs, e.AutoID[len(perfPrefix):])
+		case len(e.AutoID) > len(tagPrefix) && e.AutoID[:len(tagPrefix)] == tagPrefix:
+			tagIDs = append(tagIDs, e.AutoID[len(tagPrefix):])
+		case len(e.AutoID) > len(aggPrefix) && e.AutoID[:len(aggPrefix)] == aggPrefix:
+			out[e.AutoID] = defaultAggregateName(e.AutoID[len(aggPrefix):])
+		}
+	}
+
+	if len(performerIDs) > 0 {
+		if resp, err := gql.FindPerformersByIDs(ctx, libraryService.StashClient, performerIDs); err == nil {
+			for _, p := range resp.FindPerformers.Performers {
+				out[perfPrefix+p.Id] = p.Name
+			}
+		} else {
+			log.Ctx(ctx).Warn().Err(err).Msg("auto-sections: batch-resolve performer names failed")
+		}
+	}
+	if len(tagIDs) > 0 {
+		if resp, err := gql.FindTagsByIDs(ctx, libraryService.StashClient, tagIDs); err == nil {
+			for _, t := range resp.FindTags.Tags {
+				out[tagPrefix+t.Id] = t.Name
+			}
+		} else {
+			log.Ctx(ctx).Warn().Err(err).Msg("auto-sections: batch-resolve tag names failed")
+		}
+	}
+	return out
 }
 
 func (libraryService *Service) buildSavedFilterSection(ctx context.Context, idx int, out []Section, f gql.SavedFilterParts, nameOverride string) {
