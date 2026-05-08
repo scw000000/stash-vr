@@ -18,13 +18,18 @@ const pageSize = 30
 
 // fetchSceneIDs runs FindSceneIdsByFilter and returns (ids, totalCount).
 // sceneFilter may be nil (all scenes); page is 1-indexed.
-func fetchSceneIDs(ctx context.Context, client graphql.Client, sceneFilter *gql.SceneFilterType, page int) ([]string, int, error) {
-	resp, err := gql.FindSceneIdsByFilter(ctx, client, sceneFilter, &gql.FindFilterType{
+// q is an optional full-text search string (passed to FindFilterType.Q).
+func fetchSceneIDs(ctx context.Context, client graphql.Client, sceneFilter *gql.SceneFilterType, q string, page int) ([]string, int, error) {
+	findFilter := &gql.FindFilterType{
 		Page:      util.Ptr(page),
 		Per_page:  util.Ptr(pageSize),
 		Sort:      util.Ptr("created_at"),
 		Direction: util.Ptr(gql.SortDirectionEnumDesc),
-	})
+	}
+	if q != "" {
+		findFilter.Q = util.Ptr(q)
+	}
+	resp, err := gql.FindSceneIdsByFilter(ctx, client, sceneFilter, findFilter)
 	if err != nil {
 		return nil, 0, fmt.Errorf("FindSceneIdsByFilter: %w", err)
 	}

@@ -19,6 +19,7 @@ var browseTmpl = template.Must(template.ParseFS(static.Fs, "browse.gohtml"))
 func (h *httpHandler) indexHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tab := q.Get("tab")
+	searchQ := q.Get("q")
 
 	page, _ := strconv.Atoi(q.Get("page"))
 	if page < 1 {
@@ -32,7 +33,7 @@ func (h *httpHandler) indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ids, total, err := fetchSceneIDs(r.Context(), h.libraryService.StashClient, nil, page)
+	ids, total, err := fetchSceneIDs(r.Context(), h.libraryService.StashClient, nil, searchQ, page)
 	if err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: fetch default scene ids")
 		http.Error(w, "Couldn't list scenes.", http.StatusInternalServerError)
@@ -79,6 +80,7 @@ func (h *httpHandler) entityHandler(kind string) http.HandlerFunc {
 			return
 		}
 		q := r.URL.Query()
+		searchQ := q.Get("q")
 		page, _ := strconv.Atoi(q.Get("page"))
 		if page < 1 {
 			page = 1
@@ -121,7 +123,7 @@ func (h *httpHandler) entityHandler(kind string) http.HandlerFunc {
 			return
 		}
 
-		ids, total, err := fetchSceneIDs(r.Context(), h.libraryService.StashClient, sceneFilter, page)
+		ids, total, err := fetchSceneIDs(r.Context(), h.libraryService.StashClient, sceneFilter, searchQ, page)
 		if err != nil {
 			log.Ctx(r.Context()).Err(err).Msg("browse: fetch entity scenes")
 			http.Error(w, "Couldn't list scenes for this entity.", http.StatusInternalServerError)
