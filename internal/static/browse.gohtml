@@ -60,6 +60,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
 {{if .SubHead}}<span class="subhead">{{.SubHead}}</span>{{end}}
 </div>
 <form method="GET" class="searchbar">
+{{if .Sidebar.ActiveTab}}<input type="hidden" name="tab" value="{{.Sidebar.ActiveTab}}">{{end}}
 <input type="search" name="q" value="{{.SearchQuery}}" placeholder="Search titles…" autocomplete="off">
 {{if .SearchQuery}}<a class="searchclear" href="?{{if .Sidebar.ActiveTab}}tab={{.Sidebar.ActiveTab}}{{end}}">Clear</a>{{end}}
 </form>
