@@ -8,6 +8,9 @@ For each criterion: PASS / FAIL / PARTIAL + one-line note.
 
 ## Browse / search
 
+- [ ] Open `/browse` directly (no `?q=` in URL). Full grid renders with all scenes. (Baseline — confirms empty `q` is treated as no filter.)
+  - Result: ___ — note: ___
+
 - [ ] /browse loads. Cards visible. Thumbnails visible. Search input visible above the grid.
   - Result: ___ — note: ___
 
@@ -40,7 +43,7 @@ For each criterion: PASS / FAIL / PARTIAL + one-line note.
 - [ ] Click play (or unmute) — audio audible, frames visible.
   - Result: ___ — note: ___
 
-- [ ] Drag the seek scrubber to a different position — playback resumes at the new time. (Validates byte-range.)
+- [ ] Drag the seek scrubber to a different position — playback resumes at the dragged position within ~2 s. (Validates byte-range. If playback restarts from 0:00 or hangs, byte-range is broken → FAIL.)
   - Result: ___ — note: ___
 
 - [ ] No "Play in DeoVR" button anywhere on scene detail.
