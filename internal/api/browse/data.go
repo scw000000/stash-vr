@@ -44,6 +44,7 @@ type PageData struct {
 	PageNum int
 	PageMax int
 	ErrMessage string
+	SearchQuery string
 }
 
 // SceneDetailData drives browse_scene.gohtml.

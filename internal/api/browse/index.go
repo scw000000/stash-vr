@@ -57,14 +57,15 @@ func (h *httpHandler) indexHandler(w http.ResponseWriter, r *http.Request) {
 	prev, next := pagerURLs("/browse", page, pageMax, extra)
 
 	data := PageData{
-		Sidebar: sidebar,
-		Header:  "All scenes — newest first",
-		SubHead: fmt.Sprintf("%d scenes", total),
-		Cards:   cards,
-		PrevURL: prev,
-		NextURL: next,
-		PageNum: page,
-		PageMax: pageMax,
+		Sidebar:     sidebar,
+		Header:      "All scenes — newest first",
+		SubHead:     fmt.Sprintf("%d scenes", total),
+		Cards:       cards,
+		PrevURL:     prev,
+		NextURL:     next,
+		PageNum:     page,
+		PageMax:     pageMax,
+		SearchQuery: searchQ,
 	}
 
 	if err := browseTmpl.Execute(w, data); err != nil {
@@ -150,15 +151,16 @@ func (h *httpHandler) entityHandler(kind string) http.HandlerFunc {
 		prev, next := pagerURLs("/browse/"+kind+"/"+id, page, pageMax, extra)
 
 		data := PageData{
-			Sidebar: sidebar,
-			BackURL: "/browse",
-			Header:  header,
-			SubHead: fmt.Sprintf("%d scenes", total),
-			Cards:   cards,
-			PrevURL: prev,
-			NextURL: next,
-			PageNum: page,
-			PageMax: pageMax,
+			Sidebar:     sidebar,
+			BackURL:     "/browse",
+			Header:      header,
+			SubHead:     fmt.Sprintf("%d scenes", total),
+			Cards:       cards,
+			PrevURL:     prev,
+			NextURL:     next,
+			PageNum:     page,
+			PageMax:     pageMax,
+			SearchQuery: searchQ,
 		}
 		if err := browseTmpl.Execute(w, data); err != nil {
 			log.Ctx(r.Context()).Err(err).Msg("browse: render entity")

@@ -16,6 +16,11 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
 .header .subhead { color: #999; font-size: 0.9rem; }
 .header a { color: #9cf; text-decoration: none; }
 .errbanner { background: #5a1a1a; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; }
+.searchbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+.searchbar input { flex: 1; padding: 8px 12px; background: #1a1a1a; border: 1px solid #333; color: #eee; border-radius: 4px; font-size: 0.95rem; }
+.searchbar input:focus { outline: none; border-color: #2c5282; }
+.searchclear { color: #9cf; text-decoration: none; font-size: 0.9rem; }
+.searchclear:hover { color: #fff; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .card { background: #1a1a1a; border-radius: 6px; overflow: hidden; transition: transform 0.1s; }
 .card:hover { transform: translateY(-2px); }
@@ -55,6 +60,10 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
 <h1>{{.Header}}</h1>
 {{if .SubHead}}<span class="subhead">{{.SubHead}}</span>{{end}}
 </div>
+<form method="GET" class="searchbar">
+<input type="search" name="q" value="{{.SearchQuery}}" placeholder="Search titles…" autocomplete="off">
+{{if .SearchQuery}}<a class="searchclear" href="?">Clear</a>{{end}}
+</form>
 {{if .Cards}}
 <div class="grid">
 {{range .Cards}}
