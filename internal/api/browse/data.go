@@ -63,6 +63,7 @@ type SceneDetailData struct {
 	OCounter        int
 	Organized       bool
 	DirectStreamURL string
+	IsVR180SBS      bool
 	ErrMessage      string
 
 	// StarSlice is a 5-element placeholder used purely so the template can

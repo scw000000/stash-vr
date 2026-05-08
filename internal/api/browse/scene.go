@@ -73,20 +73,31 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	favTag := config.Application().FavoriteTag
+	hasDome, hasSBS := false, false
 	for _, t := range vd.SceneParts.Tags {
 		if t == nil {
 			continue
 		}
-		// Skip ancestor-injected tags (decorateTags adds these with prefix.SvrAncestor in Sort_name).
+		name := t.TagParts.Name
+		// Detect VR projection BEFORE the ancestor skip so an ancestor-injected
+		// DOME or SBS tag still counts.
+		if name == apiinternal.TagVR_DOME {
+			hasDome = true
+		}
+		if name == apiinternal.TagVR_SBS {
+			hasSBS = true
+		}
+		// Skip ancestor-injected tags from the chip list.
 		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
 			continue
 		}
-		if favTag != "" && t.TagParts.Name == favTag {
+		if favTag != "" && name == favTag {
 			data.IsFavorite = true
 			continue
 		}
-		data.Tags = append(data.Tags, t.TagParts.Name)
+		data.Tags = append(data.Tags, name)
 	}
+	data.IsVR180SBS = hasDome && hasSBS
 
 	if vd.SceneParts.O_counter != nil {
 		data.OCounter = *vd.SceneParts.O_counter
