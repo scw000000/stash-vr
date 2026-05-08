@@ -80,8 +80,10 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     if (!btn || !scene || !wrap) return;
 
     function show2D() {
-      [...wrap.children].forEach(el => { el.style.display = ''; });
       scene.style.display = 'none';
+      [...wrap.children].forEach(el => {
+        if (el !== scene) el.style.display = '';
+      });
     }
     function hide2D() {
       [...wrap.children].forEach(el => {
