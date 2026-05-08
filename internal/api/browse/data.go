@@ -28,7 +28,6 @@ type Card struct {
 	Duration     string // already-formatted "HH:MM:SS" or "MM:SS"
 	Performers   string // comma-joined names
 	Studio       string
-	DeoVRPlayURL string // direct play URL for the quick-play overlay
 	DetailURL    string // /browse/scene/{id}
 }
 

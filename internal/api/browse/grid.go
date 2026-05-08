@@ -61,11 +61,10 @@ func buildCards(ctx context.Context, lib *library.Service, baseURL string, ids [
 			continue
 		}
 		c := Card{
-			ID:           ids[i],
-			Title:        vd.Title(),
-			Duration:     formatDuration(vd.SceneParts.Files[0].Duration),
-			DetailURL:    "/browse/scene/" + url.PathEscape(ids[i]),
-			DeoVRPlayURL: "/deovr/" + url.PathEscape(ids[i]),
+			ID:        ids[i],
+			Title:     vd.Title(),
+			Duration:  formatDuration(vd.SceneParts.Files[0].Duration),
+			DetailURL: "/browse/scene/" + url.PathEscape(ids[i]),
 		}
 		if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Screenshot != nil {
 			c.ThumbnailURL = heatmap.GetCoverUrl(baseURL, ids[i])
