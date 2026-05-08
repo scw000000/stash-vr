@@ -61,9 +61,6 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 <button id="enterVR" class="btn-vr" type="button">{{if eq .VRMode "180sbs"}}▥ Enter VR (180° SBS){{else}}▥ Watch on virtual screen{{end}}</button>
 
 <a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false">
-  <a-assets timeout="5000">
-    <video id="vrTex" src="{{.DirectStreamURL}}" preload="auto" muted playsinline loop></video>
-  </a-assets>
   <a-entity camera position="0 1.6 0"></a-entity>
 {{if eq .VRMode "180sbs"}}
   <a-entity id="vrSphere"
@@ -111,18 +108,23 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     const scene = document.getElementById('vrScene');
     const wrap  = document.querySelector('.wrap');
     const video = document.getElementById('sceneVideo');
-    const vrTex = document.getElementById('vrTex');
-    if (!btn || !scene || !wrap) return;
+    if (!btn || !scene || !wrap || !video) return;
 
     // Bind material + texture programmatically. aframe-stereo-component@1.4.0
     // doesn't work on A-Frame 1.7 (reads material as raw string at init), so
     // stereo is handled here directly.
     //
-    // Strategy: ONE half-sphere with the full SBS-encoded texture. WebXR
-    // renders the scene twice per frame (once per eye), and Three.js calls
-    // mesh.onBeforeRender per render call with the active camera. We swap
-    // tex.offset/repeat per eye so the left eye samples the left half and
-    // the right eye samples the right half of the SBS texture.
+    // Single-video architecture: sceneVideo (the on-page <video>) is the
+    // sole media element. THREE.VideoTexture reads frames from it; the
+    // element also produces audio. One pipeline = no drift between audio
+    // and picture, and the texture is non-empty on Enter VR because
+    // sceneVideo has been autoplaying (muted) since page load.
+    //
+    // Strategy for SBS: ONE half-sphere with the full SBS-encoded texture.
+    // WebXR renders the scene twice per frame (once per eye), and Three.js
+    // calls mesh.onBeforeRender per render call with the active camera. We
+    // swap tex.offset/repeat per eye so the left eye samples the left half
+    // and the right eye samples the right half of the SBS texture.
     //
     // The half-sphere uses phiStart:180, phiLength:180 so it natively faces
     // -Z (camera forward) with U increasing left-to-right and V increasing
@@ -130,10 +132,10 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     // rotation needed.
     function applySphere() {
       const el = document.getElementById('vrSphere');
-      if (!el || !vrTex || !window.AFRAME || !AFRAME.THREE) return;
+      if (!el || !window.AFRAME || !AFRAME.THREE) return;
       const mesh = el.getObject3D('mesh');
       if (!mesh || mesh.userData.boundVR) return;
-      const tex = new AFRAME.THREE.VideoTexture(vrTex);
+      const tex = new AFRAME.THREE.VideoTexture(video);
       if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
       mesh.material = new AFRAME.THREE.MeshBasicMaterial({
         map: tex,
@@ -160,10 +162,10 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     }
     function applyFlat() {
       const el = document.getElementById('vrFlat');
-      if (!el || !vrTex || !window.AFRAME || !AFRAME.THREE) return;
+      if (!el || !window.AFRAME || !AFRAME.THREE) return;
       const mesh = el.getObject3D('mesh');
       if (!mesh || mesh.userData.boundVR) return;
-      const tex = new AFRAME.THREE.VideoTexture(vrTex);
+      const tex = new AFRAME.THREE.VideoTexture(video);
       if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
       mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
       mesh.userData.boundVR = true;
@@ -180,22 +182,22 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 
     // In-VR control panel: raycast clicks fire on .vr-btn entities (via
     // A-Frame's laser-controls + cursor pipeline). Each button has a
-    // data-action attribute that maps to a vrTex playback verb.
+    // data-action attribute that maps to a sceneVideo playback verb.
     function vrAction(action) {
       if (action === 'playpause') {
-        if (vrTex.paused) {
-          const p = vrTex.play();
-          if (p && p.catch) p.catch(err => console.warn('stash-vr: vrTex play failed', err));
+        if (video.paused) {
+          const p = video.play();
+          if (p && p.catch) p.catch(err => console.warn('stash-vr: video play failed', err));
         } else {
-          vrTex.pause();
+          video.pause();
         }
       } else if (action === 'seek-back') {
-        if (vrTex && !isNaN(vrTex.currentTime)) {
-          vrTex.currentTime = Math.max(0, vrTex.currentTime - 10);
+        if (!isNaN(video.currentTime)) {
+          video.currentTime = Math.max(0, video.currentTime - 10);
         }
       } else if (action === 'seek-fwd') {
-        if (vrTex && !isNaN(vrTex.currentTime) && !isNaN(vrTex.duration) && vrTex.duration > 0) {
-          vrTex.currentTime = Math.min(vrTex.duration - 0.1, vrTex.currentTime + 10);
+        if (!isNaN(video.currentTime) && !isNaN(video.duration) && video.duration > 0) {
+          video.currentTime = Math.min(video.duration - 0.1, video.currentTime + 10);
         }
       } else if (action === 'exit') {
         try { scene.exitVR(); } catch (e) { console.warn('stash-vr: exitVR failed', e); }
@@ -212,10 +214,10 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       [...wrap.children].forEach(el => {
         if (el !== scene) el.style.display = '';
       });
-      // Stop the silent VR texture video on exit.
-      if (vrTex) {
-        try { vrTex.pause(); } catch (e) {}
-      }
+      // Restore the page's initial muted state so re-entering VR or
+      // scrolling around doesn't surprise the user with audible playback
+      // from the 2D <video>.
+      video.muted = true;
     }
     function hide2D() {
       applyAll();
@@ -223,18 +225,15 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
         if (el !== scene && el !== video) el.style.display = 'none';
       });
       scene.style.display = '';
-      // Sync VR texture video to the 2D player's position and start it.
-      // Keep sceneVideo playing in the background — it provides audio while
-      // vrTex (muted) feeds the WebGL texture.
-      if (video && vrTex) {
-        try { vrTex.currentTime = video.currentTime; } catch (e) {}
-        const p = vrTex.play();
-        if (p && p.catch) p.catch(err => console.warn('stash-vr: vrTex.play failed', err));
-      }
     }
 
     btn.addEventListener('click', () => {
       hide2D();
+      // The click is a user gesture — autoplay policy permits unmuting.
+      // sceneVideo continues from its current position; do not touch
+      // currentTime here (would cause a re-seek and possibly a black
+      // frame).
+      video.muted = false;
       if (typeof scene.enterVR !== 'function') {
         console.warn('stash-vr: a-scene not ready');
         show2D();
