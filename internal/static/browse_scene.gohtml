@@ -52,7 +52,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 <a class="back" href="{{.BackURL}}">← Back</a>
 {{if .ErrMessage}}<div class="errbanner">{{.ErrMessage}}</div>{{end}}
 {{if .DirectStreamURL}}
-<video id="sceneVideo" class="player" controls playsinline autoplay muted preload="metadata" src="{{.DirectStreamURL}}"{{if .ThumbnailURL}} poster="{{.ThumbnailURL}}"{{end}}></video>
+<video id="sceneVideo" class="player" controls playsinline autoplay preload="metadata" src="{{.DirectStreamURL}}"{{if .ThumbnailURL}} poster="{{.ThumbnailURL}}"{{end}}></video>
 {{else if .ThumbnailURL}}
 <img class="thumb" src="{{.ThumbnailURL}}" alt="">
 {{end}}
@@ -60,7 +60,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 {{if .DirectStreamURL}}
 <button id="enterVR" class="btn-vr" type="button">{{if eq .VRMode "180sbs"}}▥ Enter VR (180° SBS){{else}}▥ Watch on virtual screen{{end}}</button>
 
-<a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false">
+<a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111">
   <a-entity camera position="0 1.6 0"></a-entity>
 {{if eq .VRMode "180sbs"}}
   <a-entity id="vrSphere"
@@ -118,7 +118,8 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     // sole media element. THREE.VideoTexture reads frames from it; the
     // element also produces audio. One pipeline = no drift between audio
     // and picture, and the texture is non-empty on Enter VR because
-    // sceneVideo has been autoplaying (muted) since page load.
+    // sceneVideo will already be playing (or about to play, started by the
+    // Enter VR click which is a user gesture).
     //
     // Strategy for SBS: ONE half-sphere with the full SBS-encoded texture.
     // WebXR renders the scene twice per frame (once per eye), and Three.js
@@ -214,10 +215,6 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       [...wrap.children].forEach(el => {
         if (el !== scene) el.style.display = '';
       });
-      // Restore the page's initial muted state so re-entering VR or
-      // scrolling around doesn't surprise the user with audible playback
-      // from the 2D <video>.
-      video.muted = true;
     }
     function hide2D() {
       applyAll();
@@ -229,11 +226,12 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 
     btn.addEventListener('click', () => {
       hide2D();
-      // The click is a user gesture — autoplay policy permits unmuting.
-      // sceneVideo continues from its current position; do not touch
-      // currentTime here (would cause a re-seek and possibly a black
-      // frame).
-      video.muted = false;
+      // The click is a user gesture, so unmuted-with-sound playback is
+      // permitted from here. play() is a no-op if already playing.
+      const playPromise = video.play();
+      if (playPromise && playPromise.catch) {
+        playPromise.catch(err => console.warn('stash-vr: video play failed', err));
+      }
       if (typeof scene.enterVR !== 'function') {
         console.warn('stash-vr: a-scene not ready');
         show2D();
