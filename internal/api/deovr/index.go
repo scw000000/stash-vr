@@ -1,8 +1,8 @@
 package deovr
 
 import (
+	"stash-vr/internal/api/heatmap"
 	"stash-vr/internal/library"
-	"stash-vr/internal/stash"
 	"stash-vr/internal/util"
 )
 
@@ -43,7 +43,7 @@ func buildIndex(sections []library.Section, vds map[string]*library.VideoData, b
 				VideoUrl:    getVideoDataUrl(baseUrl, vd.Id()),
 			}
 			if vd.SceneParts.Paths.Screenshot != nil {
-				s.List[j].ThumbnailUrl = util.Ptr(stash.ApiKeyed(*vd.SceneParts.Paths.Screenshot))
+				s.List[j].ThumbnailUrl = util.Ptr(heatmap.GetCoverUrl(baseUrl, vd.Id()))
 			}
 		}
 	}

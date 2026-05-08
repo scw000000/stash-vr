@@ -60,11 +60,7 @@ func buildVideoData(vd *library.VideoData, baseUrl string) (*videoDataDto, error
 	}
 
 	if vd.SceneParts.Paths.Screenshot != nil {
-		if vd.SceneParts.Interactive && vd.SceneParts.Paths.Interactive_heatmap != nil {
-			dto.ThumbnailUrl = util.Ptr(heatmap.GetCoverUrl(baseUrl, videoId))
-		} else {
-			dto.ThumbnailUrl = util.Ptr(stash.ApiKeyed(*vd.SceneParts.Paths.Screenshot))
-		}
+		dto.ThumbnailUrl = util.Ptr(heatmap.GetCoverUrl(baseUrl, videoId))
 	}
 
 	if vd.SceneParts.Paths.Preview != nil {
@@ -79,7 +75,7 @@ func buildVideoData(vd *library.VideoData, baseUrl string) (*videoDataDto, error
 }
 
 func setStreamSources(vd *library.VideoData, dto *videoDataDto) {
-	streams := []stash.Stream{stash.GetTranscodingStream(vd.SceneParts), stash.GetDirectStream(vd.SceneParts)}
+	streams := []stash.Stream{stash.GetDirectStream(vd.SceneParts), stash.GetTranscodingStream(vd.SceneParts)}
 	dto.Encodings = make([]encodingDto, len(streams))
 	for i, stream := range streams {
 		dto.Encodings[i] = encodingDto{

@@ -82,11 +82,7 @@ func buildVideoData(ctx context.Context, vd *library.VideoData, baseUrl string) 
 	}
 
 	if vd.SceneParts.Paths.Screenshot != nil {
-		if vd.SceneParts.Interactive && vd.SceneParts.Paths.Interactive_heatmap != nil {
-			dto.ThumbnailImage = util.Ptr(heatmap.GetCoverUrl(baseUrl, videoId))
-		} else {
-			dto.ThumbnailImage = util.Ptr(stash.ApiKeyed(*vd.SceneParts.Paths.Screenshot))
-		}
+		dto.ThumbnailImage = util.Ptr(heatmap.GetCoverUrl(baseUrl, videoId))
 	}
 
 	if vd.SceneParts.Paths.Preview != nil {
