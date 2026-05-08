@@ -66,12 +66,8 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
   </a-assets>
   <a-entity camera position="0 1.6 0"></a-entity>
 {{if eq .VRMode "180sbs"}}
-  <a-entity id="vrSphereL"
-            geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            rotation="0 90 0"></a-entity>
-  <a-entity id="vrSphereR"
-            geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            rotation="0 90 0"></a-entity>
+  <a-entity id="vrSphere"
+            geometry="primitive:sphere;radius:100;phiStart:180;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"></a-entity>
 {{else}}
   <a-entity id="vrFlat"
             geometry="primitive:plane;width:4;height:2.25"
@@ -89,54 +85,68 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     const vrTex = document.getElementById('vrTex');
     if (!btn || !scene || !wrap) return;
 
-    // Bind material + texture programmatically. The vendored
-    // aframe-stereo-component@1.4.0 doesn't work on A-Frame 1.7 (reads
-    // material as a raw string at init), so we skip it and handle stereo
-    // via UV transforms + Three.js layers ourselves. Each eye gets its
-    // own VideoTexture (sharing the underlying <video> element) with
-    // offset/repeat for the SBS half it should sample.
-    const meshConfigs = [
-      { id: 'vrSphereL', layer: 1, offsetX: 0,   side: 'back' },
-      { id: 'vrSphereR', layer: 2, offsetX: 0.5, side: 'back' },
-      { id: 'vrFlat',    layer: 0, offsetX: 0,   side: 'front', mono: true }
-    ];
-    function applyMaterial(cfg) {
-      const el = document.getElementById(cfg.id);
-      if (!el) return;
+    // Bind material + texture programmatically. aframe-stereo-component@1.4.0
+    // doesn't work on A-Frame 1.7 (reads material as raw string at init), so
+    // stereo is handled here directly.
+    //
+    // Strategy: ONE half-sphere with the full SBS-encoded texture. WebXR
+    // renders the scene twice per frame (once per eye), and Three.js calls
+    // mesh.onBeforeRender per render call with the active camera. We swap
+    // tex.offset/repeat per eye so the left eye samples the left half and
+    // the right eye samples the right half of the SBS texture.
+    //
+    // The half-sphere uses phiStart:180, phiLength:180 so it natively faces
+    // -Z (camera forward) with U increasing left-to-right and V increasing
+    // top-to-bottom — texture orientation matches the user's view, no
+    // rotation needed.
+    function applySphere() {
+      const el = document.getElementById('vrSphere');
+      if (!el || !vrTex || !window.AFRAME || !AFRAME.THREE) return;
       const mesh = el.getObject3D('mesh');
-      if (!mesh || !vrTex || !window.AFRAME || !AFRAME.THREE) return;
-      if (mesh.userData.boundVR) return;
+      if (!mesh || mesh.userData.boundVR) return;
       const tex = new AFRAME.THREE.VideoTexture(vrTex);
       if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
-      if (!cfg.mono) {
-        tex.repeat.set(0.5, 1);
-        tex.offset.set(cfg.offsetX, 0);
-      }
       mesh.material = new AFRAME.THREE.MeshBasicMaterial({
         map: tex,
-        side: cfg.side === 'back' ? AFRAME.THREE.BackSide : AFRAME.THREE.FrontSide
+        side: AFRAME.THREE.BackSide
       });
-      mesh.layers.set(cfg.layer);
+      mesh.onBeforeRender = function(renderer, sceneObj, cam) {
+        const xr = renderer.xr;
+        if (!xr || !xr.isPresenting) {
+          tex.offset.set(0, 0);
+          tex.repeat.set(1, 1);
+          return;
+        }
+        const xrCam = xr.getCamera();
+        if (!xrCam || !xrCam.cameras || xrCam.cameras.length < 2) return;
+        if (cam === xrCam.cameras[0]) {
+          tex.offset.set(0, 0);    // left eye: left half of SBS texture
+          tex.repeat.set(0.5, 1);
+        } else if (cam === xrCam.cameras[1]) {
+          tex.offset.set(0.5, 0);  // right eye: right half
+          tex.repeat.set(0.5, 1);
+        }
+      };
+      mesh.userData.boundVR = true;
+    }
+    function applyFlat() {
+      const el = document.getElementById('vrFlat');
+      if (!el || !vrTex || !window.AFRAME || !AFRAME.THREE) return;
+      const mesh = el.getObject3D('mesh');
+      if (!mesh || mesh.userData.boundVR) return;
+      const tex = new AFRAME.THREE.VideoTexture(vrTex);
+      if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+      mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
       mesh.userData.boundVR = true;
     }
     function applyAll() {
-      meshConfigs.forEach(applyMaterial);
+      applySphere();
+      applyFlat();
     }
     scene.addEventListener('loaded', applyAll);
-    meshConfigs.forEach(cfg => {
-      const el = document.getElementById(cfg.id);
-      if (el) el.addEventListener('object3dset', () => applyMaterial(cfg));
-    });
-    // WebXR cameras default to layer 0 — without this, layer-1/2 meshes are
-    // invisible. Enable per-eye layers when the WebXR session starts.
-    scene.addEventListener('enter-vr', () => {
-      const renderer = scene.renderer;
-      if (!renderer || !renderer.xr) return;
-      const cam = renderer.xr.getCamera();
-      if (cam && cam.cameras && cam.cameras.length >= 2) {
-        cam.cameras[0].layers.enable(1);
-        cam.cameras[1].layers.enable(2);
-      }
+    ['vrSphere', 'vrFlat'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('object3dset', applyAll);
     });
 
     function show2D() {
