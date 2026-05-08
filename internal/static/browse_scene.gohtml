@@ -77,8 +77,12 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     const btn   = document.getElementById('enterVR');
     const scene = document.getElementById('vrScene');
     const wrap  = document.querySelector('.wrap');
+    const video = document.getElementById('sceneVideo');
     if (!btn || !scene || !wrap) return;
 
+    // Keep the <video> mounted (not display:none) during VR so the browser
+    // keeps decoding frames; A-Frame samples its texture each frame. Hidden
+    // videos can be throttled by the browser, producing a black texture.
     function show2D() {
       scene.style.display = 'none';
       [...wrap.children].forEach(el => {
@@ -87,7 +91,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     }
     function hide2D() {
       [...wrap.children].forEach(el => {
-        if (el !== scene) el.style.display = 'none';
+        if (el !== scene && el !== video) el.style.display = 'none';
       });
       scene.style.display = '';
     }
