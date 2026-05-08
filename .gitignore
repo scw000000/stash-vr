@@ -3,3 +3,9 @@
 /graphql.config.yml
 /build/
 /.superpowers/
+
+# Local scan artifacts and third-party research captures.
+# The durable research synthesis lives under docs/superpowers/research/.
+/devstash-vrscan_output.json
+/scripts/slr_*
+/scripts/deovr_page.html

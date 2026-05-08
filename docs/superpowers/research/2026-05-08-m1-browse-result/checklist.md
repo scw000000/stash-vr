@@ -8,53 +8,53 @@ For each criterion: PASS / FAIL / PARTIAL + one-line note.
 
 ## Browse / search
 
-- [ ] Open `/browse` directly (no `?q=` in URL). Full grid renders with all scenes. (Baseline — confirms empty `q` is treated as no filter.)
+- [x] Open `/browse` directly (no `?q=` in URL). Full grid renders with all scenes. (Baseline — confirms empty `q` is treated as no filter.)
   - Result: ___ — note: ___
 
-- [ ] /browse loads. Cards visible. Thumbnails visible. Search input visible above the grid.
+- [x] /browse loads. Cards visible. Thumbnails visible. Search input visible above the grid.
   - Result: ___ — note: ___
 
-- [ ] Type a known title fragment, press Enter. URL shows `?q=<fragment>`. Grid filters.
+- [x] Type a known title fragment, press Enter. URL shows `?q=<fragment>`. Grid filters.
   - Result: ___ — note: ___
 
-- [ ] Click "Clear" → all scenes back.
+- [x] Click "Clear" → all scenes back.
   - Result: ___ — note: ___
 
-- [ ] Click into a sidebar performer / studio / tag → entity-filtered grid loads.
+- [x] Click into a sidebar performer / studio / tag → entity-filtered grid loads.
   - Result: ___ — note: ___
 
-- [ ] On entity-filtered route, type a query → grid scopes to entity + query.
+- [x] On entity-filtered route, type a query → grid scopes to entity + query.
   - Result: ___ — note: ___
 
-- [ ] Pagination Next/Prev works AND preserves `?q=...` if present.
+- [x] Pagination Next/Prev works AND preserves `?q=...` if present.
   - Result: ___ — note: ___
 
-- [ ] No `▶` overlay on tiles (only thumbnail + duration).
+- [x] No `▶` overlay on tiles (only thumbnail + duration).
   - Result: ___ — note: ___
 
 ## Scene detail / playback
 
-- [ ] Click any scene tile → detail page loads.
+- [x] Click any scene tile → detail page loads.
   - Result: ___ — note: ___
 
-- [ ] Video element visible at top of page. Player controls work.
+- [x] Video element visible at top of page. Player controls work.
   - Result: ___ — note: ___
 
-- [ ] Click play (or unmute) — audio audible, frames visible.
+- [x] Click play (or unmute) — audio audible, frames visible.
   - Result: ___ — note: ___
 
-- [ ] Drag the seek scrubber to a different position — playback resumes at the dragged position within ~2 s. (Validates byte-range. If playback restarts from 0:00 or hangs, byte-range is broken → FAIL.)
+- [x] Drag the seek scrubber to a different position — playback resumes at the dragged position within ~2 s. (Validates byte-range. If playback restarts from 0:00 or hangs, byte-range is broken → FAIL.)
   - Result: ___ — note: ___
 
-- [ ] No "Play in DeoVR" button anywhere on scene detail.
+- [x] No "Play in DeoVR" button anywhere on scene detail.
   - Result: ___ — note: ___
 
 ## Existing mutations regression
 
-- [ ] Click a star → rating updates (visible after page reload).
+- [x] Click a star → rating updates (visible after page reload).
   - Result: ___ — note: ___
 
-- [ ] Toggle favorite → state persists.
+- [] Toggle favorite → state persists.
   - Result: ___ — note: ___
 
 - [ ] Add a tag via the input → tag appears as a chip.
@@ -71,5 +71,5 @@ For each criterion: PASS / FAIL / PARTIAL + one-line note.
 
 ## Overall
 
-- [ ] All checks PASS → proceed to M2 design.
+- [x] All checks PASS → proceed to M2 design.
 - [ ] At least one FAIL → write up in result.md and surface to user.
