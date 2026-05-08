@@ -61,18 +61,21 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 <button id="enterVR" class="btn-vr" type="button">{{if eq .VRMode "180sbs"}}▥ Enter VR (180° SBS){{else}}▥ Watch on virtual screen{{end}}</button>
 
 <a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false">
+  <a-assets timeout="5000">
+    <video id="vrTex" src="{{.DirectStreamURL}}" preload="auto" muted playsinline crossorigin="anonymous" loop></video>
+  </a-assets>
   <a-entity camera position="0 1.6 0"></a-entity>
 {{if eq .VRMode "180sbs"}}
   <a-entity stereo="eye:left;mode:half"
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            material="src:#sceneVideo;shader:flat;side:back"
+            material="src:#vrTex;shader:flat;side:back"
             rotation="0 90 0"></a-entity>
   <a-entity stereo="eye:right;mode:half"
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
-            material="src:#sceneVideo;shader:flat;side:back"
+            material="src:#vrTex;shader:flat;side:back"
             rotation="0 90 0"></a-entity>
 {{else}}
-  <a-video src="#sceneVideo" position="0 1.6 -3" width="4" height="2.25"></a-video>
+  <a-video src="#vrTex" position="0 1.6 -3" width="4" height="2.25"></a-video>
 {{end}}
 </a-scene>
 
@@ -84,22 +87,32 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     const scene = document.getElementById('vrScene');
     const wrap  = document.querySelector('.wrap');
     const video = document.getElementById('sceneVideo');
+    const vrTex = document.getElementById('vrTex');
     if (!btn || !scene || !wrap) return;
 
-    // Keep the <video> mounted (not display:none) during VR so the browser
-    // keeps decoding frames; A-Frame samples its texture each frame. Hidden
-    // videos can be throttled by the browser, producing a black texture.
     function show2D() {
       scene.style.display = 'none';
       [...wrap.children].forEach(el => {
         if (el !== scene) el.style.display = '';
       });
+      // Carry VR position back to 2D, pause VR video.
+      if (video && vrTex) {
+        try { video.currentTime = vrTex.currentTime; } catch (e) {}
+        try { vrTex.pause(); } catch (e) {}
+      }
     }
     function hide2D() {
       [...wrap.children].forEach(el => {
-        if (el !== scene && el !== video) el.style.display = 'none';
+        if (el !== scene) el.style.display = 'none';
       });
       scene.style.display = '';
+      // Carry 2D position into VR, start VR video.
+      if (video && vrTex) {
+        try { vrTex.currentTime = video.currentTime; } catch (e) {}
+        try { video.pause(); } catch (e) {}
+        const p = vrTex.play();
+        if (p && p.catch) p.catch(err => console.warn('stash-vr: vrTex.play failed', err));
+      }
     }
 
     btn.addEventListener('click', () => {
