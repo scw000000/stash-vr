@@ -17,10 +17,12 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 .section { margin-bottom: 20px; }
 .section h2 { font-size: 0.85rem; text-transform: uppercase; color: #888; margin: 0 0 8px 0; letter-spacing: 0.05em; }
 
-.stars { display: inline-flex; gap: 4px; }
+.stars { display: inline-flex; gap: 4px; align-items: center; }
 .stars button { background: transparent; border: none; font-size: 1.5rem; color: #555; cursor: pointer; padding: 0 2px; }
 .stars button.on { color: #f7b500; }
 .stars button:hover { color: #f7b500; }
+.stars button.clear { font-size: 1rem; margin-left: 8px; color: #888; }
+.stars button.clear:hover { color: #f55; }
 
 .fav button { background: transparent; border: 1px solid #555; color: #ccc; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
 .fav button.on { background: #c11; border-color: #c11; color: #fff; }
@@ -55,11 +57,12 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 <img class="thumb" src="{{.ThumbnailURL}}" alt="">
 {{end}}
 
-{{if .IsVR180SBS}}
-<button id="enterVR" class="btn-vr" type="button">▥ Enter VR</button>
+{{if .DirectStreamURL}}
+<button id="enterVR" class="btn-vr" type="button">{{if eq .VRMode "180sbs"}}▥ Enter VR (180° SBS){{else}}▥ Watch on virtual screen{{end}}</button>
 
 <a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false">
-  <a-entity camera></a-entity>
+  <a-entity camera position="0 1.6 0"></a-entity>
+{{if eq .VRMode "180sbs"}}
   <a-entity stereo="eye:left;mode:half"
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
             material="src:#sceneVideo;shader:flat;side:back"
@@ -68,6 +71,9 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
             geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
             material="src:#sceneVideo;shader:flat;side:back"
             rotation="0 90 0"></a-entity>
+{{else}}
+  <a-video src="#sceneVideo" position="0 1.6 -3" width="4" height="2.25"></a-video>
+{{end}}
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
@@ -121,6 +127,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 {{range $i, $_ := .StarSlice}}
 <button name="value" value="{{add $i 1}}"{{if le (add $i 1) $.Rating1to5}} class="on"{{end}}>★</button>
 {{end}}
+{{if .Rating1to5}}<button name="value" value="0" class="clear" title="Clear rating">✕</button>{{end}}
 </form>
 </div>
 

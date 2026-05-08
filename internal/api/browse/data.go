@@ -63,7 +63,7 @@ type SceneDetailData struct {
 	OCounter        int
 	Organized       bool
 	DirectStreamURL string
-	IsVR180SBS      bool
+	VRMode          string // "180sbs" for stereo half-sphere; "flat" for flat plane in 3D space
 	ErrMessage      string
 
 	// StarSlice is a 5-element placeholder used purely so the template can
