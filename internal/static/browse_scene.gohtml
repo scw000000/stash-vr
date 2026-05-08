@@ -41,6 +41,8 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 .org button.on { background: #2c5282; border-color: #2c5282; color: #fff; }
 
 .player { width: 100%; max-height: 70vh; background: #000; border-radius: 6px; margin-bottom: 16px; }
+.btn-vr { display: block; width: 100%; padding: 14px; margin-bottom: 24px; background: #2c5282; color: #fff; border: none; border-radius: 6px; font-size: 1.05rem; font-weight: 600; cursor: pointer; }
+.btn-vr:hover { background: #3776c2; }
 </style>
 </head>
 <body>
@@ -48,9 +50,61 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 <a class="back" href="{{.BackURL}}">← Back</a>
 {{if .ErrMessage}}<div class="errbanner">{{.ErrMessage}}</div>{{end}}
 {{if .DirectStreamURL}}
-<video class="player" controls playsinline autoplay muted preload="metadata" src="{{.DirectStreamURL}}"{{if .ThumbnailURL}} poster="{{.ThumbnailURL}}"{{end}}></video>
+<video id="sceneVideo" class="player" controls playsinline autoplay muted preload="metadata" src="{{.DirectStreamURL}}"{{if .ThumbnailURL}} poster="{{.ThumbnailURL}}"{{end}}></video>
 {{else if .ThumbnailURL}}
 <img class="thumb" src="{{.ThumbnailURL}}" alt="">
+{{end}}
+
+{{if .IsVR180SBS}}
+<button id="enterVR" class="btn-vr" type="button">▥ Enter VR</button>
+
+<a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false">
+  <a-entity camera></a-entity>
+  <a-entity stereo="eye:left;mode:half"
+            geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
+            material="src:#sceneVideo;shader:flat;side:back"
+            rotation="0 90 0"></a-entity>
+  <a-entity stereo="eye:right;mode:half"
+            geometry="primitive:sphere;radius:100;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"
+            material="src:#sceneVideo;shader:flat;side:back"
+            rotation="0 90 0"></a-entity>
+</a-scene>
+
+<script src="/vendor/aframe.min.js"></script>
+<script src="/vendor/aframe-stereo-component.min.js"></script>
+<script>
+  (function() {
+    const btn   = document.getElementById('enterVR');
+    const scene = document.getElementById('vrScene');
+    const wrap  = document.querySelector('.wrap');
+    if (!btn || !scene || !wrap) return;
+
+    function show2D() {
+      [...wrap.children].forEach(el => { el.style.display = ''; });
+      scene.style.display = 'none';
+    }
+    function hide2D() {
+      [...wrap.children].forEach(el => {
+        if (el !== scene) el.style.display = 'none';
+      });
+      scene.style.display = '';
+    }
+
+    btn.addEventListener('click', () => {
+      hide2D();
+      if (typeof scene.enterVR !== 'function') {
+        console.warn('stash-vr: a-scene not ready');
+        show2D();
+        return;
+      }
+      scene.enterVR().catch(err => {
+        console.warn('stash-vr: enterVR failed', err);
+        show2D();
+      });
+    });
+    scene.addEventListener('exit-vr', show2D);
+  })();
+</script>
 {{end}}
 <h1>{{.Title}}</h1>
 <p class="meta">{{if .Performers}}{{.Performers}}{{end}}{{if and .Performers .Studio}} · {{end}}{{.Studio}}{{if .Date}} · {{.Date}}{{end}}{{if .Duration}} · {{.Duration}}{{end}}</p>
