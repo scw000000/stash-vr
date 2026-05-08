@@ -1,0 +1,21 @@
+HTTP/1.1 200 OK
+Date: Fri, 08 May 2026 14:04:48 GMT
+Content-Type: application/json
+Transfer-Encoding: chunked
+Connection: keep-alive
+Set-Cookie: session=g5ki7ia6i8kom52t1a8gcbh8en; expires=Sun, 07-Jun-2026 14:04:48 GMT; Max-Age=2592000; path=/; domain=.deovr.com; HttpOnly
+Set-Cookie: trial_first_visit=1778249088; expires=Mon, 05-May-2036 14:04:48 GMT; Max-Age=315360000; path=/; domain=.deovr.com; secure; HttpOnly
+Set-Cookie: amp_dvid=1946cf33-6363-4983-be08-5b3379c84734; expires=Mon, 05-May-2036 14:04:48 GMT; Max-Age=315360000; path=/
+expires: Thu, 19 Nov 1981 08:52:00 GMT
+Cache-Control: no-store, no-cache, must-revalidate
+pragma: no-cache
+x-frame-options: deny
+x-content-security-policy: frame-ancestors 'none'
+strict-transport-security: max-age=31536000; includeSubDomains
+cf-cache-status: DYNAMIC
+Nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+Report-To: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=1kdu2TnwGECvyCgio5AO6BdHsDoEjaNGeZVthedILCsAAF%2BHX0nDRccMKYvSMo%2FWzkVk6chVJU5yfrrTFs%2BRRkWv%2FFVSTirEDl%2BfvB69h94augdbccgUt4VmFDM%3D"}]}
+Server: cloudflare
+CF-RAY: 9f890402d8d2e718-DFW
+alt-svc: h3=":443"; ma=86400
+

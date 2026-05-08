@@ -1,0 +1,97 @@
+Source: https://deovr.com/app/doc
+Fetched: 2026-05-08 (re-fetch via WebFetch tool, model summary)
+
+QUERY: List every documented mechanism by which a third-party WEBSITE (HTML page, not JSON file)
+can trigger video playback in the DeoVR app's webview/in-VR browser.
+
+RESPONSE (verbatim summary from WebFetch):
+
+# DeoVR Third-Party Website Integration Mechanisms
+
+## 1. **Deeplink URL Scheme**
+The primary mechanism is the `deovr://` custom URL scheme:
+> "a button with a deeplink to this file (e.g. 'deovr://https://www.deovr.com/something.json') is added to the site"
+This pattern allows websites to link directly to JSON files describing videos or video selections.
+
+## 2. **JSON File References**
+Websites can host JSON files that DeoVR parses when accessed via deeplink. The documentation specifies two formats:
+- **Single video**: JSON describing one video with encodings, metadata, corrections
+- **Multiple videos (Selection Scene)**: JSON containing arrays of scenes with video lists
+
+## 3. **Domain-Level Integration**
+Websites can place a file named `deovr` (no extension) in the server root:
+> "put file 'deovr' (without extension and quotes) into the root directory of the server. When following a link containing only domain name, DeoVR will request the data at the address 'http://www.yoursite.com/deovr'"
+
+## 4. **Browser-Based Access**
+Users can navigate to websites directly within DeoVR's built-in browser, where DeoVR requests the `/deovr` file or custom endpoints returning JSON.
+
+---
+
+**Note**: The documentation contains no references to JavaScript globals (`window.deoVR`),
+`postMessage` protocols, `<video>` tag attributes, meta tags, HTTP headers,
+`registerProtocolHandler`, or other dynamic web APIs. Integration appears exclusively
+JSON/deeplink-based.
+
+
+===============================================================================
+SECOND QUERY (full-doc dump): "Provide the COMPLETE verbatim text of the documentation."
+
+RESPONSE:
+
+# DeoVR Documentation Summary
+
+## Core Integration Methods
+DeoVR supports two primary integration approaches:
+1. **Single video deeplink**: A JSON file describes one video, launching directly into playback when a deeplink is clicked.
+2. **Multiple videos selection (Selection Scene)**: A JSON file contains collections organized into scenes/tabs, allowing users to browse and select from a list.
+
+## JSON File Structure for Single Videos
+Videos require metadata including:
+- `title` and `id` (to distinguish videos with identical titles)
+- `videoSources` array with resolution and URL pairs
+- `videoLength` (in seconds, required for timestamps)
+- `screenType` (sphere, dome, flat, fisheye, mkx200, rf52)
+- `stereoMode` (sbs, tb, cuv, or off)
+- Optional: `videoThumbnail`, `videoPreview`, `thumbnailUrl`, `timeStamps`, `corrections`
+
+## Multiple Videos (Selection Scene) Format
+The JSON wrapper contains:
+- `scenes` array, each with a `name` and `list` of video objects
+- `authorized` field (values: 1 for authorized, 0 for guest, -1 for error)
+A shortened format exists using `video_url` pointers instead of full video definitions, requiring only:
+`thumbnailUrl`, `title`, `videoLength`, and `video_url`.
+
+## File Naming Conventions
+DeoVR recognizes flags in filenames to auto-configure playback:
+**Stereo modes**: `_180`, `_360`, `_fisheye`, `_fisheye190`, `_mkx200`, `_vrca220`
+**Screen types**: `LR`/`SBS`, `TB`/`OverUnder`
+Example: `Title_SBS_180.mp4` applies side-by-side stereo at 180°.
+
+## Browser Integration (deovr File)
+Place a file named `deovr` (no extension) in the server root. When DeoVR's browser accesses
+your domain, it requests `http://yoursite.com/deovr`, receiving a JSON response with
+scene/video listings. For other URLs, the response from that exact path should contain valid JSON.
+
+## Authorization
+If implementing login, POST requests include `login` and `password` fields. The JSON response
+must reflect status in the `authorized` field.
+
+## Special Features
+- **Spatial Audio**: Provide separate `encodings_spatial` entries pointing to MKV files
+  with Opus codec in Facebook 360 TBE 8.2 format
+- **Images Support**: Use `path` instead of `encodings`, with same `screenType` and `stereoMode` options
+- **HLS Streaming**: Supported via direct URL or JSON with `path` pointing to `.m3u8` files
+- **Passthrough**: Videos with transparent backgrounds (alpha channel for fisheye, or chroma key removal for other projections)
+
+
+===============================================================================
+INTERPRETATION:
+- All four documented mechanisms collapse to two artifacts: a `deovr://` deeplink (custom URL scheme,
+  triggered from outside DeoVR's in-VR browser) and a JSON document at a known URL.
+- There is no HTML-side playback hook documented anywhere on this page.
+- The only HTML-related text is "When DeoVR's browser accesses your domain, it requests
+  http://yoursite.com/deovr" — i.e., the same JSON path stash-vr already serves.
+- This is consistent with forum thread 7896 post #2's claim that "All but Json modes are
+  determined by the URL and are hardcoded" — DeoVR's app code maps recognized hosts
+  (sexlikereal.com, deovr.com, jillvr.com) to special render modes; everyone else falls back
+  to either Json mode (/deovr endpoint) or plain browser (no playback hook).

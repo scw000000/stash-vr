@@ -1,0 +1,130 @@
+All searches performed in pretty-printed (line-broken) copies of SLR's production JS bundles
+under c:\dev\stash-vr\scripts\, with line numbers.
+
+================================================================================
+SEARCH 1: "deovr|DeoVR|Deovr" (case-insensitive) across all five SLR JS bundles
+================================================================================
+
+slr_videoplayer.js.pretty.js: 1 hit
+  Line 15212:
+  playInVrTooltip:"Open sexlikereal.com in DeoVR app or Meta/Safari browser",scriptAi:"Script AI",unlockAllScripts:"Unlock All Scripts",cameraRestriction:"Camera access is denied <br /> Enable it in your browser settings"
+
+slr_watch.js.pretty.js:    0 hits
+slr_appcore.js.pretty.js:  0 hits
+slr_router.js.pretty.js:   0 hits
+slr_web.js.pretty.js:      0 hits
+
+================================================================================
+SEARCH 2: "deovr|DeoVR|videoData|vrPlayer" (case-insensitive) in static HTML
+================================================================================
+
+slr_listing.html:  0 hits
+slr_scene.html:    0 hits
+slr_allage.html:   0 hits
+
+================================================================================
+SEARCH 3: candidate JS hooks
+"videoData|vrPlayerSettings|vrPlayer|webkitDeoVR|window.deo|application/x-deovr|HereSphere|heresphere"
+================================================================================
+
+slr_videoplayer.js.pretty.js: 0 hits
+slr_watch.js.pretty.js:       0 hits
+slr_appcore.js.pretty.js:     0 hits
+slr_router.js.pretty.js:      0 hits
+slr_web.js.pretty.js:         0 hits
+
+================================================================================
+SEARCH 4: candidate URL schemes / launch APIs
+"deovr://|sexlikereal://|slr-app://|slrapp://|vrl://|oculus://|launcherUrl|x-deovr|launchVr|launchVR|OpenInApp|openInApp|openInPlayer|sendToPlayer|window.location.href.*://"
+================================================================================
+
+slr_videoplayer.js.pretty.js: 0 hits
+slr_watch.js.pretty.js:       0 hits
+slr_appcore.js.pretty.js:     0 hits
+
+================================================================================
+SEARCH 5: "postMessage|registerProtocolHandler"
+================================================================================
+
+slr_videoplayer.js.pretty.js: 0 hits
+slr_watch.js.pretty.js:       0 hits
+slr_appcore.js.pretty.js:     0 hits
+slr_router.js.pretty.js:      0 hits
+
+================================================================================
+SEARCH 6: device detection (does the player ever single out DeoVR?)
+"Quest|Oculus|userAgent|navigator.xr|NativeXR"
+================================================================================
+
+slr_videoplayer.js.pretty.js: many hits — all about Quest 1/2/3/Pro UA detection for sizing,
+                              isSessionSupported("immersive-ar"), and reading
+                              `_.NativeXR` (a property never assigned by SLR's own code,
+                              i.e. an injection point for some host shim, not DeoVR).
+                              See lines 51, 67-80, 675, 693, 698-725, 732-740, 12871-12940, 15238.
+                              No DeoVR-specific detection.
+
+================================================================================
+SEARCH 7: scene/listing static markup that might hand off
+"<video|<source|playerSrc|data-video|data-scene|data-deovr|data-mode|onclick="
+================================================================================
+
+slr_listing.html: no matches in static body — page is an empty SPA shell hydrated by
+                  Solid.js + Astro. Scene tiles, anchors, and click handlers are produced
+                  client-side by the JS bundles.
+slr_scene.html:   same.
+
+================================================================================
+INVENTORY: every <meta> and <link rel> in slr_listing.html
+================================================================================
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no,maximum-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="index, follow">
+<meta name="keywords" content>
+<meta name="description" content="VR Porn videos for your pleasure! ...">
+<meta name="twitter:card"|"twitter:title"|"twitter:description"|"twitter:site"|"twitter:image"|"twitter:image:alt">
+<meta property="og:locale"|"og:title"|"og:description"|"og:url"|"og:image"|"og:image:alt"|"og:image:type"|"og:image:width"|"og:image:height">
+<meta name="theme-color" content="#242424">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SLR">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="full-screen" content="yes">
+<meta name="browsermode" content="application">
+<meta name="layoutmode" content="fitscreen/standard">
+
+<link rel="icon" href="...favicon.ico" sizes="32x32">
+<link rel="icon" href="data:image/svg+xml,...">
+<link rel="stylesheet" href="/_astro/layers.*.css">
+<link rel="stylesheet" href="/_astro/design-system.*.css">
+<link rel="preconnect" href="//www.google.com">
+<link rel="preconnect" href="//www.google-analytics.com">
+<link rel="preconnect" href="//cdn-vr.sexlikereal.com">
+<link rel="canonical" href="https://www.sexlikereal.com/all-age">
+<link rel="apple-touch-icon" href="/pwa-180px.png" sizes="180x180">
+<link rel="mask-icon" href="/pwa-512.png" color="#FFFFFF">
+<link rel="manifest" href="data:application/json;base64,...">  (decoded: standard PWA manifest, no DeoVR fields)
+<link rel="stylesheet" href="/_astro/Head.*.css"
+                            "AbstractPage.*.css"
+                            "WatchPage.*.css"
+                            "SearchPage.*.css"
+                            "CategoryPage.*.css"
+                            "CamPage.*.css"
+                            "ProfilePage.*.css"
+                            "SWFPage.*.css"
+                            "DownloadAppPage.*.css"
+                            "JoinPage.*.css"
+                            "FreeVideosUnauthorizedPage.*.css"
+                            "ByojEditorPage.*.css"
+                            "TryHandyPage.*.css"
+                            "CreatorCard.*.css"
+                            "ShortsPage.*.css">
+
+NO link rel="application/x-deovr"
+NO link rel="alternate" type="application/json" pointing at a /deovr endpoint
+NO meta name="deovr-*" or "vr-player-*"
+NO meta http-equiv referencing DeoVR
+NO custom protocol-handler markup
+NO <script type="application/x-deovr"> blocks
+NO <script src=".*deovr.*"> tags

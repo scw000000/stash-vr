@@ -1,0 +1,22 @@
+HTTP/1.1 302 Found
+Date: Fri, 08 May 2026 14:04:46 GMT
+Content-Length: 0
+Connection: keep-alive
+set-cookie: s_did=1c5ed702-c3f9-4a0c-9b0a-2ca1a6ebf9e2; Max-Age=31536000000
+location: /all-age
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer-when-downgrade
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+HTTP/1.1 200 OK
+Date: Fri, 08 May 2026 14:04:46 GMT
+Content-Type: text/html
+Content-Length: 184632
+Connection: keep-alive
+set-cookie: s_did=d1306f46-bae2-4175-9199-7a6d8f52bb9f; Max-Age=31536000000
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer-when-downgrade
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+

@@ -1,0 +1,31 @@
+{
+  "sha": "43c7cb0b0de4ba00c3a250e55489551f3a165ced",
+  "url": "https://api.github.com/repos/Tweeticoats/stash-deovr/git/trees/43c7cb0b0de4ba00c3a250e55489551f3a165ced",
+  "tree": [
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1bbedd014cfe2b74c9ec5854fa4c80b9add16c34",
+      "size": 2663,
+      "url": "https://api.github.com/repos/Tweeticoats/stash-deovr/git/blobs/1bbedd014cfe2b74c9ec5854fa4c80b9add16c34"
+    },
+    {
+      "path": "deovr-plugin.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f321fe398aba255a2c139baacecef9f679b68326",
+      "size": 10239,
+      "url": "https://api.github.com/repos/Tweeticoats/stash-deovr/git/blobs/f321fe398aba255a2c139baacecef9f679b68326"
+    },
+    {
+      "path": "deovr-plugin.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "47a418feb938c8994b784d1899805f3a72cf9f9a",
+      "size": 448,
+      "url": "https://api.github.com/repos/Tweeticoats/stash-deovr/git/blobs/47a418feb938c8994b784d1899805f3a72cf9f9a"
+    }
+  ],
+  "truncated": false
+}
