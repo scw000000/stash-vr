@@ -12,7 +12,6 @@ import (
 	apiinternal "stash-vr/internal/api/internal"
 	"stash-vr/internal/config"
 	"stash-vr/internal/prefix"
-	"stash-vr/internal/stash"
 	"stash-vr/internal/static"
 )
 
@@ -40,16 +39,12 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 		ID:           id,
 		Title:        vd.Title(),
 		BackURL:      backURL(r),
-		DeoVRPlayURL: "/deovr/videoData/" + url.PathEscape(id),
+		DeoVRPlayURL: "/deovr/" + url.PathEscape(id),
 		ErrMessage:   r.URL.Query().Get("err"),
 	}
 
 	if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Screenshot != nil {
-		if vd.SceneParts.Interactive && vd.SceneParts.Paths.Interactive_heatmap != nil {
-			data.ThumbnailURL = heatmap.GetCoverUrl(baseURL, id)
-		} else {
-			data.ThumbnailURL = stash.ApiKeyed(*vd.SceneParts.Paths.Screenshot)
-		}
+		data.ThumbnailURL = heatmap.GetCoverUrl(baseURL, id)
 	}
 
 	performerNames := make([]string, 0, len(vd.SceneParts.Performers))

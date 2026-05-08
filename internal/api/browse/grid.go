@@ -10,7 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"stash-vr/internal/api/heatmap"
 	"stash-vr/internal/library"
-	"stash-vr/internal/stash"
 	"stash-vr/internal/stash/gql"
 	"stash-vr/internal/util"
 )
@@ -61,15 +60,10 @@ func buildCards(ctx context.Context, lib *library.Service, baseURL string, ids [
 			Title:        vd.Title(),
 			Duration:     formatDuration(vd.SceneParts.Files[0].Duration),
 			DetailURL:    "/browse/scene/" + url.PathEscape(ids[i]),
-			DeoVRPlayURL: "/deovr/videoData/" + url.PathEscape(ids[i]),
+			DeoVRPlayURL: "/deovr/" + url.PathEscape(ids[i]),
 		}
-		// Thumbnail: heatmap composite for interactive scenes; screenshot otherwise.
 		if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Screenshot != nil {
-			if vd.SceneParts.Interactive && vd.SceneParts.Paths.Interactive_heatmap != nil {
-				c.ThumbnailURL = heatmap.GetCoverUrl(baseURL, ids[i])
-			} else {
-				c.ThumbnailURL = stash.ApiKeyed(*vd.SceneParts.Paths.Screenshot)
-			}
+			c.ThumbnailURL = heatmap.GetCoverUrl(baseURL, ids[i])
 		}
 		// Performers comma-joined.
 		names := make([]string, 0, len(vd.SceneParts.Performers))
