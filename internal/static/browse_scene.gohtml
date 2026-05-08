@@ -95,21 +95,21 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       [...wrap.children].forEach(el => {
         if (el !== scene) el.style.display = '';
       });
-      // Carry VR position back to 2D, pause VR video.
-      if (video && vrTex) {
-        try { video.currentTime = vrTex.currentTime; } catch (e) {}
+      // Stop the silent VR texture video on exit.
+      if (vrTex) {
         try { vrTex.pause(); } catch (e) {}
       }
     }
     function hide2D() {
       [...wrap.children].forEach(el => {
-        if (el !== scene) el.style.display = 'none';
+        if (el !== scene && el !== video) el.style.display = 'none';
       });
       scene.style.display = '';
-      // Carry 2D position into VR, start VR video.
+      // Sync VR texture video to the 2D player's position and start it.
+      // Keep sceneVideo playing in the background — it provides audio while
+      // vrTex (muted) feeds the WebGL texture.
       if (video && vrTex) {
         try { vrTex.currentTime = video.currentTime; } catch (e) {}
-        try { video.pause(); } catch (e) {}
         const p = vrTex.play();
         if (p && p.catch) p.catch(err => console.warn('stash-vr: vrTex.play failed', err));
       }
