@@ -62,7 +62,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
 </div>
 <form method="GET" class="searchbar">
 <input type="search" name="q" value="{{.SearchQuery}}" placeholder="Search titles…" autocomplete="off">
-{{if .SearchQuery}}<a class="searchclear" href="?">Clear</a>{{end}}
+{{if .SearchQuery}}<a class="searchclear" href="?{{if .Sidebar.ActiveTab}}tab={{.Sidebar.ActiveTab}}{{end}}">Clear</a>{{end}}
 </form>
 {{if .Cards}}
 <div class="grid">
