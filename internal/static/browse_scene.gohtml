@@ -396,8 +396,218 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     }
     document.querySelectorAll('.vr-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        vrAction(btn.dataset.action || btn.getAttribute('data-action'));
+        const action = btn.dataset.action || btn.getAttribute('data-action');
+        if (action) {
+          vrAction(action);
+          return;
+        }
+        const row = btn.dataset.pickRow;
+        const value = btn.dataset.pickValue;
+        if (row) handlePickerTap(row, value);
       });
+    });
+
+    // ============================================================
+    // Picker state + handlers.
+    //
+    // Initial state derived from the server-rendered Projection
+    // (read off <a-scene>'s data-stereo, vrFisheye's data-fov, and
+    // the visibility of the four render entities). The user picks
+    // one button per row; on every tap we (a) re-bind the renderer
+    // locally, (b) POST the new selection so Stash tags update,
+    // (c) update the active-highlight per row.
+    // ============================================================
+
+    const sceneId = (function() {
+      const m = location.pathname.match(/\/browse\/scene\/([^\/]+)/);
+      return m ? m[1] : '';
+    })();
+    const pickerState = computeInitialPickerState();
+
+    // computeInitialPickerState reads the server-rendered Projection
+    // off the <a-scene> attributes and the four render entities to
+    // determine which preset is currently active. Used both for the
+    // initial active-highlight and as the revert target for Auto.
+    function computeInitialPickerState() {
+      const stereoAttr = scene.dataset.stereo || '';
+      const fisheyeEl = document.getElementById('vrFisheye');
+      const sphere180 = document.getElementById('vrSphere180');
+      const sphere360 = document.getElementById('vrSphere360');
+      const flat      = document.getElementById('vrFlat');
+      let type = 'Normal', degree = '180', stereo = 'SBS';
+      if (flat && flat.getAttribute('visible')) {
+        type = 'Normal'; degree = 'Cinema'; stereo = '2D';
+      } else if (fisheyeEl && fisheyeEl.getAttribute('visible')) {
+        type = 'FishEye';
+        const fov = parseFloat(fisheyeEl.dataset.fov || '180');
+        degree = (fov >= 200 ? '200' : '180');
+      } else if (sphere360 && sphere360.getAttribute('visible')) {
+        type = 'Normal'; degree = '360';
+      } else if (sphere180 && sphere180.getAttribute('visible')) {
+        type = 'Normal'; degree = '180';
+      }
+      if (degree === 'Cinema') {
+        stereo = '2D';
+      } else if (stereoAttr === 'sbs') {
+        stereo = 'SBS';
+      } else if (stereoAttr === 'tb') {
+        stereo = 'TB';
+      } else {
+        stereo = '2D';
+      }
+      return { type, degree, stereo, initial: null };
+    }
+    pickerState.initial = { type: pickerState.type, degree: pickerState.degree, stereo: pickerState.stereo };
+
+    // Apply current pickerState: update data attrs, toggle entity
+    // visibility, reset boundVR flags so applyAll rebinds, then
+    // recompute the per-row highlights and disabled state.
+    function applyPickerState() {
+      const isFishEye = pickerState.type === 'FishEye';
+      const isCinema  = pickerState.degree === 'Cinema';
+      const isNormal  = pickerState.type === 'Normal';
+
+      // Cinema forces stereo=2D regardless of the user's Stereo pick.
+      const effectiveStereo = isCinema ? '2D' : pickerState.stereo;
+      const stereoData = effectiveStereo === 'SBS' ? 'sbs' :
+                         effectiveStereo === 'TB'  ? 'tb'  : '';
+      scene.dataset.stereo = stereoData;
+
+      // Decide which render entity is active.
+      let activeId = 'vrFlat';
+      if (!isCinema) {
+        if (isFishEye) {
+          activeId = 'vrFisheye';
+          const fovEl = document.getElementById('vrFisheye');
+          if (fovEl) fovEl.dataset.fov = (pickerState.degree === '200' ? '200' : '180');
+        } else if (isNormal && pickerState.degree === '360') {
+          activeId = 'vrSphere360';
+        } else if (isNormal && pickerState.degree === '180') {
+          activeId = 'vrSphere180';
+        }
+      }
+      ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.setAttribute('visible', id === activeId);
+        // Reset bind flag so applyAll re-creates the material with
+        // the right offsets (sphere) or re-creates the shader
+        // (fisheye) for the new geometry/fov.
+        const mesh = el.getObject3D('mesh');
+        if (mesh) mesh.userData.boundVR = false;
+      });
+      applyAll();
+
+      updatePickerHighlights();
+      updatePickerDisabled();
+    }
+
+    function updatePickerHighlights() {
+      document.querySelectorAll('.picker-btn').forEach(b => {
+        const row = b.dataset.pickRow;
+        const value = b.dataset.pickValue;
+        const isActive = (row !== 'auto' && pickerState[row] === value);
+        b.setAttribute('material', 'color: ' + (isActive ? '#3776c2' : '#2c5282') + '; opacity: 0.95');
+      });
+    }
+
+    function isInvalidCombo(row, value) {
+      // Cinema is only valid with Type=Normal.
+      if (row === 'degree' && value === 'Cinema' && pickerState.type === 'FishEye') return true;
+      // 200 is only valid with Type=FishEye.
+      if (row === 'degree' && value === '200' && pickerState.type === 'Normal') return true;
+      // 360 is only valid with Type=Normal.
+      if (row === 'degree' && value === '360' && pickerState.type === 'FishEye') return true;
+      // When degree is Cinema, all stereo other than 2D is moot but not "invalid" per se
+      // — leave them tappable; tapping a Stereo button while Cinema doesn't change render
+      // (Cinema forces 2D in applyPickerState). No styling change for these.
+      return false;
+    }
+
+    function updatePickerDisabled() {
+      document.querySelectorAll('.picker-btn').forEach(b => {
+        const row = b.dataset.pickRow;
+        const value = b.dataset.pickValue;
+        if (row === 'auto') return;
+        const disabled = isInvalidCombo(row, value);
+        if (disabled) {
+          b.setAttribute('material', 'color: #444; opacity: 0.4');
+          b.dataset.disabled = '1';
+        } else {
+          delete b.dataset.disabled;
+          // Active-highlight setter in updatePickerHighlights will
+          // set the right color; this branch only ensures non-disabled
+          // buttons aren't stuck at the disabled color.
+        }
+      });
+    }
+
+    // Single in-flight lock for POST. Rapid taps coalesce — the latest
+    // pickerState wins; intermediate POSTs that haven't started yet
+    // are skipped.
+    let postInFlight = false;
+    let postPending  = null;
+    function postProjection(body) {
+      postPending = body;
+      if (postInFlight) return;
+      const send = () => {
+        const next = postPending;
+        if (!next) { postInFlight = false; return; }
+        postPending = null;
+        postInFlight = true;
+        fetch('/browse/scene/' + encodeURIComponent(sceneId) + '/projection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(next)
+        }).then(resp => {
+          if (!resp.ok) console.warn('stash-vr: projection POST returned', resp.status);
+        }).catch(err => {
+          console.warn('stash-vr: projection POST failed', err);
+        }).finally(() => {
+          postInFlight = false;
+          if (postPending) send();
+        });
+      };
+      send();
+    }
+
+    function handlePickerTap(row, value) {
+      // Auto: revert pickerState to initial, re-apply, POST {auto:true}.
+      if (row === 'auto') {
+        pickerState.type   = pickerState.initial.type;
+        pickerState.degree = pickerState.initial.degree;
+        pickerState.stereo = pickerState.initial.stereo;
+        applyPickerState();
+        postProjection({ auto: true });
+        return;
+      }
+      // Disabled buttons no-op.
+      const btnEl = document.querySelector('.picker-btn[data-pick-row="' + row + '"][data-pick-value="' + value + '"]');
+      if (btnEl && btnEl.dataset.disabled === '1') return;
+      // Update state.
+      pickerState[row] = value;
+      // Picking Type may invalidate current Degree — auto-correct to a
+      // valid neighbor so the resulting Projection is renderable.
+      if (row === 'type') {
+        if (value === 'FishEye' && (pickerState.degree === 'Cinema' || pickerState.degree === '360')) {
+          pickerState.degree = '180';
+        }
+        if (value === 'Normal' && pickerState.degree === '200') {
+          pickerState.degree = '180';
+        }
+      }
+      applyPickerState();
+      postProjection({
+        type:   pickerState.type,
+        degree: pickerState.degree,
+        stereo: pickerState.stereo
+      });
+    }
+
+    // Initial highlight + disabled-state pass once A-Frame is ready.
+    scene.addEventListener('loaded', function() {
+      updatePickerHighlights();
+      updatePickerDisabled();
     });
 
     function show2D() {
