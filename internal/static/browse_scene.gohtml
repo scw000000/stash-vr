@@ -1553,27 +1553,43 @@ a.chip:hover { background: #3a3a3a; }
 
           attachPreviewHandlers(el);
           root.appendChild(el);
+          // Stamp the geom signature so the first existing-tile relayout
+          // doesn't see a mismatch and rebuild from scratch.
+          el.dataset.geomSig = pos.thetaStartDeg.toFixed(2) + '|' +
+                               pos.thetaLengthDeg.toFixed(2) + '|' +
+                               tileCoverH.toFixed(3);
         } else {
           // Existing tile: cols may have changed → resize cover, badge, title.
+          // Track whether per-tile geometry actually changed since the
+          // last relayout. If only the row's y has shifted (pure scroll),
+          // we don't need to rebuild any of the cylinder geometry or the
+          // per-character title chars — the children all live in
+          // tile-local coords and inherit the y-shift from the tile entity.
+          const geomSig = pos.thetaStartDeg.toFixed(2) + '|' +
+                          pos.thetaLengthDeg.toFixed(2) + '|' +
+                          tileCoverH.toFixed(3);
+          const geomChanged = (el.dataset.geomSig !== geomSig);
           const cyl = el.querySelector('a-cylinder.vr-tile-cover');
-          if (cyl) {
+          if (cyl && geomChanged) {
             cyl.setAttribute('radius', ARC_R);
             cyl.setAttribute('height', tileCoverH);
             cyl.setAttribute('theta-start',  pos.thetaStartDeg);
             cyl.setAttribute('theta-length', pos.thetaLengthDeg);
           }
           const badge = el.querySelector('.vr-tile-detail');
-          if (badge) {
+          if (badge && geomChanged) {
             badge.setAttribute('geometry', 'primitive:circle;radius:' + badgeR.toFixed(3));
             badge.setAttribute('position',
               badgeLocalX.toFixed(3) + ' ' + badgeLocalY.toFixed(3) + ' ' + badgeLocalZ.toFixed(3));
             badge.setAttribute('rotation', '0 ' + badgeYawDeg.toFixed(3) + ' 0');
           }
-          // Rebuild the curved title chars with the new arc params (the
-          // cover's arc shifted because cols changed → tile width / theta
-          // span is different).
+          // Only rebuild the per-character title chars if the cover arc
+          // has actually changed (cols cycle), NOT on every scroll frame.
+          // Without this gate, scrolling wipes + recreates ~20 a-text
+          // entities per visible tile every frame, causing titles to
+          // flicker / vanish during scroll.
           const titleWrap = el.querySelector(':scope > .vr-tile-title');
-          if (titleWrap) {
+          if (titleWrap && geomChanged) {
             placeCurvedString(titleWrap, tile.title, {
               R: ARC_R,
               thetaStartDeg:  pos.thetaStartDeg,
@@ -1582,6 +1598,7 @@ a.chip:hover { background: #3a3a3a; }
               y: titleY,
             }, 'curved-title-char');
           }
+          el.dataset.geomSig = geomSig;
         }
         // Tile entity sits at the cylinder hub for the row. The cover
         // cylinder's theta-start handles the per-column placement on the
@@ -1890,11 +1907,12 @@ a.chip:hover { background: #3a3a3a; }
       const now = performance.now();
       const dt = m4cLastScrollTickMs ? Math.min(0.1, (now - m4cLastScrollTickMs) / 1000) : 1 / 60;
       m4cLastScrollTickMs = now;
-      // 0.6 m/s at full deflection. Stick UP (ts.y = -1) → scroll forward
-      // (scrollY INCREASES → tiles shift up → next rows revealed below).
-      // Stick DOWN reverses; scrollY clamps at 0 (top).
+      // 0.6 m/s at full deflection. Stick DOWN (ts.y = +1) → scroll
+      // forward (scrollY INCREASES → tiles shift up → next rows revealed
+      // below). Stick UP reverses; scrollY clamps at 0 (top). Matches the
+      // mobile "drag down to scroll down" convention requested by the user.
       const rate = 0.6;
-      const target = scrollY - ts.y * rate * dt;
+      const target = scrollY + ts.y * rate * dt;
       const clamped = Math.max(0, Math.min(target, m4cMaxScroll));
       if (Math.abs(clamped - scrollY) < 0.0001) return;
       scrollY = clamped;
