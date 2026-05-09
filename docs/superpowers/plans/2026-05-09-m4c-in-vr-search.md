@@ -4,7 +4,7 @@
 
 **Goal:** Add a 3D scene-grid browse panel reachable from the M4b control panel, with text search via DOM overlay, six filter pickers, vertical scroll, configurable cols, and seamless scene swap (no VR re-entry).
 
-**Architecture:** Eight tasks. Task 1 is a DOM-overlay feasibility spike — confirm Meta Browser supports DOM overlay during a WebXR session before committing to the rest. Task 2 adds the server-side JSON endpoints. Tasks 3–4 build the browse panel UI: top strip, cylinder grid layout, tile entities with cover textures. Task 5 adds vertical scroll + lazy load + the M3c thumbstick handoff. Task 6 wires the DOM-overlay search field. Task 7 adds the six filter pickers + Clear all. Task 8 implements the seamless scene swap with fade.
+**Architecture:** Nine tasks. Task 1 is a DOM-overlay feasibility spike — confirm Meta Browser supports DOM overlay during a WebXR session before committing to the rest. Task 2 adds the server-side JSON endpoints. Tasks 3–4 build the browse panel UI: top strip, cylinder grid layout, tile entities with cover textures + ⓘ detail badge. Task 5 adds vertical scroll + lazy load + the M3c thumbstick handoff. Task 6 wires the DOM-overlay search field. Task 7 adds the 3-column filters panel with searchable lists. Task 8 implements the seamless scene swap with fade and the rich `/scene/{id}/meta` endpoint. Task 9 adds the standalone detail panel with chip-click filters.
 
 **Tech Stack:** Go 1.24, A-Frame 1.7, Three.js, vanilla JS, WebXR DOM Overlay Module.
 
@@ -670,16 +670,38 @@ function relayoutTiles() {
     let el = root.querySelector('a-entity[data-scene-id="' + CSS.escape(tile.id) + '"]');
     if (!el) {
       el = document.createElement('a-entity');
-      el.classList.add('vr-btn', 'vr-tile');
+      el.classList.add('vr-tile');
       el.dataset.sceneId = tile.id;
       el.dataset.projection = JSON.stringify(tile.projection);
       el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
 
+      // Cover plane — tap → seamless scene swap (Play). The class
+      // .vr-tile-cover is the click target; .vr-btn allows raycaster.
       const plane = document.createElement('a-plane');
+      plane.classList.add('vr-btn', 'vr-tile-cover');
       plane.setAttribute('width', TILE_W);
       plane.setAttribute('height', TILE_W * 9 / 16);
       plane.setAttribute('material', 'color:#222;opacity:1;shader:flat');
       el.appendChild(plane);
+
+      // ⓘ detail badge — small circle in the top-right corner of the
+      // tile. Tap → opens the detail panel (Task 9).
+      const detailBadge = document.createElement('a-entity');
+      detailBadge.classList.add('vr-btn', 'vr-tile-detail');
+      detailBadge.setAttribute('geometry', 'primitive:circle;radius:0.04');
+      detailBadge.setAttribute('material', 'color:#000;opacity:0.85;shader:flat');
+      // Top-right corner: half tile width minus radius, half tile height minus radius.
+      const badgeX = (TILE_W / 2) - 0.05;
+      const badgeY = ((TILE_W * 9 / 16) / 2) - 0.05;
+      detailBadge.setAttribute('position', badgeX.toFixed(3) + ' ' + badgeY.toFixed(3) + ' 0.01');
+      const badgeText = document.createElement('a-text');
+      badgeText.setAttribute('value', 'ⓘ');
+      badgeText.setAttribute('align', 'center');
+      badgeText.setAttribute('color', '#fff');
+      badgeText.setAttribute('width', '1.5');
+      badgeText.setAttribute('position', '0 0 0.005');
+      detailBadge.appendChild(badgeText);
+      el.appendChild(detailBadge);
 
       const titleEl = document.createElement('a-text');
       titleEl.setAttribute('value', tile.title);
@@ -1595,18 +1617,31 @@ async function swapToScene(tile) {
   swapInFlight = false;
 }
 
-// Wire tile clicks.
+// Wire tile clicks. Distinguish cover-tap (Play) from ⓘ-tap (Detail).
 document.addEventListener('click', function(evt) {
-  let target = evt.target;
-  while (target && !target.classList?.contains('vr-tile')) target = target.parentElement;
-  if (target && target.classList.contains('vr-tile')) {
-    target.dataset.tileTitle = target.querySelector('a-text')?.getAttribute('value') || '';
-    swapToScene(target);
+  // Walk up to find the nearest classed ancestor.
+  let cover = evt.target;
+  while (cover && !(cover.classList && cover.classList.contains('vr-tile-cover'))) cover = cover.parentElement;
+  let detail = evt.target;
+  while (detail && !(detail.classList && detail.classList.contains('vr-tile-detail'))) detail = detail.parentElement;
+
+  if (detail) {
+    // ⓘ tapped — Task 9 wires the detail panel.
+    const tileEl = detail.closest('.vr-tile');
+    if (tileEl && typeof openDetailPanel === 'function') openDetailPanel(tileEl.dataset.sceneId);
+    return;
+  }
+  if (cover) {
+    // Cover tapped — Play.
+    const tileEl = cover.closest('.vr-tile');
+    if (!tileEl) return;
+    tileEl.dataset.tileTitle = tileEl.querySelector('a-text')?.getAttribute('value') || '';
+    swapToScene(tileEl);
   }
 });
 ```
 
-(The `target.dataset.tileTitle` is set on click for the post-swap title display, since the new title comes from the clicked tile's text.)
+(The `tileEl.dataset.tileTitle` is set on click for the post-swap title display, since the new title comes from the clicked tile's text.)
 
 - [ ] **Step 3: Vet, build, manually verify**
 
@@ -1654,9 +1689,24 @@ if (meta) {
 }
 ```
 
-This implies a new endpoint `GET /browse/scene/{id}/meta` returning `{title, durationSec, captions, sceneMarkers, projection}`. Add to grid_json.go (or a new metadata.go):
+This implies a new endpoint `GET /browse/scene/{id}/meta` returning a rich payload — used both here (post-swap M4b refresh) AND by Task 9's detail panel. Single source of truth.
+
+Add to grid_json.go (or a new metadata.go):
 
 ```go
+type SceneMeta struct {
+	Title        string        `json:"title"`
+	Description  string        `json:"description"`
+	DurationSec  float64       `json:"durationSec"`
+	Date         string        `json:"date"`
+	Rating1to5   int           `json:"rating1to5"`
+	Performers   []EntityRef   `json:"performers"`
+	Studio       *EntityRef    `json:"studio,omitempty"`
+	Tags         []EntityRef   `json:"tags"`
+	Captions     []CaptionRef  `json:"captions"`
+	SceneMarkers []SceneMarker `json:"sceneMarkers"`
+}
+
 func (h *httpHandler) sceneMetaHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	vd, err := h.libraryService.GetScene(r.Context(), id, false)
@@ -1664,16 +1714,43 @@ func (h *httpHandler) sceneMetaHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	out := struct {
-		Title        string         `json:"title"`
-		DurationSec  float64        `json:"durationSec"`
-		Captions     []CaptionRef   `json:"captions"`
-		SceneMarkers []SceneMarker  `json:"sceneMarkers"`
-	}{Title: vd.Title()}
-	if len(vd.SceneParts.Files) > 0 && vd.SceneParts.Files[0] != nil {
-		out.DurationSec = vd.SceneParts.Files[0].Duration
+	sp := vd.SceneParts
+	out := SceneMeta{Title: vd.Title()}
+	if sp.Details != nil {
+		out.Description = *sp.Details
 	}
-	for _, c := range vd.SceneParts.Captions {
+	if sp.Date != nil {
+		out.Date = *sp.Date
+	}
+	if sp.Rating100 != nil {
+		out.Rating1to5 = *sp.Rating100 / 20
+	}
+	if len(sp.Files) > 0 && sp.Files[0] != nil {
+		out.DurationSec = sp.Files[0].Duration
+	}
+	for _, p := range sp.Performers {
+		if p == nil {
+			continue
+		}
+		out.Performers = append(out.Performers, EntityRef{ID: p.Id, Name: p.Name})
+	}
+	if sp.Studio != nil {
+		out.Studio = &EntityRef{ID: sp.Studio.Id, Name: sp.Studio.Name}
+	}
+	favTag := config.Application().FavoriteTag
+	for _, t := range sp.Tags {
+		if t == nil {
+			continue
+		}
+		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
+			continue
+		}
+		if favTag != "" && t.TagParts.Name == favTag {
+			continue
+		}
+		out.Tags = append(out.Tags, EntityRef{ID: t.TagParts.Id, Name: t.TagParts.Name})
+	}
+	for _, c := range sp.Captions {
 		if c == nil {
 			continue
 		}
@@ -1682,7 +1759,7 @@ func (h *httpHandler) sceneMetaHandler(w http.ResponseWriter, r *http.Request) {
 			CaptionType:  c.Caption_type,
 		})
 	}
-	for _, m := range vd.SceneParts.Scene_markers {
+	for _, m := range sp.Scene_markers {
 		if m == nil {
 			continue
 		}
@@ -1698,7 +1775,9 @@ func (h *httpHandler) sceneMetaHandler(w http.ResponseWriter, r *http.Request) {
 
 Mount: `r.Get("/scene/{id}/meta", h.sceneMetaHandler)` in router.go.
 
-`rebuildCaptionPicker(captions)`: clears existing language buttons in `vrSubtitlePicker` (those rendered by `{{range .Captions}}`) and re-creates them from the JSON. Implementation parallels Task 4's `relayoutTiles` for tile entities.
+(Verify that `SceneParts.Details` exists in the GraphQL fragment — it's the description field. If not, add `details` to the `SceneParts` fragment in `query.graphql` and regen.)
+
+`rebuildCaptionPicker(captions)`: clears existing language buttons in `vrSubtitlePicker` (those rendered by M4b's `renderSubtitlePicker`) and re-creates them from the JSON. Implementation: just re-call `renderSubtitlePicker()` after assigning the new caption list to its source variable.
 
 - [ ] **Step 5: Re-vet, re-build, re-verify swap with new metadata refresh**
 
@@ -1711,6 +1790,338 @@ Re-test the swap on the headset; verify scene markers refresh, CC button visibil
 ```
 git add internal/static/browse_scene.gohtml internal/api/browse/grid_json.go internal/api/browse/router.go
 git commit -m "m4c: seamless scene swap with fade, projection rebind, M4b state refresh"
+```
+
+---
+
+## Task 9: Detail panel
+
+**Files:**
+- Modify: `internal/static/browse_scene.gohtml`
+
+**Goal:** Tap ⓘ on a tile → standalone detail panel opens in front of the grid showing title, description, performer/studio/tag chips, date, duration, rating, and a "Play this scene" button. Clicking a chip closes the panel and applies the matching filter. The panel uses the rich `/scene/{id}/meta` endpoint (extended in Task 8).
+
+- [ ] **Step 1: Add the detail panel HTML**
+
+Inside `vrControlsRoot`, after the closing `</a-entity>` of `vrFiltersPanel` (Task 7), add:
+
+```html
+<a-entity id="vrDetailPanel" position="0 1.4 -1.5" rotation="0 0 0" visible="false">
+  <a-plane width="2.4" height="1.6" color="#000" material="opacity:0.95"></a-plane>
+  <a-text id="vrDetailTitle" value="" align="left" color="#fff" width="3" position="-1.10 0.65 0.01" wrap-count="42"></a-text>
+  <a-entity class="vr-btn" data-action="detail-close" position="1.08 0.68 0.01"
+            geometry="primitive:plane;width:0.18;height:0.14"
+            material="color:#a01010;opacity:0.95">
+    <a-text value="✕" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
+  </a-entity>
+
+  <!-- Loading sentinel — visible while fetch is in flight. -->
+  <a-text id="vrDetailLoading" value="Loading…" align="center" color="#888" width="3"
+          position="0 0 0.01" visible="false"></a-text>
+
+  <!-- Meta row: performers, studio, date, duration, rating. JS populates. -->
+  <a-entity id="vrDetailMeta" position="0 0.40 0.01"></a-entity>
+
+  <!-- Description body. Multi-line, scrollable when overflowing. -->
+  <a-entity id="vrDetailBody" position="-1.10 0.05 0.01">
+    <a-text id="vrDetailDescription" value="" align="left" color="#ddd" width="3.5"
+            wrap-count="68"></a-text>
+  </a-entity>
+
+  <!-- Tag chips row at bottom of body. JS populates. -->
+  <a-entity id="vrDetailTags" position="0 -0.40 0.01"></a-entity>
+
+  <!-- Primary action: Play this scene. -->
+  <a-entity class="vr-btn" data-action="detail-play" id="vrDetailPlayBtn"
+            position="0 -0.65 0.01"
+            geometry="primitive:plane;width:1.2;height:0.16"
+            material="color:#3776c2;opacity:0.95">
+    <a-text value="▶ Play this scene" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+  </a-entity>
+</a-entity>
+```
+
+- [ ] **Step 2: Add detail-panel state + open/close + chip handlers**
+
+In the IIFE, add detail panel state and the open/close functions:
+
+```javascript
+m4cState.detailSceneId = '';
+m4cState.detailMeta = null;
+m4cState.detailScrollY = 0;
+const DETAIL_DESC_VISIBLE_H = 0.30; // visible height in panel space
+
+function openDetailPanel(sceneId) {
+  if (!sceneId) return;
+  m4cState.detailSceneId = sceneId;
+  m4cState.detailMeta = null;
+  m4cState.detailScrollY = 0;
+  m4cState.lastScrollFocus = 'detail';
+
+  const panel = document.getElementById('vrDetailPanel');
+  const loading = document.getElementById('vrDetailLoading');
+  const title = document.getElementById('vrDetailTitle');
+  const desc = document.getElementById('vrDetailDescription');
+  const meta = document.getElementById('vrDetailMeta');
+  const tags = document.getElementById('vrDetailTags');
+  if (!panel) return;
+  panel.setAttribute('visible', true);
+  if (title) title.setAttribute('value', '');
+  if (desc) desc.setAttribute('value', '');
+  if (meta) while (meta.firstChild) meta.removeChild(meta.firstChild);
+  if (tags) while (tags.firstChild) tags.removeChild(tags.firstChild);
+  if (loading) loading.setAttribute('visible', true);
+
+  fetch('/browse/scene/' + encodeURIComponent(sceneId) + '/meta', {
+    headers: { 'Accept': 'application/json' }
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (m4cState.detailSceneId !== sceneId) return; // user switched
+      m4cState.detailMeta = data;
+      renderDetailPanel(data);
+    })
+    .catch(err => {
+      console.warn('stash-vr: detail meta fetch failed', err);
+      if (loading) loading.setAttribute('value', 'fetch failed');
+    });
+}
+
+function closeDetailPanel() {
+  m4cState.detailSceneId = '';
+  m4cState.detailMeta = null;
+  document.getElementById('vrDetailPanel').setAttribute('visible', false);
+}
+
+function formatDurationSec(s) {
+  if (!isFinite(s) || s <= 0) return '';
+  const total = Math.floor(s);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+function renderDetailPanel(data) {
+  const loading = document.getElementById('vrDetailLoading');
+  const title = document.getElementById('vrDetailTitle');
+  const desc = document.getElementById('vrDetailDescription');
+  const meta = document.getElementById('vrDetailMeta');
+  const tags = document.getElementById('vrDetailTags');
+
+  if (loading) loading.setAttribute('visible', false);
+  if (title) title.setAttribute('value', data.title || '');
+  if (desc) desc.setAttribute('value', data.description || '');
+
+  // Meta row: performer chips + studio chip + date/duration/rating text.
+  let xOffset = -1.10;
+  (data.performers || []).forEach(p => {
+    const chip = document.createElement('a-entity');
+    chip.classList.add('vr-btn');
+    chip.dataset.action = 'detail-chip-perf';
+    chip.dataset.entityId = p.id;
+    chip.dataset.entityName = p.name;
+    chip.setAttribute('geometry', 'primitive:plane;width:0.55;height:0.10');
+    chip.setAttribute('material', 'color:#2a2a2a;opacity:0.95');
+    chip.setAttribute('position', xOffset.toFixed(2) + ' 0.05 0');
+    const text = document.createElement('a-text');
+    text.setAttribute('value', p.name);
+    text.setAttribute('align', 'center');
+    text.setAttribute('color', '#fff');
+    text.setAttribute('width', '2.5');
+    text.setAttribute('position', '0 0 0.005');
+    chip.appendChild(text);
+    meta.appendChild(chip);
+    xOffset += 0.60;
+    if (xOffset > 1.10) { xOffset = -1.10; }
+  });
+  if (data.studio) {
+    const chip = document.createElement('a-entity');
+    chip.classList.add('vr-btn');
+    chip.dataset.action = 'detail-chip-studio';
+    chip.dataset.entityId = data.studio.id;
+    chip.dataset.entityName = data.studio.name;
+    chip.setAttribute('geometry', 'primitive:plane;width:0.55;height:0.10');
+    chip.setAttribute('material', 'color:#2a2a3a;opacity:0.95');
+    chip.setAttribute('position', xOffset.toFixed(2) + ' 0.05 0');
+    const text = document.createElement('a-text');
+    text.setAttribute('value', data.studio.name);
+    text.setAttribute('align', 'center');
+    text.setAttribute('color', '#fff');
+    text.setAttribute('width', '2.5');
+    text.setAttribute('position', '0 0 0.005');
+    chip.appendChild(text);
+    meta.appendChild(chip);
+  }
+
+  // Date / duration / rating text below the chips.
+  const stats = [];
+  if (data.date) stats.push(data.date);
+  const d = formatDurationSec(data.durationSec || 0);
+  if (d) stats.push(d);
+  if (data.rating1to5 > 0) stats.push('★'.repeat(data.rating1to5) + '☆'.repeat(5 - data.rating1to5));
+  if (stats.length) {
+    const statsText = document.createElement('a-text');
+    statsText.setAttribute('value', stats.join('   ·   '));
+    statsText.setAttribute('align', 'left');
+    statsText.setAttribute('color', '#aaa');
+    statsText.setAttribute('width', '3');
+    statsText.setAttribute('position', '-1.10 -0.10 0');
+    meta.appendChild(statsText);
+  }
+
+  // Tag chips.
+  let tagX = -1.10;
+  (data.tags || []).slice(0, 8).forEach(t => {
+    const chip = document.createElement('a-entity');
+    chip.classList.add('vr-btn');
+    chip.dataset.action = 'detail-chip-tag';
+    chip.dataset.entityId = t.id;
+    chip.dataset.entityName = t.name;
+    chip.setAttribute('geometry', 'primitive:plane;width:0.40;height:0.09');
+    chip.setAttribute('material', 'color:#2a2a2a;opacity:0.95');
+    chip.setAttribute('position', tagX.toFixed(2) + ' 0 0');
+    const text = document.createElement('a-text');
+    text.setAttribute('value', t.name);
+    text.setAttribute('align', 'center');
+    text.setAttribute('color', '#fff');
+    text.setAttribute('width', '2.5');
+    text.setAttribute('position', '0 0 0.005');
+    chip.appendChild(text);
+    tags.appendChild(chip);
+    tagX += 0.45;
+    if (tagX > 1.10) tagX = -1.10;
+  });
+}
+```
+
+Wire actions in `vrAction`:
+
+```javascript
+} else if (action === 'detail-close') {
+  closeDetailPanel();
+} else if (action === 'detail-play') {
+  // Reuse swapToScene with a synthetic tile element.
+  const meta = m4cState.detailMeta;
+  if (!meta || !m4cState.detailSceneId) return;
+  // Find the original tile to read projection metadata.
+  const tileEl = document.querySelector('.vr-tile[data-scene-id="' + CSS.escape(m4cState.detailSceneId) + '"]');
+  if (!tileEl) return;
+  tileEl.dataset.tileTitle = meta.title || '';
+  closeDetailPanel();
+  swapToScene(tileEl);
+}
+```
+
+Wire chip-click delegate (extend the existing chip handler near `clearChip`):
+
+```javascript
+document.addEventListener('click', function(evt) {
+  let el = evt.target;
+  while (el && !(el.dataset && (el.dataset.action === 'detail-chip-perf' || el.dataset.action === 'detail-chip-studio' || el.dataset.action === 'detail-chip-tag'))) el = el.parentElement;
+  if (!el) return;
+  const id = el.dataset.entityId;
+  const name = el.dataset.entityName;
+  if (!id) return;
+  if (el.dataset.action === 'detail-chip-perf') {
+    m4cState.filters.performer = id;
+    m4cState.filterNames.performer = name;
+    renderColumnList('performer');
+  } else if (el.dataset.action === 'detail-chip-studio') {
+    m4cState.filters.studio = id;
+    m4cState.filterNames.studio = name;
+    renderColumnList('studio');
+  } else if (el.dataset.action === 'detail-chip-tag') {
+    m4cState.filters.tag = id;
+    m4cState.filterNames.tag = name;
+    renderColumnList('tag');
+  }
+  closeDetailPanel();
+  renderActiveChips();
+  fetchGrid(true);
+});
+```
+
+- [ ] **Step 3: Description scrolling via thumbstick Y**
+
+Extend the `m3c:browse-scroll` listener (added in Task 5, modified in Task 7) to also handle `lastScrollFocus === 'detail'`:
+
+```javascript
+scene.addEventListener('m3c:browse-scroll', function(e) {
+  const bp = document.getElementById('vrBrowsePanel');
+  if (!bp) return;
+  const browseOpen = bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true';
+  if (!browseOpen) return;
+
+  const focus = m4cState.lastScrollFocus;
+  if (focus === 'grid') {
+    applyScroll(e.detail.deltaSec, e.detail.stickY);
+  } else if (focus === 'list-performer' || focus === 'list-studio' || focus === 'list-tag') {
+    applyListScroll(focus.slice(5), e.detail.deltaSec, e.detail.stickY);
+  } else if (focus === 'detail') {
+    applyDetailScroll(e.detail.deltaSec, e.detail.stickY);
+  }
+});
+
+function applyDetailScroll(deltaSec, stickY) {
+  const dy = -stickY * SCROLL_RATE * deltaSec;
+  m4cState.detailScrollY = Math.max(0, m4cState.detailScrollY + dy);
+  const body = document.getElementById('vrDetailBody');
+  if (body) body.setAttribute('position', '-1.10 ' + (0.05 + m4cState.detailScrollY).toFixed(3) + ' 0.01');
+}
+```
+
+Set `lastScrollFocus = 'detail'` whenever user taps inside the detail panel:
+
+```javascript
+document.getElementById('vrDetailPanel').addEventListener('click', function() {
+  m4cState.lastScrollFocus = 'detail';
+});
+```
+
+- [ ] **Step 4: Cascade close when browse panel closes**
+
+Update `vrAction`'s `'browse-close'` branch (originally set in Task 6, extended in Task 7) to also close the detail panel:
+
+```javascript
+} else if (action === 'browse-close') {
+  document.getElementById('vrBrowsePanel').setAttribute('visible', false);
+  document.getElementById('vrFiltersPanel').setAttribute('visible', false);
+  closeDetailPanel();
+  hideSearchOverlay();
+}
+```
+
+- [ ] **Step 5: Vet, build, manually verify**
+
+Run: `go vet ./...` then `go build ./...` — expect clean.
+
+Build, run on Quest 3. Open a scene with a description, performers, studio, tags. Enter VR, summon panel, click Browse. Verify:
+
+- Each tile shows ⓘ badge in the top-right corner of the cover.
+- Tap the cover (NOT ⓘ) → seamless scene swap (Play). Detail panel does not open.
+- Tap ⓘ → detail panel opens with "Loading…" briefly, then displays:
+  - Title at top.
+  - Performer chip(s) + studio chip in the meta row.
+  - Date · duration · rating below the chips.
+  - Description text in the body.
+  - Tag chips at the bottom.
+  - "▶ Play this scene" button.
+- Tap a performer chip → detail panel closes; chip "Performer: Alice ✕" appears in filters panel; grid filters.
+- Tap a tag chip → detail panel closes; tag filter applies; grid filters.
+- Tap a studio chip → studio filter applies; grid filters.
+- Tap "▶ Play this scene" → same fade-out / swap / fade-in flow as cover tap.
+- Tap ✕ on detail panel → panel closes; grid stays.
+- For a long description: push thumbstick Y after tapping inside detail panel → description scrolls vertically.
+- After tapping a grid tile then a list, scroll target switches accordingly.
+- Tap ✕ on browse panel → all panels (browse + filters + detail) close together.
+
+- [ ] **Step 6: Commit**
+
+```
+git add internal/static/browse_scene.gohtml
+git commit -m "m4c: tile detail badge + standalone detail panel with chip-click filters"
 ```
 
 ---

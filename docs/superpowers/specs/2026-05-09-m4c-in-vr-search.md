@@ -88,9 +88,10 @@ The M4b control panel grows by one button: **Browse** (`data-action="browse"`), 
 
 ### 4.2 Grid: tile rendering
 
-Each tile is `<a-entity class="vr-btn vr-tile" data-scene-id="...">` with two children:
+Each tile is `<a-entity class="vr-tile" data-scene-id="...">` with three children:
 
-- `<a-plane>` carrying the cover texture (loaded from `/cover/{id}` via `THREE.TextureLoader`).
+- `<a-plane class="vr-btn vr-tile-cover">` carrying the cover texture (loaded from `/cover/{id}` via `THREE.TextureLoader`). **Tap this → seamless scene swap (Play).**
+- `<a-entity class="vr-btn vr-tile-detail">` ⓘ badge in the top-right corner of the tile (small circle, ~0.06 m radius). **Tap this → opens the detail panel (§4.10).**
 - `<a-text>` below the plane, value=scene title, `wrap-count=22`.
 
 Cylinder placement, given `cols` and `(row, col)` where col is 0-indexed from left:
@@ -294,10 +295,54 @@ When the browse panel is open:
 
 - Thumbstick Y → scroll (suppresses M3c scale)
 - Thumbstick X → still ±10s seek of CURRENT scene (M3c untouched)
-- Trigger single-click on tile → swap
+- Trigger single-click on tile cover → seamless scene swap (Play)
+- Trigger single-click on tile ⓘ badge → opens detail panel (§4.10)
 - Trigger single-click on empty space (still routes through M3c) → toggles M4b panel + browse panel together
 - B/Y short-press → in immersive: yaw recenter; in cinema: reset cinema plane (M3c untouched)
 - B/Y long-press → full recenter (M3c untouched)
+
+### 4.10 Detail panel
+
+Tapping a tile's ⓘ badge opens a standalone **detail panel** that shows the scene's full metadata. The user reads the description, performer/studio chips, etc., then either taps "Play this scene" (which triggers the same seamless swap as tapping the tile cover) or "Close" to return to browsing.
+
+**Position:** standalone sibling of `vrBrowsePanel`, positioned in front-of-grid at `(0, 1.4, -1.5)` with no rotation — so it overlays / floats in front of the grid temporarily. Width 2.4 m, height 1.6 m. While the detail panel is visible, the grid panel stays underneath but is visually backgrounded by the detail panel's opaque plane.
+
+**Contents:**
+
+```
+┌──────────────────────────────────────┐
+│  Title — large                  ✕    │
+├──────────────────────────────────────┤
+│  Performers: [Alice] [Bob]           │  ← clickable chips → close panel,
+│  Studio: [StudioX]                   │     filter grid by that entity, return
+│  Date: 2024-08-15  Duration: 1:23:45 │
+│  Rating: ★★★★☆                       │
+├──────────────────────────────────────┤
+│  Description                         │
+│  Lorem ipsum dolor sit amet,         │
+│  consectetur adipiscing elit, ...    │  ← scrollable if long
+│                                      │
+├──────────────────────────────────────┤
+│  Tags: [tag1] [tag2] [tag3] ...      │
+├──────────────────────────────────────┤
+│        [ ▶ Play this scene ]         │  ← primary action button
+└──────────────────────────────────────┘
+```
+
+**Data source:** the existing `/browse/scene/{id}/meta` endpoint introduced in Task 8 of this plan is **extended** to return the full detail metadata (title, durationSec, captions, sceneMarkers, **plus**: description, performers `[{id,name}]`, studio `{id,name}`, date, rating1to5, tags `[{id,name}]`). The same endpoint serves both the swap-time M4b refresh AND the detail panel — single source of truth.
+
+**Behaviour:**
+
+- Tap ⓘ on a tile → fetch `/browse/scene/{id}/meta`, populate the detail panel, set `visible=true`. While the request is in flight, panel shows "Loading…".
+- Tap a performer/studio chip inside the detail panel → close the detail panel, set the corresponding M4c filter (`m4cState.filters.performer = id`), refresh the grid, and the user lands back on the filtered grid view.
+- Tap a tag chip → same flow, but for the Tag filter.
+- Tap "Play this scene" → close the detail panel, trigger the same seamless swap as tapping a tile cover (§4.8).
+- Tap ✕ → close the detail panel, return to browsing the grid.
+- Closing the browse panel also closes the detail panel.
+
+**Scrolling:** the description body may exceed visible space. When the detail panel is the focused scroll target (set on tap inside it), thumbstick Y scrolls the description text. Scroll focus extends from §4.4: `'detail'` is a 6th value alongside `grid`, the three lists, and `none`.
+
+The detail panel reuses the M3c panel-toggle root — closing the M4b/M3c panel hides everything including the detail panel.
 
 ## 5. Data model
 
@@ -361,7 +406,7 @@ On Quest 3 / Meta Browser, assuming M4a and M4b shipped:
 ### A. Initial state
 - [ ] Click "Browse" on M4b panel → grid appears with default 4 cols, ~3 visible rows.
 - [ ] Top strip shows Search, Filters ▾, Clear all, Cols: 4, Close ✕.
-- [ ] Each tile shows cover image and title.
+- [ ] Each tile shows cover image, ⓘ badge in top-right corner, and title text below.
 
 ### B. Cols cycle
 - [ ] Tap Cols → "Cols: 5", grid relayouts smoothly.
@@ -401,7 +446,7 @@ On Quest 3 / Meta Browser, assuming M4a and M4b shipped:
 - [ ] Close browse panel ✕ → both panels (browse + filters) close together.
 
 ### F. Scene swap (different projection)
-- [ ] Currently watching DOME 180° SBS. Open browse, click a fisheye tile → fade out, video swaps, projection swaps, fade in. Fisheye plays.
+- [ ] Currently watching DOME 180° SBS. Open browse, tap the **cover image** of a fisheye tile → fade out, video swaps, projection swaps, fade in. Fisheye plays.
 - [ ] Browse panel closed automatically.
 - [ ] M3c geometry pose at default for new projection.
 - [ ] M4b mute/speed/loop preserved across swap.
@@ -409,6 +454,17 @@ On Quest 3 / Meta Browser, assuming M4a and M4b shipped:
 
 ### G. Scene swap (same projection)
 - [ ] DOME → another DOME → no projection rebind, just src swap. Fade in/out.
+
+### G2. Detail panel
+- [ ] Tap the **ⓘ badge** on a tile (NOT the cover) → detail panel opens in front of the grid; "Loading…" briefly visible.
+- [ ] Once loaded, panel shows: title, performer chips, studio chip, date, duration, rating stars, description text, tag chips, and a "▶ Play this scene" button.
+- [ ] Tap a performer chip → detail panel closes; grid filters by that performer (verify chip "Performer: <name> ✕" appears in the filters panel chips area).
+- [ ] Tap a tag chip → detail panel closes; grid filters by that tag.
+- [ ] Tap a studio chip → detail panel closes; grid filters by that studio.
+- [ ] Tap "▶ Play this scene" → same fade-out / swap / fade-in flow as tapping the tile cover.
+- [ ] Tap ✕ on detail panel → panel closes; grid stays.
+- [ ] Description text scrolls with thumbstick Y when the detail panel is the focused scroll target.
+- [ ] Closing the browse panel ✕ also closes the detail panel.
 
 ### H. M3c regressions
 - [ ] Browse panel closed: trigger toggle still works, geometry-drag fires on empty space, thumbstick scale works, B/Y reset works.
