@@ -33,7 +33,7 @@ func (h *httpHandler) sceneCaptionHandler(w http.ResponseWriter, r *http.Request
 	upstream := *vd.SceneParts.Paths.Caption + "?lang=" + url.QueryEscape(lang) + "&type=" + url.QueryEscape(captionType)
 	upstream = stash.ApiKeyed(upstream)
 
-	req, err := http.NewRequestWithContext(r.Context(), "GET", upstream, nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, upstream, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -51,7 +51,11 @@ func (h *httpHandler) sceneCaptionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	upstreamCT := resp.Header.Get("Content-Type")
+	if upstreamCT == "" {
+		upstreamCT = "text/vtt; charset=utf-8"
+	}
+	w.Header().Set("Content-Type", upstreamCT)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: copy caption body")
 	}
