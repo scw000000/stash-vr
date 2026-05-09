@@ -65,6 +65,9 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 {{if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 180)}}
   <a-entity id="vrSphere"
             geometry="primitive:sphere;radius:100;phiStart:180;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"></a-entity>
+{{else if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 360)}}
+  <a-entity id="vrSphere"
+            geometry="primitive:sphere;radius:100;segmentsWidth:64;segmentsHeight:64"></a-entity>
 {{else}}
   <a-entity id="vrFlat"
             geometry="primitive:plane;width:4;height:2.25"
