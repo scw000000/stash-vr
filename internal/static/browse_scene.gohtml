@@ -23,9 +23,12 @@ a.chip:hover { background: #3a3a3a; }
 .section h2 { font-size: 0.85rem; text-transform: uppercase; color: #888; margin: 0 0 8px 0; letter-spacing: 0.05em; }
 
 .stars { display: inline-flex; gap: 4px; align-items: center; }
+.stars-fill { display: inline-flex; flex-direction: row-reverse; gap: 4px; }
 .stars button { background: transparent; border: none; font-size: 1.5rem; color: #555; cursor: pointer; padding: 0 2px; }
-.stars button.on { color: #f7b500; }
-.stars button:hover { color: #f7b500; }
+.stars-fill button:hover,
+.stars-fill button:hover ~ button,
+.stars-fill button.on,
+.stars-fill button.on ~ button { color: #f7b500; }
 .stars button.clear { font-size: 1rem; margin-left: 8px; color: #888; }
 .stars button.clear:hover { color: #f55; }
 
@@ -903,10 +906,13 @@ a.chip:hover { background: #3a3a3a; }
 
 <div class="section">
 <h2>Rating</h2>
-<form method="post" action="/browse/scene/{{.ID}}/rating" class="stars" style="display:inline-flex">
+<form method="post" action="/browse/scene/{{.ID}}/rating" class="stars">
+<span class="stars-fill">
 {{range $i, $_ := .StarSlice}}
-<button name="value" value="{{add $i 1}}"{{if le (add $i 1) $.Rating1to5}} class="on"{{end}}>★</button>
+{{- $star := sub 5 $i -}}
+<button name="value" value="{{$star}}"{{if eq $star $.Rating1to5}} class="on"{{end}}>★</button>
 {{end}}
+</span>
 {{if .Rating1to5}}<button name="value" value="0" class="clear" title="Clear rating">✕</button>{{end}}
 </form>
 </div>
