@@ -60,7 +60,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 {{if .DirectStreamURL}}
 <button id="enterVR" class="btn-vr" type="button">{{if .Projection.Geometry}}▥ Enter VR{{else}}▥ Watch on virtual screen{{end}}</button>
 
-<a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" data-stereo="{{.Projection.Stereo}}">
+<a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
   <a-entity camera position="0 1.6 0"></a-entity>
   <!--
     All four render entities are always emitted. JS toggles visibility
@@ -425,25 +425,24 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     const pickerState = computeInitialPickerState();
 
     // computeInitialPickerState reads the server-rendered Projection
-    // off the <a-scene> attributes and the four render entities to
-    // determine which preset is currently active. Used both for the
-    // initial active-highlight and as the revert target for Auto.
+    // straight off <a-scene>'s data-* attrs. Reading entity `visible`
+    // here would be wrong: at script-execution time A-Frame hasn't
+    // parsed it yet, so getAttribute returns the raw HTML string
+    // ("true"/"false") — both truthy in JS — which makes every
+    // condition fire on the first branch.
     function computeInitialPickerState() {
       const stereoAttr = scene.dataset.stereo || '';
-      const fisheyeEl = document.getElementById('vrFisheye');
-      const sphere180 = document.getElementById('vrSphere180');
-      const sphere360 = document.getElementById('vrSphere360');
-      const flat      = document.getElementById('vrFlat');
+      const geom       = scene.dataset.geometry || '';
+      const fov        = parseFloat(scene.dataset.fov || '0');
       let type = 'Normal', degree = '180', stereo = 'SBS';
-      if (flat && flat.getAttribute('visible')) {
+      if (geom === '') {
         type = 'Normal'; degree = 'Cinema'; stereo = '2D';
-      } else if (fisheyeEl && fisheyeEl.getAttribute('visible')) {
+      } else if (geom === 'fisheye') {
         type = 'FishEye';
-        const fov = parseFloat(fisheyeEl.dataset.fov || '180');
         degree = (fov >= 200 ? '200' : '180');
-      } else if (sphere360 && sphere360.getAttribute('visible')) {
+      } else if (geom === 'equirectangular' && fov === 360) {
         type = 'Normal'; degree = '360';
-      } else if (sphere180 && sphere180.getAttribute('visible')) {
+      } else if (geom === 'equirectangular') {
         type = 'Normal'; degree = '180';
       }
       if (degree === 'Cinema') {
