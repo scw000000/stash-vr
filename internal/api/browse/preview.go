@@ -17,7 +17,7 @@ func (h *httpHandler) scenePreviewHandler(w http.ResponseWriter, r *http.Request
 	id := chi.URLParam(r, "id")
 
 	vd, err := h.libraryService.GetScene(r.Context(), id, false)
-	if err != nil || vd == nil || vd.SceneParts == nil || vd.SceneParts.Paths == nil || vd.SceneParts.Paths.Preview == nil {
+	if err != nil || vd == nil || vd.SceneParts == nil || vd.SceneParts.Paths == nil || vd.SceneParts.Paths.Preview == nil || *vd.SceneParts.Paths.Preview == "" {
 		http.NotFound(w, r)
 		return
 	}
