@@ -176,11 +176,11 @@
     _onByUp: function(which) {
       const st = this._byState[which];
       const wasFired = st.fired;
-      const elapsed = performance.now() - st.downTime;
+      const pressTime = st.downTime;  // capture before reset; downTime=0 means no prior press.
       st.downTime = 0;
       st.fired = false;
       if (wasFired) return; // long-press already fired
-      if (elapsed < this.LONG_PRESS_MS) {
+      if (pressTime !== 0 && performance.now() - pressTime < this.LONG_PRESS_MS) {
         const mode = this._currentMode();
         this.sceneEl.emit('m3c:reset-short', { mode: mode });
       }
