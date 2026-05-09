@@ -999,8 +999,11 @@ a.chip:hover { background: #3a3a3a; }
           if (i >= count) break;
           const ourThetaCenter = (col - halfCols) * thetaSpacing;       // radians
           const ourThetaStart  = ourThetaCenter - thetaPerTile / 2;
-          // A-Frame cylinder degrees: 0 = +X axis, CCW. Our theta=0 is +Z.
-          const aFrameThetaStartDeg  = 90 + ourThetaStart * 180 / Math.PI;
+          // Three.js CylinderGeometry uses vertex.x=sin(θ)*R, vertex.z=cos(θ)*R,
+          // so theta=0 is +Z (facing the user) — same as our convention. The
+          // mapping is identity (no +90° offset). The +ourTheta direction is
+          // user's right (+X), matching Three.js's sin(+θ) → +X.
+          const aFrameThetaStartDeg  = ourThetaStart * 180 / Math.PI;
           const aFrameThetaLengthDeg = thetaPerTile * 180 / Math.PI;
           // All tiles in a row share x=0, z=hubZ (the cylinder hub). The
           // cylinder's theta-start handles the per-column placement on the
