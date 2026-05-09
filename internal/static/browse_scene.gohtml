@@ -695,11 +695,7 @@ a.chip:hover { background: #3a3a3a; }
         const help = document.getElementById('vrHelpPanel');
         if (help) help.setAttribute('visible', false);
       }
-      // 'cc' and 'vol-track' are intentional no-ops here:
-      //  - 'cc' will be wired in Task 5.
-      //  - 'vol-track' is just a click no-op; the slider drag uses
-      //    mousedown / mouseup separately so the click handler doesn't
-      //    accidentally jump volume after a drag.
+      // 'cc' is wired in Task 5; 'vol-track' is a no-op (the slider drag uses mousedown).
     }
     document.querySelectorAll('.vr-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -769,7 +765,16 @@ a.chip:hover { background: #3a3a3a; }
         const v = cursorToVol(its[0]);
         if (v !== null) setVideoVolume(v);
       });
+      laser.addEventListener('raycaster-intersection-cleared', function() {
+        // If the laser leaves all targets while a drag is in flight, end the
+        // drag — the matching mouseup fires on whatever the laser landed on
+        // (often nothing), so we won't otherwise see it.
+        volActive = false;
+      });
     });
+
+    // Backstop: any mouseup anywhere ends the drag. Cheap; runs only on click.
+    scene.addEventListener('mouseup', function() { volActive = false; });
 
     // Initialize volume to 1.0; this also positions the fill + thumb at the right edge.
     setVideoVolume(1.0);
