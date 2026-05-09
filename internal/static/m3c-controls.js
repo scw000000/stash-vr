@@ -73,6 +73,16 @@
         leftLaser.addEventListener('ybuttondown', () => this._onByDown('y'));
         leftLaser.addEventListener('ybuttonup',   () => this._onByUp('y'));
       }
+
+      // Thumbstick state per hand. seekArmed=true means the next
+      // |axis_x|>0.7 will fire a seek event.
+      this.SEEK_TRIGGER = 0.7;
+      this.SEEK_REARM   = 0.3;
+      this.SEEK_SECONDS = 10;
+      this.thumbState = {
+        right: { seekArmed: true },
+        left:  { seekArmed: true }
+      };
     },
 
     _newTriggerState: function() {
@@ -193,6 +203,30 @@
       return (v === true || v === 'true') ? 'cinema' : 'immersive';
     },
 
+    _getThumbstick: function(hand) {
+      const el = this._lasers[hand];
+      if (!el) return null;
+      const tc = el.components && el.components['tracked-controls'];
+      const ctrl = tc && tc.controller;
+      const axes = ctrl && ctrl.axes;
+      if (!axes || axes.length < 2) return null;
+      // xr-standard mapping puts thumbstick on axes[2],[3]; legacy on [0],[1].
+      // Prefer the pair with larger magnitude (likely non-default).
+      let x = 0, y = 0;
+      if (axes.length >= 4) {
+        x = axes[2] || 0;
+        y = axes[3] || 0;
+        if (Math.abs(x) < 0.001 && Math.abs(y) < 0.001) {
+          x = axes[0] || 0;
+          y = axes[1] || 0;
+        }
+      } else {
+        x = axes[0] || 0;
+        y = axes[1] || 0;
+      }
+      return { x: x, y: y };
+    },
+
     tick: function(time, delta) {
       // Trigger candidate → drag promotion (existing).
       ['right', 'left'].forEach(hand => {
@@ -227,6 +261,21 @@
           st.fired = true;
           const mode = this._currentMode();
           this.sceneEl.emit('m3c:reset-long', { mode: mode });
+        }
+      });
+
+      // Thumbstick X — discrete seek with arm/rearm.
+      ['right', 'left'].forEach(hand => {
+        const ts = this._getThumbstick(hand);
+        if (!ts) return;
+        const st = this.thumbState[hand];
+        const ax = Math.abs(ts.x);
+        if (st.seekArmed && ax > this.SEEK_TRIGGER) {
+          const sign = ts.x > 0 ? 1 : -1;
+          this.sceneEl.emit('m3c:seek', { sign: sign, seconds: this.SEEK_SECONDS });
+          st.seekArmed = false;
+        } else if (!st.seekArmed && ax < this.SEEK_REARM) {
+          st.seekArmed = true;
         }
       });
     },

@@ -477,6 +477,18 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       resetGeometry();
     });
 
+    scene.addEventListener('m3c:seek', function(e) {
+      if (isNaN(video.currentTime)) return;
+      const delta = e.detail.sign * e.detail.seconds;
+      if (delta < 0) {
+        video.currentTime = Math.max(0, video.currentTime + delta);
+      } else if (!isNaN(video.duration) && video.duration > 0) {
+        video.currentTime = Math.min(video.duration - 0.1, video.currentTime + delta);
+      } else {
+        video.currentTime = video.currentTime + delta;
+      }
+    });
+
     // Panel + lasers visibility is shared. M3c hides them by default and
     // toggles via m3c:panel-toggle (or programmatically on Enter VR /
     // Format-button taps). When hidden: lasers' raycaster also disabled
