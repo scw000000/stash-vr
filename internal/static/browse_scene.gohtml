@@ -417,6 +417,60 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       }
     });
 
+    // Reset the active geometry to its template-default position+scale.
+    // Defaults are static per the HTML: vrFlat at (0,1.6,-3) scale 1,
+    // all others at (0,0,0) scale 1.
+    function resetGeometry() {
+      const el = activeGeometry();
+      if (!el || !el.object3D) return;
+      if (el.id === 'vrFlat') {
+        el.object3D.position.set(0, 1.6, -3);
+      } else {
+        el.object3D.position.set(0, 0, 0);
+      }
+      el.object3D.scale.set(1, 1, 1);
+      const cam = scene.camera;
+      if (el.id === 'vrFlat' && cam) el.object3D.lookAt(cam.position);
+    }
+
+    // WebXR yaw recenter: capture current camera yaw, build inverse-yaw
+    // offset, swap reference space. Pitch/roll left to the headset (it
+    // reports them correctly).
+    function recenterYaw() {
+      const r = scene.renderer;
+      if (!r || !r.xr || !r.xr.isPresenting) return;
+      const session = r.xr.getSession();
+      const baseSpace = r.xr.getReferenceSpace();
+      if (!session || !baseSpace) return;
+      const cam = r.xr.getCamera();
+      if (!cam) return;
+      // Extract yaw from camera world matrix.
+      const e = cam.matrixWorld.elements;
+      // Forward vector is -Z column (cols 8,9,10 are -Z). Yaw = atan2(forward.x, forward.z).
+      const fx = -e[8], fz = -e[10];
+      const yaw = Math.atan2(fx, fz);
+      const sinH = Math.sin(-yaw / 2);
+      const cosH = Math.cos(-yaw / 2);
+      // Quaternion for rotation about Y axis by -yaw.
+      const offset = new XRRigidTransform(
+        { x: cam.position.x, y: 0, z: cam.position.z, w: 1 },
+        { x: 0, y: sinH, z: 0, w: cosH }
+      );
+      try {
+        r.xr.setReferenceSpace(baseSpace.getOffsetReferenceSpace(offset));
+      } catch (err) {
+        console.warn('stash-vr: recenter failed', err);
+      }
+    }
+
+    scene.addEventListener('m3c:reset-short', function(e) {
+      if (e.detail.mode === 'cinema') {
+        resetGeometry();
+      } else {
+        recenterYaw();
+      }
+    });
+
     // Panel + lasers visibility is shared. M3c hides them by default and
     // toggles via m3c:panel-toggle (or programmatically on Enter VR /
     // Format-button taps). When hidden: lasers' raycaster also disabled

@@ -56,6 +56,23 @@
       if (leftLaser) {
         leftLaser.addEventListener('xbuttonup', this._onAxClickUp);
       }
+
+      // B (right) / Y (left) — short-press = reset, long-press = recenter (Task 8).
+      this.LONG_PRESS_MS = 500;
+      this._byState = {
+        b: { downTime: 0, fired: false },
+        y: { downTime: 0, fired: false }
+      };
+      this._onByDown = this._onByDown.bind(this);
+      this._onByUp   = this._onByUp.bind(this);
+      if (rightLaser) {
+        rightLaser.addEventListener('bbuttondown', () => this._onByDown('b'));
+        rightLaser.addEventListener('bbuttonup',   () => this._onByUp('b'));
+      }
+      if (leftLaser) {
+        leftLaser.addEventListener('ybuttondown', () => this._onByDown('y'));
+        leftLaser.addEventListener('ybuttonup',   () => this._onByUp('y'));
+      }
     },
 
     _newTriggerState: function() {
@@ -149,6 +166,32 @@
         }
       }, this.DOUBLE_CLICK_MS);
       this._pendingClick = pending;
+    },
+
+    _onByDown: function(which) {
+      const st = this._byState[which];
+      st.downTime = performance.now();
+      st.fired = false;
+    },
+    _onByUp: function(which) {
+      const st = this._byState[which];
+      if (st.fired) {
+        // Long-press already fired in tick(); skip the short-press emit.
+        st.fired = false;
+        return;
+      }
+      const elapsed = performance.now() - st.downTime;
+      const mode = this._currentMode();
+      if (elapsed < this.LONG_PRESS_MS) {
+        this.sceneEl.emit('m3c:reset-short', { mode: mode });
+      }
+    },
+    _currentMode: function() {
+      // Cinema = the flat plane is the active geometry. Otherwise immersive.
+      const flat = document.getElementById('vrFlat');
+      if (!flat) return 'immersive';
+      const v = flat.getAttribute('visible');
+      return (v === true || v === 'true') ? 'cinema' : 'immersive';
     },
 
     tick: function(time, delta) {
