@@ -41,7 +41,14 @@ These constants are easy to tweak in `internal/static/m3c-controls.js`'s `init`.
 
 (Things we learned during M3c that should inform what comes next.)
 
-_(fill in here)_
+- **M3c-followup: drag/scale sensitivity tuning + config knob.** During Quest 3
+  validation, immersive drag needed a 50× delta multiplier (currently hardcoded
+  in `internal/static/browse_scene.gohtml`'s `m3c:drag-move` handler) for hand
+  motion to be perceptible against a 100m sphere. Both drag and Y-axis scale
+  rates feel sub-optimal. Bundle these into a tunable config (per-projection
+  override would be ideal): drag-multiplier-cinema, drag-multiplier-immersive,
+  scale-rate. Possibly expose via the panel as a "Sensitivity" sub-control or
+  a `?sens=` query parameter on the scene URL.
 
 ## Risks that materialized (cross-reference spec §8)
 

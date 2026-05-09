@@ -249,10 +249,6 @@
             dy: this.deltaPos.y,
             dz: this.deltaPos.z
           });
-          // Track for debug overlay.
-          this._lastDx = this.deltaPos.x;
-          this._lastDy = this.deltaPos.y;
-          this._lastDz = this.deltaPos.z;
           st.startPos.copy(this.curPos);
         }
       });
@@ -297,32 +293,6 @@
       if (compositeY !== 0 && dtSec > 0) {
         const factor = 1 + 0.6 * compositeY * dtSec;
         this.sceneEl.emit('m3c:scale', { factor: factor });
-        this._lastFactor = factor;
-        this._lastCompositeY = compositeY;
-      }
-
-      // Debug overlay update — feed live values to the in-VR <a-text>.
-      // Disable by removing the <a-entity id="vrDebug"> from the template.
-      const debugText = document.getElementById('vrDebugText');
-      if (debugText) {
-        const tsR = this._getThumbstick('right') || { x: NaN, y: NaN };
-        const tsL = this._getThumbstick('left')  || { x: NaN, y: NaN };
-        let agId = 'none';
-        const ids = ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'];
-        for (let i = 0; i < ids.length; i++) {
-          const el = document.getElementById(ids[i]);
-          if (el && el.object3D && el.object3D.visible) { agId = ids[i]; break; }
-        }
-        const fmt = (n) => (typeof n !== 'number' || isNaN(n)) ? 'NaN' : n.toFixed(2);
-        const lines = [
-          'RH ts: ' + fmt(tsR.x) + ', ' + fmt(tsR.y),
-          'LH ts: ' + fmt(tsL.x) + ', ' + fmt(tsL.y),
-          'phase R/L: ' + this.triggerState.right.phase + '/' + this.triggerState.left.phase,
-          'DM: ' + fmt(this._lastDx) + ' ' + fmt(this._lastDy) + ' ' + fmt(this._lastDz),
-          'compY: ' + fmt(this._lastCompositeY) + '  fac: ' + (this._lastFactor != null ? this._lastFactor.toFixed(4) : '-'),
-          'AG: ' + agId
-        ];
-        debugText.setAttribute('value', lines.join('\n'));
       }
     },
 

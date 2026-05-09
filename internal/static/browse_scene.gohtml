@@ -230,15 +230,6 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
        gamepad polling, and B/Y long-press timer. Emits semantic events
        on <a-scene>; the inline IIFE applies them. -->
   <a-entity m3c-controls></a-entity>
-
-  <!-- TEMPORARY in-VR debug overlay for M3c diagnostics.
-       Always visible; sits in upper-left of user's view, parented to scene.
-       Remove this entity once drag/scale issues are resolved. m3c-controls
-       updates the text every tick. -->
-  <a-entity id="vrDebug" position="-0.5 1.9 -1" rotation="0 25 0">
-    <a-plane width="0.7" height="0.5" color="#000" material="opacity:0.7"></a-plane>
-    <a-text id="vrDebugText" value="DEBUG init..." align="left" color="#0f0" width="2.5" position="-0.32 0 0.01"></a-text>
-  </a-entity>
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
@@ -503,33 +494,30 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     function recenterYaw() {
       const r = scene.renderer;
       if (!r || !r.xr || !r.xr.isPresenting) return;
-      const baseSpace = r.xr.getReferenceSpace();
-      if (!baseSpace) return;
       const cam = r.xr.getCamera();
       if (!cam) return;
-      // Extract yaw from camera world matrix.
-      // Three.js column-major: cols 8,9,10 are camera's local +Z (which is
-      // OPPOSITE to forward; camera looks at -localZ). Forward = (-e[8], -e[9], -e[10]).
-      // Yaw measured from -Z (canonical forward) = atan2(forward.x, -forward.z)
-      //                                          = atan2(-e[8], e[10]).
+      // Extract user's yaw from camera matrixWorld.
+      // Cols 8,9,10 are camera's local +Z (= -forward). yaw measured from
+      // canonical -Z forward = atan2(forward.x, -forward.z) = atan2(-e[8], e[10]).
       const e = cam.matrixWorld.elements;
       const yaw = Math.atan2(-e[8], e[10]);
-      const sinH = Math.sin(-yaw / 2);
-      const cosH = Math.cos(-yaw / 2);
-      // Yaw-only recenter: NO translation. Translating the offset by the
-      // user's xz position causes the camera and tracked controllers to
-      // desync (Three.js camera follows new ref space; tracked-controls-webxr
-      // may sample its pose differently). SKYBOX-style "recenter" is also
-      // yaw-only — re-orient without warping you to a different position.
-      const offset = new XRRigidTransform(
-        { x: 0, y: 0, z: 0, w: 1 },
-        { x: 0, y: sinH, z: 0, w: cosH }
-      );
-      try {
-        r.xr.setReferenceSpace(baseSpace.getOffsetReferenceSpace(offset));
-      } catch (err) {
-        console.warn('stash-vr: recenter failed', err);
+      const el = activeGeometry();
+      if (!el || !el.object3D) return;
+      if (el.id === 'vrFlat') {
+        // Cinema: yaw recenter is a no-op; resetGeometry's lookAt(camera)
+        // handles plane orientation. Skipping here keeps the cinema reset
+        // path simple.
+        return;
       }
+      // Immersive: rotate the active geometry by -yaw about Y so its local
+      // -Z direction (where texture center is for spheres / fisheye) aligns
+      // with the user's current gaze direction. We do NOT change the WebXR
+      // reference space — that desyncs A-Frame's tracked-controls (which
+      // samples controller poses against the original ref space) from the
+      // camera (which follows setReferenceSpace). Rotating the geometry
+      // achieves the visual recenter without touching the ref space, so
+      // controllers remain in their real-world positions.
+      el.object3D.rotation.y = -yaw;
     }
 
     scene.addEventListener('m3c:reset-short', function(e) {
