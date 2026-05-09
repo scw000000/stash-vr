@@ -30,10 +30,17 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
+	perPage, _ := strconv.Atoi(q.Get("per_page"))
+	if perPage <= 0 {
+		perPage = 20 // default in-VR batch size; smaller than 2D pageSize=30
+	}
+	if perPage > 60 {
+		perPage = 60
+	}
 	_ = favorite // favorite filter deferred — see plan note.
 
 	sceneFilter := buildGridFilter(performer, studio, tag, starsMin, ocountMin)
-	ids, total, err := fetchSceneIDs(r.Context(), h.libraryService.StashClient, sceneFilter, searchQ, page)
+	ids, total, err := fetchSceneIDsWithSize(r.Context(), h.libraryService.StashClient, sceneFilter, searchQ, page, perPage)
 	if err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: grid fetchSceneIDs")
 		http.Error(w, "fetch failed", http.StatusInternalServerError)
@@ -72,7 +79,7 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp := GridResponse{
 		Tiles:   tiles,
-		HasMore: page*pageSize < total,
+		HasMore: page*perPage < total,
 	}
 	if resp.HasMore {
 		resp.NextCursor = strconv.Itoa(page + 1)

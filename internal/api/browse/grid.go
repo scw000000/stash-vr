@@ -16,13 +16,22 @@ import (
 
 const pageSize = 30
 
-// fetchSceneIDs runs FindSceneIdsByFilter and returns (ids, totalCount).
+// fetchSceneIDs runs FindSceneIdsByFilter at the package's default pageSize.
+// Kept for callers that don't need a custom batch size (the existing
+// /browse 2D index handler).
+func fetchSceneIDs(ctx context.Context, client graphql.Client, sceneFilter *gql.SceneFilterType, q string, page int) ([]string, int, error) {
+	return fetchSceneIDsWithSize(ctx, client, sceneFilter, q, page, pageSize)
+}
+
+// fetchSceneIDsWithSize runs FindSceneIdsByFilter at an arbitrary per-page
+// batch size. Used by /browse/grid where the in-VR browse client can
+// configure how many tiles arrive per request.
 // sceneFilter may be nil (all scenes); page is 1-indexed.
 // q is an optional full-text search string (passed to FindFilterType.Q).
-func fetchSceneIDs(ctx context.Context, client graphql.Client, sceneFilter *gql.SceneFilterType, q string, page int) ([]string, int, error) {
+func fetchSceneIDsWithSize(ctx context.Context, client graphql.Client, sceneFilter *gql.SceneFilterType, q string, page, perPage int) ([]string, int, error) {
 	findFilter := &gql.FindFilterType{
 		Page:      util.Ptr(page),
-		Per_page:  util.Ptr(pageSize),
+		Per_page:  util.Ptr(perPage),
 		Sort:      util.Ptr("created_at"),
 		Direction: util.Ptr(gql.SortDirectionEnumDesc),
 	}
