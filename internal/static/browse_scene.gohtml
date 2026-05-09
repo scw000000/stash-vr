@@ -365,6 +365,51 @@ a.chip:hover { background: #3a3a3a; }
     video.addEventListener('play', updatePlayPauseIcon);
     video.addEventListener('pause', updatePlayPauseIcon);
 
+    // Recover from WebGL context loss. Quest 3 drops the context after
+    // ~30s sleep; without preventDefault the browser won't restore it,
+    // and the video texture stays frozen even after re-entering VR
+    // (audio keeps playing because that pipeline is independent).
+    function refreshVideoTexture() {
+      if (!video || video.readyState < 2) return;
+      const wasPaused = video.paused;
+      const t = isFinite(video.currentTime) ? video.currentTime : 0;
+      try {
+        video.pause();
+        // Re-assigning currentTime forces the decoder to re-emit a
+        // frame, which the next render tick uploads to the GL texture.
+        video.currentTime = t;
+        if (!wasPaused) {
+          const p = video.play();
+          if (p && p.catch) p.catch(err => console.warn('stash-vr: video resume failed', err));
+        }
+      } catch (e) {
+        console.warn('stash-vr: video texture refresh failed', e);
+      }
+    }
+
+    scene.addEventListener('loaded', function() {
+      const canvas = scene.canvas;
+      if (!canvas) return;
+      canvas.addEventListener('webglcontextlost', function(e) {
+        console.warn('stash-vr: WebGL context lost — requesting restore');
+        e.preventDefault(); // critical: without this the browser doesn't restore
+      }, false);
+      canvas.addEventListener('webglcontextrestored', function() {
+        console.warn('stash-vr: WebGL context restored — refreshing video texture');
+        refreshVideoTexture();
+      }, false);
+    });
+
+    // Page-visibility backstop. Some sleep scenarios don't fully drop the
+    // GL context but still stall the decoder pipeline; refreshing on
+    // visibility return covers those cases cheaply.
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) refreshVideoTexture();
+    });
+
+    // Entering VR fresh after a stall benefits from the same refresh.
+    scene.addEventListener('enter-vr', refreshVideoTexture);
+
     // Bind material + texture programmatically. aframe-stereo-component@1.4.0
     // doesn't work on A-Frame 1.7 (reads material as raw string at init), so
     // stereo is handled here directly.
