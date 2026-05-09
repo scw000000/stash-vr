@@ -62,21 +62,26 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 
 <a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" data-stereo="{{.Projection.Stereo}}">
   <a-entity camera position="0 1.6 0"></a-entity>
-{{if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 180)}}
-  <a-entity id="vrSphere"
+  <!--
+    All four render entities are always emitted. JS toggles visibility
+    based on the active Projection. The initial visibility below
+    matches the server-side detected Projection so the page renders
+    correctly before any JS runs.
+  -->
+  <a-entity id="vrSphere180"
+            visible="{{if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 180)}}true{{else}}false{{end}}"
             geometry="primitive:sphere;radius:100;phiStart:180;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"></a-entity>
-{{else if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 360)}}
-  <a-entity id="vrSphere"
+  <a-entity id="vrSphere360"
+            visible="{{if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 360)}}true{{else}}false{{end}}"
             geometry="primitive:sphere;radius:100;segmentsWidth:64;segmentsHeight:64"></a-entity>
-{{else if eq .Projection.Geometry "fisheye"}}
   <a-entity id="vrFisheye"
-            data-fov="{{.Projection.FOV}}"
+            visible="{{if eq .Projection.Geometry "fisheye"}}true{{else}}false{{end}}"
+            data-fov="{{if eq .Projection.Geometry "fisheye"}}{{.Projection.FOV}}{{else}}180{{end}}"
             geometry="primitive:sphere;radius:100;segmentsWidth:64;segmentsHeight:64"></a-entity>
-{{else}}
   <a-entity id="vrFlat"
+            visible="{{if not .Projection.Geometry}}true{{else}}false{{end}}"
             geometry="primitive:plane;width:4;height:2.25"
             position="0 1.6 -3"></a-entity>
-{{end}}
 
   <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
   <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
@@ -143,13 +148,24 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     // renders the scene twice per frame (once per eye); Three.js calls
     // mesh.onBeforeRender per render call with the active camera, which
     // is how we know which eye to configure UV/offset uniforms for.
-    function applySphere() {
-      const el = document.getElementById('vrSphere');
+    // Shared VideoTexture instance reused across all bind functions.
+    // sphere materials mutate offset/repeat per eye; fisheye shader
+    // ignores offset/repeat and applies its own UV math via uniforms,
+    // so sharing is safe.
+    let sharedTex = null;
+    function getSharedTex() {
+      if (!sharedTex) {
+        sharedTex = new AFRAME.THREE.VideoTexture(video);
+        if (AFRAME.THREE.SRGBColorSpace) sharedTex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+      }
+      return sharedTex;
+    }
+    function bindSphereMesh(id) {
+      const el = document.getElementById(id);
       if (!el || !window.AFRAME || !AFRAME.THREE) return;
       const mesh = el.getObject3D('mesh');
       if (!mesh || mesh.userData.boundVR) return;
-      const tex = new AFRAME.THREE.VideoTexture(video);
-      if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+      const tex = getSharedTex();
       mesh.material = new AFRAME.THREE.MeshBasicMaterial({
         map: tex,
         side: AFRAME.THREE.BackSide
@@ -175,21 +191,22 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
           tex.repeat.set(1, 0.5);
           tex.offset.set(0, isLeft ? 0 : 0.5);
         } else {
-          // Unknown stereo string — render full texture defensively.
           tex.offset.set(0, 0);
           tex.repeat.set(1, 1);
         }
       };
       mesh.userData.boundVR = true;
     }
+    function applySphere() {
+      bindSphereMesh('vrSphere180');
+      bindSphereMesh('vrSphere360');
+    }
     function applyFlat() {
       const el = document.getElementById('vrFlat');
       if (!el || !window.AFRAME || !AFRAME.THREE) return;
       const mesh = el.getObject3D('mesh');
       if (!mesh || mesh.userData.boundVR) return;
-      const tex = new AFRAME.THREE.VideoTexture(video);
-      if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
-      mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
+      mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: getSharedTex() });
       mesh.userData.boundVR = true;
     }
     // applyFisheye binds a custom ShaderMaterial that converts each
@@ -204,8 +221,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       if (!el || !window.AFRAME || !AFRAME.THREE) return;
       const mesh = el.getObject3D('mesh');
       if (!mesh || mesh.userData.boundVR) return;
-      const tex = new AFRAME.THREE.VideoTexture(video);
-      if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+      const tex = getSharedTex();
       const fov = parseFloat(el.dataset.fov || '180');
       const material = new AFRAME.THREE.ShaderMaterial({
         side: AFRAME.THREE.BackSide,
@@ -276,7 +292,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       applyFisheye();
     }
     scene.addEventListener('loaded', applyAll);
-    ['vrSphere', 'vrFlat', 'vrFisheye'].forEach(id => {
+    ['vrSphere180', 'vrSphere360', 'vrFlat', 'vrFisheye'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('object3dset', applyAll);
     });
