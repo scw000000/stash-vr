@@ -70,7 +70,7 @@ a.chip:hover { background: #3a3a3a; }
 {{if .DirectStreamURL}}
 <button id="enterVR" class="btn-vr" type="button">{{if .Projection.Geometry}}▥ Enter VR{{else}}▥ Watch on virtual screen{{end}}</button>
 
-<a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
+<a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" webxr="optionalFeatures: layers" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
   <a-entity camera position="0 1.6 0"></a-entity>
   <!--
     All four render entities are always emitted. JS toggles visibility
@@ -1771,6 +1771,117 @@ a.chip:hover { background: #3a3a3a; }
       });
       scene.setAttribute('m4b-tickers', '');
     }
+
+    // ============================================================
+    // SPIKE: WebXR Media Layers — see followups.md "V flash" entry.
+    // Activated via ?spike-layers=1. Replaces the VideoTexture render
+    // path for the current projection with an XRMediaBinding layer
+    // (the compositor handles video frames directly, bypassing the
+    // texImage2D upload that VideoTexture uses today). Goal: discover
+    // whether 8K video plays smoothly via this path.
+    // Falls back silently to the current path on any failure.
+    // ============================================================
+    (function spikeWebXRLayers() {
+      if (!new URLSearchParams(location.search).has('spike-layers')) return;
+
+      let mediaLayer = null;
+      let geometryHidden = null; // entity we hid so we can restore on exit-vr
+
+      function teardownSpike() {
+        if (geometryHidden) {
+          geometryHidden.setAttribute('visible', 'true');
+          geometryHidden = null;
+        }
+        if (mediaLayer) {
+          // Layers are auto-cleaned when the session ends, but null our ref
+          // so a subsequent enter-vr can rebuild fresh.
+          mediaLayer = null;
+        }
+      }
+      scene.addEventListener('exit-vr', teardownSpike);
+
+      scene.addEventListener('enter-vr', function() {
+        try {
+          if (typeof XRMediaBinding === 'undefined') {
+            console.warn('stash-vr spike: XRMediaBinding not available — staying on current path');
+            return;
+          }
+          const xr = scene.renderer && scene.renderer.xr;
+          if (!xr) { console.warn('stash-vr spike: no xr renderer'); return; }
+          const xrSession = xr.getSession();
+          if (!xrSession) { console.warn('stash-vr spike: no xr session'); return; }
+          const refSpace = xr.getReferenceSpace();
+          if (!refSpace) { console.warn('stash-vr spike: no reference space'); return; }
+
+          const stereo = scene.dataset.stereo || '';
+          const geom = scene.dataset.geometry || '';
+          const fovDeg = parseFloat(scene.dataset.fov || '0') || 0;
+
+          // Map stash-vr stereo flag -> WebXR layout string.
+          const layout = stereo === 'sbs' ? 'stereo-left-right' :
+                         stereo === 'tb'  ? 'stereo-top-bottom' :
+                         'mono';
+
+          const mediaBinding = new XRMediaBinding(xrSession);
+
+          if (geom === 'fisheye') {
+            console.warn('stash-vr spike: fisheye has no native layer type — staying on current path');
+            return;
+          }
+
+          if (geom === 'equirectangular') {
+            // VR180 -> π central, VR360 -> 2π central. theta clamped to ±π/2.
+            const isFull360 = (fovDeg >= 360);
+            mediaLayer = mediaBinding.createEquirectLayer(video, {
+              space: refSpace,
+              layout: layout,
+              centralHorizontalAngle: isFull360 ? 2 * Math.PI : Math.PI,
+              upperVerticalAngle: Math.PI / 2,
+              lowerVerticalAngle: -Math.PI / 2,
+              radius: 0
+            });
+            // Hide whichever sphere is currently the active geometry so the
+            // video isn't double-rendered.
+            geometryHidden = isFull360 ? document.getElementById('vrSphere360')
+                                       : document.getElementById('vrSphere180');
+          } else {
+            // No geometry tag => cinema/flat. Use a quad layer roughly where
+            // vrFlat sits today (4x2.25m at 0,1.6,-3).
+            mediaLayer = mediaBinding.createQuadLayer(video, {
+              space: refSpace,
+              layout: layout,
+              width: 2.0,    // half-width of the 4m plane in WebXR convention
+              height: 1.125, // half-height of 2.25m
+              transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
+            });
+            geometryHidden = document.getElementById('vrFlat');
+          }
+
+          // Insert the media layer BEHIND the existing layer set (so the HUD
+          // projection layer stays in front). renderState.layers is the
+          // current list; if A-Frame is still on the legacy baseLayer (no
+          // 'layers' feature granted), updateRenderState({layers}) would
+          // strand it — bail in that case.
+          const existingLayers = (xrSession.renderState && xrSession.renderState.layers) || null;
+          if (!existingLayers || !existingLayers.length) {
+            console.warn('stash-vr spike: session has no layers array (likely XRWebGLLayer baseLayer path) — bailing without applying media layer; HUD would break');
+            mediaLayer = null;
+            return;
+          }
+
+          xrSession.updateRenderState({
+            layers: [mediaLayer].concat(existingLayers)
+          });
+
+          if (geometryHidden) geometryHidden.setAttribute('visible', 'false');
+
+          console.log('stash-vr spike: applied', geom || 'cinema', layout, 'layer; hid', geometryHidden && geometryHidden.id);
+        } catch (err) {
+          console.warn('stash-vr spike: failed', err);
+          teardownSpike();
+        }
+      });
+    })();
   })();
 </script>
 {{end}}
