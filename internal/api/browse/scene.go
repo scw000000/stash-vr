@@ -1,6 +1,7 @@
 package browse
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -16,6 +17,10 @@ var sceneTmpl = template.Must(template.New("browse_scene.gohtml").Funcs(template
 	"add": func(a, b int) int { return a + b },
 	"sub": func(a, b int) int { return a - b },
 	"le":  func(a, b int) bool { return a <= b },
+	"marshal": func(v interface{}) (template.JS, error) {
+		b, err := json.Marshal(v)
+		return template.JS(b), err
+	},
 }).ParseFS(static.Fs, "browse_scene.gohtml"))
 
 func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request) {

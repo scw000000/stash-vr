@@ -108,6 +108,18 @@ a.chip:hover { background: #3a3a3a; }
     <a-text id="vrTime" value="0:00 / 0:00" align="right" color="#fff" width="3.0"
             position="1.4 0.30 0.01"></a-text>
 
+    <!-- Row 2: scrub bar (drag thumb to seek; click bar to seek; click marker dot to jump). -->
+    <a-entity id="vrScrubBar" position="0 0.05 0.01">
+      <a-plane class="vr-scrub-bg vr-btn" data-action="scrub-bg" width="2.8" height="0.04"
+               color="#444" material="opacity:0.95"></a-plane>
+      <a-plane id="vrScrubFill" width="0.001" height="0.04" color="#3776c2"
+               material="opacity:0.95" position="-1.4 0 0.001"></a-plane>
+      <a-entity id="vrScrubMarkers"></a-entity>
+      <a-entity id="vrScrubThumb" class="vr-btn vr-scrub" data-action="scrub"
+                geometry="primitive:plane;width:0.05;height:0.10"
+                material="color:#fff" position="-1.4 0 0.005"></a-entity>
+    </a-entity>
+
     <!-- Row 3 (bottom): volume widget on the left, then 7 buttons. -->
     <!-- Volume icon (mute toggle) -->
     <a-entity class="vr-btn" data-action="mute" position="-1.40 -0.20 0.01"
@@ -164,7 +176,6 @@ a.chip:hover { background: #3a3a3a; }
       <a-text value="Exit VR" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
     </a-entity>
 
-    <!-- Row 2 (scrub bar) reserved for Task 4. -->
   </a-entity>
 
   <!--
@@ -700,6 +711,8 @@ a.chip:hover { background: #3a3a3a; }
       } else if (action === 'help-close') {
         const help = document.getElementById('vrHelpPanel');
         if (help) help.setAttribute('visible', false);
+      } else if (action === 'scrub' || action === 'scrub-bg') {
+        // No-op here; the scrub-bar drag handles seeking via mousedown.
       }
       // 'cc' is wired in Task 5; 'vol-track' is a no-op (the slider drag uses mousedown).
     }
@@ -810,9 +823,164 @@ a.chip:hover { background: #3a3a3a; }
     function rafLoop() {
       const now = performance.now();
       tickTimeDisplay(now);
+      tickScrubBar();
       requestAnimationFrame(rafLoop);
     }
     requestAnimationFrame(rafLoop);
+
+    // ============================================================
+    // Scrub bar: per-frame fill/thumb advance, drag-to-seek, scene
+    // marker dots with jump-on-click + tooltip-on-hover.
+    // ============================================================
+
+    // Bar geometry: centered at x=0 inside vrScrubBar; left/right map to
+    // -1.4..+1.4 in panel-local space.
+    const SCRUB_BAR_W = 2.8;
+    const SCRUB_BAR_LEFT = -1.4;
+
+    // null when the scene has no markers (server emits JSON null). Coerce to
+    // [] so .length / forEach are always safe.
+    const sceneMarkers = JSON.parse({{ marshal .SceneMarkers }}) || [];
+    const sceneDurationSec = {{ printf "%f" .DurationSec }};
+
+    function tForMarkerX(secs) {
+      if (!sceneDurationSec) return SCRUB_BAR_LEFT;
+      return SCRUB_BAR_LEFT + (secs / sceneDurationSec) * SCRUB_BAR_W;
+    }
+
+    function tickScrubBar() {
+      const dur = isFinite(video.duration) && video.duration > 0
+        ? video.duration
+        : sceneDurationSec;
+      if (!dur) return;
+      const t = Math.max(0, Math.min(dur, video.currentTime || 0));
+      const fillW = Math.max(0.001, (t / dur) * SCRUB_BAR_W);
+      const fill = document.getElementById('vrScrubFill');
+      const thumb = document.getElementById('vrScrubThumb');
+      if (fill) {
+        fill.setAttribute('width', fillW);
+        // Plane is centered on its position; shift x so the left edge stays at SCRUB_BAR_LEFT.
+        fill.setAttribute('position', { x: SCRUB_BAR_LEFT + fillW / 2, y: 0, z: 0.001 });
+      }
+      if (thumb) {
+        thumb.setAttribute('position', { x: SCRUB_BAR_LEFT + (t / dur) * SCRUB_BAR_W, y: 0, z: 0.005 });
+      }
+    }
+
+    let scrubActive = false;
+    let scrubLastWriteMs = 0;
+    const SCRUB_THROTTLE_MS = 80;
+
+    function cursorToScrubT(intersection) {
+      const bar = document.getElementById('vrScrubBar');
+      if (!bar || !bar.object3D || !intersection || !intersection.point) return null;
+      const local = bar.object3D.worldToLocal(intersection.point.clone());
+      const ratio = Math.max(0, Math.min(1, (local.x - SCRUB_BAR_LEFT) / SCRUB_BAR_W));
+      const dur = isFinite(video.duration) && video.duration > 0
+        ? video.duration
+        : sceneDurationSec;
+      if (!dur) return null;
+      return ratio * dur;
+    }
+
+    function setVideoTime(t, throttle) {
+      const now = performance.now();
+      if (throttle && now - scrubLastWriteMs < SCRUB_THROTTLE_MS) return;
+      scrubLastWriteMs = now;
+      video.currentTime = t;
+    }
+
+    // Marker tooltip: a single floating <a-text> reused across all markers.
+    // Built lazily inside an IIFE so the bar element exists at attach time.
+    const markerTip = (function() {
+      const t = document.createElement('a-text');
+      t.setAttribute('id', 'vrScrubMarkerTip');
+      t.setAttribute('color', '#fff');
+      t.setAttribute('width', '3');
+      t.setAttribute('align', 'center');
+      t.setAttribute('value', '');
+      t.setAttribute('visible', 'false');
+      t.setAttribute('position', '0 0.10 0.01');
+      const bar = document.getElementById('vrScrubBar');
+      if (bar) bar.appendChild(t);
+      return t;
+    })();
+
+    function bindScrubElement(el) {
+      el.addEventListener('mousedown', function(evt) {
+        const intersection = evt.detail && evt.detail.intersection;
+        // Marker click: jump to the marker's seconds and finish (no drag).
+        if (el.classList.contains('vr-scrub-marker')) {
+          const secs = parseFloat(el.dataset.markerSeconds);
+          if (!isNaN(secs)) setVideoTime(secs, false);
+          scrubActive = false;
+          return;
+        }
+        scrubActive = true;
+        if (intersection) {
+          const t = cursorToScrubT(intersection);
+          if (t !== null) setVideoTime(t, false);
+        }
+      });
+      el.addEventListener('mouseup', function() { scrubActive = false; });
+    }
+
+    function bindMarkerTooltip(el) {
+      el.addEventListener('raycaster-intersected', function() {
+        markerTip.setAttribute('value', el.dataset.markerTitle || '');
+        const pos = el.getAttribute('position');
+        const x = (pos && typeof pos === 'object') ? pos.x : 0;
+        markerTip.setAttribute('position', x.toFixed(3) + ' 0.10 0.01');
+        markerTip.setAttribute('visible', 'true');
+      });
+      el.addEventListener('raycaster-intersected-cleared', function() {
+        markerTip.setAttribute('visible', 'false');
+      });
+    }
+
+    // Bind bar+thumb at script-start (they exist in the static markup).
+    document.querySelectorAll('.vr-scrub, .vr-scrub-bg').forEach(bindScrubElement);
+
+    function buildSceneMarkerDots() {
+      const root = document.getElementById('vrScrubMarkers');
+      if (!root) return;
+      while (root.firstChild) root.removeChild(root.firstChild);
+      if (!sceneDurationSec || !sceneMarkers || !sceneMarkers.length) return;
+      sceneMarkers.forEach(m => {
+        const x = tForMarkerX(m.seconds);
+        const dot = document.createElement('a-entity');
+        dot.classList.add('vr-btn', 'vr-scrub-marker');
+        dot.setAttribute('data-marker-seconds', m.seconds);
+        dot.setAttribute('data-marker-title', m.title || '');
+        dot.setAttribute('geometry', 'primitive:circle;radius:0.03');
+        dot.setAttribute('material', 'color:#f7b500;opacity:0.95');
+        dot.setAttribute('position', x.toFixed(3) + ' 0 0.003');
+        root.appendChild(dot);
+        bindScrubElement(dot);
+        bindMarkerTooltip(dot);
+      });
+    }
+    scene.addEventListener('loaded', buildSceneMarkerDots);
+
+    // While scrubActive, sample raycaster intersections per laser to update
+    // the seek position. Mirrors the volume-slider drag pattern below.
+    ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
+      const laser = document.getElementById(id);
+      if (!laser) return;
+      laser.addEventListener('raycaster-intersection', function(evt) {
+        if (!scrubActive) return;
+        const its = evt.detail && evt.detail.intersections;
+        if (!its || !its.length) return;
+        const t = cursorToScrubT(its[0]);
+        if (t !== null) setVideoTime(t, true);
+      });
+      laser.addEventListener('raycaster-intersection-cleared', function() {
+        scrubActive = false;
+      });
+    });
+
+    // Backstop: any mouseup ends the scrub drag.
+    scene.addEventListener('mouseup', function() { scrubActive = false; });
 
     // ============================================================
     // Picker state + handlers.

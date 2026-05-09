@@ -108,8 +108,33 @@
       return its.length > 0;
     },
 
+    _hitsSliderClass: function(hand) {
+      const el = this._lasers[hand];
+      if (!el) return false;
+      const rc = el.components && el.components.raycaster;
+      if (!rc) return false;
+      const its = rc.intersections || [];
+      if (!its.length) return false;
+      const target = its[0].object && its[0].object.el;
+      if (!target || !target.classList) return false;
+      const sliderClasses = ['vr-scrub', 'vr-scrub-bg', 'vr-scrub-marker',
+                             'vr-vol-track', 'vr-vol-thumb'];
+      for (let i = 0; i < sliderClasses.length; i++) {
+        if (target.classList.contains(sliderClasses[i])) return true;
+      }
+      return false;
+    },
+
     _onTriggerDown: function(hand) {
       const st = this.triggerState[hand];
+      // If triggerdown lands on a slider/marker element, the cursor pipeline
+      // owns the drag; M3c should skip its candidate-phase entirely so it
+      // doesn't promote to a geometry drag while the user is scrubbing.
+      if (this._hitsSliderClass(hand)) {
+        st.phase = 'idle';
+        st.hadIntersection = true;
+        return;
+      }
       st.phase = 'candidate';
       st.downTime = performance.now();
       this._getControllerPos(hand, st.startPos);
