@@ -4,7 +4,6 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -15,11 +14,6 @@ import (
 	"stash-vr/internal/prefix"
 	"stash-vr/internal/static"
 )
-
-// vrFilenameRe matches common VR markers in a basename or path. Hand-rolled
-// boundaries because Go's \b treats _ as a word char (so "_VR_" wouldn't
-// satisfy \bVR\b). MKX matches MKX, MKX200, MKX220, etc.
-var vrFilenameRe = regexp.MustCompile(`(?i)(^|[^a-z0-9])(180|360|MKX[0-9]*|FB360|FISHEYE|DOME|SBS|EAC|RF52)([^a-z0-9]|$)`)
 
 var sceneTmpl = template.Must(template.New("browse_scene.gohtml").Funcs(template.FuncMap{
 	"add": func(a, b int) int { return a + b },
@@ -84,22 +78,16 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	favTag := config.Application().FavoriteTag
-	is180SBS := false
+	tagInputs := make([]apiinternal.TagInput, 0, len(vd.SceneParts.Tags))
 	for _, t := range vd.SceneParts.Tags {
 		if t == nil {
 			continue
 		}
 		name := t.TagParts.Name
-		// Detect VR projection BEFORE the ancestor skip so an ancestor-injected
-		// VR / DOME / SBS tag still counts. Match any tag whose name contains
-		// "VR" (case-insensitive) — Stash's VR scrapers add tags like "VR",
-		// "vr_180", etc. — and the explicit DOME / SBS projection tags.
-		if !is180SBS {
-			upper := strings.ToUpper(name)
-			if strings.Contains(upper, "VR") || upper == apiinternal.TagVR_DOME || upper == apiinternal.TagVR_SBS {
-				is180SBS = true
-			}
-		}
+		// Collect every tag (including ancestor-injected) for projection
+		// detection — an ancestor DOME tag is just as authoritative as a
+		// direct one.
+		tagInputs = append(tagInputs, apiinternal.TagInput{Name: name, Aliases: t.Aliases})
 		// Skip ancestor-injected tags from the chip list.
 		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
 			continue
@@ -110,27 +98,11 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 		}
 		data.Tags = append(data.Tags, name)
 	}
-	// Filename heuristic backstop for libraries that don't tag at all.
-	if !is180SBS {
-		for _, f := range vd.SceneParts.Files {
-			if f == nil {
-				continue
-			}
-			if vrFilenameRe.MatchString(f.Basename) || vrFilenameRe.MatchString(f.Path) {
-				is180SBS = true
-				break
-			}
-		}
+	basename := ""
+	if len(vd.SceneParts.Files) > 0 && vd.SceneParts.Files[0] != nil {
+		basename = vd.SceneParts.Files[0].Basename
 	}
-	// Mode dispatch: VR scenes get the immersive 180° SBS sphere; everything
-	// else gets a flat plane in 3D space (a virtual cinema). The Enter VR
-	// button always shows when there's a stream — user can watch any video
-	// in headset.
-	if is180SBS {
-		data.VRMode = "180sbs"
-	} else {
-		data.VRMode = "flat"
-	}
+	data.Projection = apiinternal.Detect(tagInputs, basename)
 
 	if vd.SceneParts.O_counter != nil {
 		data.OCounter = *vd.SceneParts.O_counter

@@ -1,5 +1,9 @@
 package browse
 
+import (
+	apiinternal "stash-vr/internal/api/internal"
+)
+
 // Entity is a sidebar row (performer / studio / tag).
 type Entity struct {
 	ID         string
@@ -63,7 +67,7 @@ type SceneDetailData struct {
 	OCounter        int
 	Organized       bool
 	DirectStreamURL string
-	VRMode          string // "180sbs" for stereo half-sphere; "flat" for flat plane in 3D space
+	Projection      apiinternal.Projection
 	ErrMessage      string
 
 	// StarSlice is a 5-element placeholder used purely so the template can

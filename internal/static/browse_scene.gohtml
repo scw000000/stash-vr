@@ -58,11 +58,11 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 {{end}}
 
 {{if .DirectStreamURL}}
-<button id="enterVR" class="btn-vr" type="button">{{if eq .VRMode "180sbs"}}▥ Enter VR (180° SBS){{else}}▥ Watch on virtual screen{{end}}</button>
+<button id="enterVR" class="btn-vr" type="button">{{if .Projection.Geometry}}▥ Enter VR{{else}}▥ Watch on virtual screen{{end}}</button>
 
 <a-scene id="vrScene" style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111">
   <a-entity camera position="0 1.6 0"></a-entity>
-{{if eq .VRMode "180sbs"}}
+{{if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 180)}}
   <a-entity id="vrSphere"
             geometry="primitive:sphere;radius:100;phiStart:180;phiLength:180;thetaLength:180;segmentsWidth:64;segmentsHeight:64"></a-entity>
 {{else}}
