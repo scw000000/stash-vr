@@ -295,11 +295,24 @@ a.chip:hover { background: #3a3a3a; }
        the playback panel. Top strip is wired in Task 3 (this task);
        tile grid + load-more sentinel are populated by Tasks 4-5. -->
   <a-entity id="vrBrowsePanel" position="0 1.4 -2.5" rotation="-15 0 0" visible="false">
-    <a-plane class="vr-grid-bg vr-btn" data-action="grid-bg" width="3.6" height="2.4"
-             color="#000" material="opacity:0.95"></a-plane>
+    <!-- Curved bg: partial-arc cylinder sharing the tile-cover hub
+         (panel-local z=3.02 = TILE_Z + ARC_R). Centered at A-Frame
+         theta=180° (faces user); 85° arc covers the 3.4m chord of
+         tile content (~64.93°) plus ~10° margin per side. -->
+    <a-cylinder class="vr-grid-bg vr-btn" data-action="grid-bg"
+                radius="3.0"
+                height="2.4"
+                position="0 0 3.02"
+                theta-start="137.5"
+                theta-length="85"
+                open-ended="true"
+                material="shader: flat; side: double; color: #000; opacity: 0.95">
+    </a-cylinder>
 
-    <!-- Top strip (Tasks 6 + 7 fill these). Skeleton placeholders. -->
-    <a-entity id="vrBrowseTopStrip" position="0 1.0 0.01">
+    <!-- Top strip (Tasks 6 + 7 fill these). Skeleton placeholders.
+         z=0.05 keeps the flat top-strip buttons in front of the curved
+         bg surface (which sits at panel-local z≈0.02). -->
+    <a-entity id="vrBrowseTopStrip" position="0 1.0 0.05">
       <a-plane class="vr-search-bg vr-btn" data-action="search-focus" width="1.2" height="0.16"
                color="#222" material="opacity:0.9" position="-1.0 0 0">
         <a-text value="Search…" align="left" color="#888" width="3" position="-0.55 0 0.005"></a-text>
@@ -1059,11 +1072,15 @@ a.chip:hover { background: #3a3a3a; }
       }
 
       plane.addEventListener('mouseenter', function() {
-        // Hover affordance: scale the cylinder slightly so the user gets
-        // visible feedback even if both the WebM preview and the sprite
-        // sheet are unavailable (which is the common case on libraries
-        // that haven't generated previews yet).
-        if (plane.object3D) plane.object3D.scale.set(1.05, 1.05, 1.05);
+        // Hover affordance: pop the whole tile entity forward by 0.04m in
+        // panel-local +z (toward the user, since the cylinder hub is on
+        // the user's side of the concave surface). Avoids the prior 1.05×
+        // scale, which expanded the cylinder radius from 3.0 to 3.15 and
+        // pushed the cover surface behind the bg plane (clip-through).
+        if (tileEl.object3D && !tileEl._hoverPopped) {
+          tileEl.object3D.position.z += 0.04;
+          tileEl._hoverPopped = true;
+        }
         const v = ensureVideo();
         v.currentTime = 0;
         // Track this hover so that a stale (slow) play() resolution after
@@ -1094,9 +1111,12 @@ a.chip:hover { background: #3a3a3a; }
       });
 
       plane.addEventListener('mouseleave', function() {
-        // Always reset the hover scale, regardless of which fallback path
-        // (video / sprite / nothing) was active for this tile.
-        if (plane.object3D) plane.object3D.scale.set(1, 1, 1);
+        // Reverse the hover pop (+0.04m in panel-local z) regardless of
+        // which fallback path (video / sprite / nothing) was active.
+        if (tileEl.object3D && tileEl._hoverPopped) {
+          tileEl.object3D.position.z -= 0.04;
+          tileEl._hoverPopped = false;
+        }
         // Invalidate any in-flight play() resolution from the previous
         // mouseenter so it can't replace the cover after we restore it.
         tileEl._hoverToken = (tileEl._hoverToken || 0) + 1;
@@ -1309,7 +1329,10 @@ a.chip:hover { background: #3a3a3a; }
         // Tile entity sits at the cylinder hub for the row. The cover
         // cylinder's theta-start handles the per-column placement on the
         // curve, so no per-tile yaw rotation is needed on the entity itself.
-        el.setAttribute('position', { x: pos.x, y: pos.y, z: pos.z });
+        // Preserve the +0.04m hover pop so a relayout (e.g. cols cycle,
+        // load-more) doesn't snap a currently-hovered tile back.
+        const popOffset = el._hoverPopped ? 0.04 : 0;
+        el.setAttribute('position', { x: pos.x, y: pos.y, z: pos.z + popOffset });
         el.setAttribute('rotation', { x: 0, y: 0, z: 0 });
         // Visibility clip: hide tiles whose center sits outside the band.
         // Keeps panels from rendering past their bottom edge into world.
