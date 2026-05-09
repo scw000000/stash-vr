@@ -942,27 +942,51 @@ a.chip:hover { background: #3a3a3a; }
     const TILE_GAP_Y = 0.06;        // vertical gap between rows
     const TITLE_GAP = 0.04;         // gap between cover bottom and title strip top
     const TITLE_STRIP_H = 0.08;     // height of the title text strip
-    const TILE_TOP_Y = 0.62;        // y-coordinate of the first row's center (clears top strip at y≈1.0)
-    const TILE_Z = 0.02;            // z offset, in front of panel bg plane (z=0)
-    let scrollY = 0;                // updated by Task 5 (vertical scroll)
+    const TILE_AREA_TOP_Y    = 0.85;   // top edge of first row (panel-local y); fixed regardless of cols
+    const TILE_AREA_BOTTOM_Y = -1.05;  // bottom of visible tile area; tiles below are hidden
+    const ARC_R              = 3.0;    // cylinder radius for curved tile layout
+    const TILE_Z = 0.02;            // z offset, in front of panel bg plane (z=0); also outermost-tile depth
+    let scrollY = 0;                // updated by laser-drag scroll (Stage 4)
+    let m4cMaxScroll = 0;           // computed in relayoutTiles each pass
+    // Laser-drag scroll state. World-y at triggerdown anchors the drag so
+    // dy maps 1:1 to scroll delta; scrollY is clamped to [0, m4cMaxScroll].
+    let m4cScrollActive = false;
+    let m4cScrollAnchorWorldY = 0;
+    let m4cScrollAnchorScrollY = 0;
 
-    // Returns [{x, y, z}] for each tile slot. Tiles are flat (no per-column
-    // rotation): rotated quads at the same z intersect each other at their
-    // edges, producing visible cross-cut artifacts. A flat grid avoids that.
-    // A true curved layout would require a single curved mesh with UV-mapped
-    // tile regions — out of scope for this redesign.
-    function tileCellPositions(tileW, tileH, count) {
+    // Returns [{x, y, z, rotY}] for each tile slot. Tiles are arranged on a
+    // gentle cylinder of radius ARC_R, so adjacent tiles meet at their edges
+    // with matching tangents (no cross-cut artifact). The center column sits
+    // farthest from the user; outer columns bow forward toward TILE_Z.
+    //
+    // Vertical anchor: row 0's *cover top edge* sits at TILE_AREA_TOP_Y
+    // regardless of cols, so changing column count never pushes the first
+    // row up into the top button strip.
+    function tileCellPositions(tileW, tileH, tileCoverH, count) {
       const cols = m4cCols;
       const halfCols = (cols - 1) / 2;
+      const arcStep = (tileW + TILE_GAP_X) / ARC_R;   // small-angle approx (chord ≈ arc)
+      const arcMax = halfCols * arcStep;
+      // Anchor outermost tile at z = TILE_Z (so all tiles are at z >= TILE_Z,
+      // in front of the bg plane). Center tile is hubZ + ARC_R = TILE_Z + ARC_R*(1 - cos(arcMax)).
+      const hubZ = TILE_Z - ARC_R * Math.cos(arcMax);
+
+      // Top-edge anchor: row 0's cover top at TILE_AREA_TOP_Y → row 0 center
+      // is one half-cover-height below.
+      const yRow0Center = TILE_AREA_TOP_Y - tileCoverH / 2;
+
       const positions = [];
       const rows = Math.ceil(count / cols);
       for (let row = 0; row < rows; row++) {
+        const y = yRow0Center - row * (tileH + TILE_GAP_Y) - scrollY;
         for (let col = 0; col < cols; col++) {
           const i = row * cols + col;
           if (i >= count) break;
-          const x = (col - halfCols) * (tileW + TILE_GAP_X);
-          const y = TILE_TOP_Y - row * (tileH + TILE_GAP_Y) - scrollY;
-          positions.push({ x, y, z: TILE_Z });
+          const arcOffset = (col - halfCols) * arcStep;
+          const x = ARC_R * Math.sin(arcOffset);
+          const z = hubZ + ARC_R * Math.cos(arcOffset);
+          const rotY = -arcOffset * 180 / Math.PI; // face the hub (inward)
+          positions.push({ x, y, z, rotY });
         }
       }
       return positions;
@@ -1065,7 +1089,14 @@ a.chip:hover { background: #3a3a3a; }
         }
       });
 
-      const positions = tileCellPositions(tileW, tileH, m4cState.tiles.length);
+      const positions = tileCellPositions(tileW, tileH, tileCoverH, m4cState.tiles.length);
+
+      // Max scroll: total content height minus visible band. When content
+      // fits in band, max=0 (no scroll). Used by tickBrowseScroll to clamp.
+      const totalRows = Math.ceil(m4cState.tiles.length / cols);
+      const totalContentH = totalRows > 0 ? totalRows * (tileH + TILE_GAP_Y) - TILE_GAP_Y : 0;
+      const visibleH = TILE_AREA_TOP_Y - TILE_AREA_BOTTOM_Y;
+      m4cMaxScroll = Math.max(0, totalContentH - visibleH);
 
       m4cState.tiles.forEach((tile, i) => {
         const pos = positions[i];
@@ -1158,6 +1189,16 @@ a.chip:hover { background: #3a3a3a; }
           }
         }
         el.setAttribute('position', { x: pos.x, y: pos.y, z: pos.z });
+        // Per-tile yaw so each tile faces the cylinder hub. Adjacent tiles
+        // meet at matching tangents → no cross-cut artifact even though
+        // they're rotated. (Earlier flat-grid commit removed rotation to
+        // dodge that artifact; cylinder math eliminates it directly.)
+        el.setAttribute('rotation', { x: 0, y: pos.rotY, z: 0 });
+        // Visibility clip: hide tiles whose center sits outside the band.
+        // Keeps panels from rendering past their bottom edge into world.
+        if (el.object3D) {
+          el.object3D.visible = (pos.y >= TILE_AREA_BOTTOM_Y && pos.y <= TILE_AREA_TOP_Y);
+        }
       });
     }
 
@@ -1297,6 +1338,28 @@ a.chip:hover { background: #3a3a3a; }
       }
     }
 
+    // Browse-panel laser-drag scroll. Maps world-y delta directly into
+    // scrollY (in panel-local meters). Laser drags down (dy<0) → scrollY
+    // increases → tile content scrolls up. Clamped to [0, m4cMaxScroll];
+    // triggers lazy-load when nearing the loaded-content bottom.
+    function tickBrowseScroll() {
+      if (!m4cScrollActive) return;
+      const hit = activeLaserIntersection();
+      if (!hit || !hit.point) return;
+      const dy = hit.point.y - m4cScrollAnchorWorldY;
+      const target = m4cScrollAnchorScrollY - dy;
+      const clamped = Math.max(0, Math.min(target, m4cMaxScroll));
+      if (Math.abs(clamped - scrollY) < 0.001) return;
+      scrollY = clamped;
+      relayoutTiles();
+      // Lazy-load when nearing the bottom of currently-loaded content. The
+      // 0.5m buffer gives time for the fetch round-trip before the user
+      // scrolls past the end.
+      if (m4cState.hasMore && !m4cState.loading && scrollY > m4cMaxScroll - 0.5) {
+        fetchGrid(false);
+      }
+    }
+
     function refreshVolumeUI() {
       const displayed = video.muted ? 0 : video.volume;
       const fill = document.getElementById('vrVolumeFill');
@@ -1384,11 +1447,24 @@ a.chip:hover { background: #3a3a3a; }
           scrubActive = true;
           const t = cursorToScrubT(intersection);
           if (t !== null) setVideoTime(t, false);
+        } else if (cl.contains('vr-grid-bg')) {
+          // Browse-panel background: laser-drag scrolls the tile grid.
+          // Only activate when the panel is actually visible (the bg plane
+          // can be hit even when invisible if the raycaster ignores
+          // visibility — guard explicitly).
+          const bp = document.getElementById('vrBrowsePanel');
+          const vis = bp && bp.getAttribute('visible');
+          if (bp && (vis === true || vis === 'true')) {
+            m4cScrollActive = true;
+            m4cScrollAnchorWorldY = (intersection.point && intersection.point.y) || 0;
+            m4cScrollAnchorScrollY = scrollY;
+          }
         }
       });
       laser.addEventListener('triggerup', function() {
         volActive = false;
         scrubActive = false;
+        m4cScrollActive = false;
       });
     });
 
@@ -1574,6 +1650,7 @@ a.chip:hover { background: #3a3a3a; }
       const now = performance.now();
       try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
       try { tickSliders(); }       catch (e) { console.warn('stash-vr: tickSliders', e); }
+      try { tickBrowseScroll(); }  catch (e) { console.warn('stash-vr: tickBrowseScroll', e); }
       try { tickScrubBar(); }      catch (e) { console.warn('stash-vr: tickScrubBar', e); }
       try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
       requestAnimationFrame(rafLoop);
