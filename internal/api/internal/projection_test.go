@@ -60,6 +60,13 @@ func TestDetect(t *testing.T) {
 		// Conflict resolution: tag pass result wins; filename pass is skipped.
 		{name: "tag DOME beats filename FISHEYE", tags: []TagInput{{Name: "DOME"}, {Name: "SBS"}}, basename: "scene_FISHEYE.mp4", want: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "sbs"}},
 
+		// M2-era fallback: a generic VR tag with no specific projection → DOME+SBS.
+		{name: "generic VR tag", tags: []TagInput{{Name: "VR"}}, want: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "sbs"}},
+		{name: "VR Scene tag", tags: []TagInput{{Name: "VR Scene"}}, want: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "sbs"}},
+		{name: "vr_180 tag", tags: []TagInput{{Name: "vr_180"}}, want: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "sbs"}},
+		{name: "generic VR + TB tags → DOME+TB", tags: []TagInput{{Name: "VR"}, {Name: "TB"}}, want: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "tb"}},
+		{name: "generic VR + filename FISHEYE → tag wins (DOME+SBS)", tags: []TagInput{{Name: "VR"}}, basename: "scene_FISHEYE.mp4", want: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "sbs"}},
+
 		// No detection in either pass → empty Projection (flat-screen fallback).
 		{name: "no tags no filename", tags: nil, basename: "", want: Projection{}},
 		{name: "irrelevant tag, irrelevant filename", tags: []TagInput{{Name: "softcore"}}, basename: "scene.mp4", want: Projection{}},

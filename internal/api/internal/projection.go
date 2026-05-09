@@ -34,8 +34,17 @@ func Detect(tags []TagInput, basename string) Projection {
 	// so most-specific Geometry wins regardless of tag order.
 	hasMKX200, hasRF52, hasFisheye, hasSphere, hasDome := false, false, false, false, false
 	hasSBS, hasTB := false, false
+	// hasVR catches generic VR-suggesting tag names ("VR", "VR Scene",
+	// "vr_180", etc.) so we still render in VR mode when no specific
+	// projection tag is present. M2's detection used the same heuristic
+	// and assumed DOME+SBS — this preserves that fallback so libraries
+	// that don't tag every scene with a specific projection still work.
+	hasVR := false
 
 	for _, t := range tags {
+		if strings.Contains(strings.ToUpper(t.Name), "VR") {
+			hasVR = true
+		}
 		switch {
 		case util.StrSliceEquals(t.Name, t.Aliases, TagVR_MKX200):
 			hasMKX200 = true
@@ -77,7 +86,19 @@ func Detect(tags []TagInput, basename string) Projection {
 		return p
 	}
 
-	// Filename-keyword fallback. Only runs if no Geometry tag matched.
+	// M2-era fallback: a generic VR tag (e.g. "VR") with no specific
+	// projection tag → assume DOME+SBS. Without this, scenes that M2
+	// rendered as 180 SBS regress to flat virtual screen under M3a's
+	// stricter detection. Honor SBS/TB tags if explicitly present.
+	if hasVR {
+		fallback := Projection{Geometry: "equirectangular", FOV: 180, Stereo: "sbs"}
+		if hasTB {
+			fallback.Stereo = "tb"
+		}
+		return fallback
+	}
+
+	// Filename-keyword fallback. Only runs if no projection signal at all.
 	return detectFromFilename(basename)
 }
 
