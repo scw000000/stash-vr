@@ -379,6 +379,33 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       if (el) el.addEventListener('object3dset', applyAll);
     });
 
+    // Resolve the currently-rendering geometry entity. M3b ensures
+    // exactly one of the four has visible="true" at any time.
+    function activeGeometry() {
+      const ids = ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'];
+      for (let i = 0; i < ids.length; i++) {
+        const el = document.getElementById(ids[i]);
+        if (!el) continue;
+        const v = el.getAttribute('visible');
+        if (v === true || v === 'true') return el;
+      }
+      return null;
+    }
+
+    // M3c drag — translate the active geometry by per-tick controller
+    // delta. Cinema plane re-aims at user after each translate.
+    scene.addEventListener('m3c:drag-move', function(e) {
+      const el = activeGeometry();
+      if (!el || !el.object3D) return;
+      el.object3D.position.x += e.detail.dx;
+      el.object3D.position.y += e.detail.dy;
+      el.object3D.position.z += e.detail.dz;
+      if (el.id === 'vrFlat') {
+        const cam = scene.camera;
+        if (cam) el.object3D.lookAt(cam.position);
+      }
+    });
+
     // Panel + lasers visibility is shared. M3c hides them by default and
     // toggles via m3c:panel-toggle (or programmatically on Enter VR /
     // Format-button taps). When hidden: lasers' raycaster also disabled
