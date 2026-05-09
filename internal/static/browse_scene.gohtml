@@ -87,6 +87,7 @@ a.chip:hover { background: #3a3a3a; }
   <a-entity id="vrFisheye"
             visible="{{if eq .Projection.Geometry "fisheye"}}true{{else}}false{{end}}"
             data-fov="{{if eq .Projection.Geometry "fisheye"}}{{.Projection.FOV}}{{else}}180{{end}}"
+            data-cant="{{.Projection.Cant}}"
             geometry="primitive:sphere;radius:100;segmentsWidth:64;segmentsHeight:64"></a-entity>
   <a-entity id="vrFlat"
             visible="{{if not .Projection.Geometry}}true{{else}}false{{end}}"
@@ -529,6 +530,7 @@ a.chip:hover { background: #3a3a3a; }
         uniforms: {
           uMap:       { value: tex },
           uFOV:       { value: fov },
+          uCant:      { value: 0.0 },
           uEyeOffset: { value: new AFRAME.THREE.Vector2(0, 0) },
           uEyeRepeat: { value: new AFRAME.THREE.Vector2(1, 1) }
         },
@@ -544,15 +546,19 @@ a.chip:hover { background: #3a3a3a; }
           'varying vec3 vDir;',
           'uniform sampler2D uMap;',
           'uniform float uFOV;',
+          'uniform float uCant;',
           'uniform vec2 uEyeOffset;',
           'uniform vec2 uEyeRepeat;',
           'void main() {',
           '  vec3 d = normalize(vDir);',
-          '  float theta = acos(-d.z);',
+          '  float c = cos(uCant);',
+          '  float s = sin(uCant);',
+          '  vec3 dr = vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);',
+          '  float theta = acos(-dr.z);',
           '  float maxTheta = radians(uFOV * 0.5);',
           '  if (theta > maxTheta) discard;',
           '  float r = (theta / maxTheta) * 0.5;',
-          '  float phi = atan(d.y, d.x);',
+          '  float phi = atan(dr.y, dr.x);',
           '  vec2 uv = vec2(0.5 + r * cos(phi), 0.5 + r * sin(phi));',
           '  uv = uv * uEyeRepeat + uEyeOffset;',
           '  gl_FragColor = texture2D(uMap, uv);',
@@ -567,6 +573,7 @@ a.chip:hover { background: #3a3a3a; }
         if (!xr || !xr.isPresenting || !stereo) {
           u.uEyeOffset.value.set(0, 0);
           u.uEyeRepeat.value.set(1, 1);
+          u.uCant.value = 0;
           return;
         }
         const xrCam = xr.getCamera();
@@ -574,6 +581,9 @@ a.chip:hover { background: #3a3a3a; }
         const isLeft = cam === xrCam.cameras[0];
         const isRight = cam === xrCam.cameras[1];
         if (!isLeft && !isRight) return;
+        const cantDeg = parseFloat(el.dataset.cant || '0');
+        const cantRad = cantDeg * Math.PI / 180;
+        u.uCant.value = isLeft ? -cantRad : cantRad;
         if (stereo === 'sbs') {
           u.uEyeRepeat.value.set(0.5, 1);
           u.uEyeOffset.value.set(isLeft ? 0 : 0.5, 0);
@@ -583,6 +593,7 @@ a.chip:hover { background: #3a3a3a; }
         } else {
           u.uEyeOffset.value.set(0, 0);
           u.uEyeRepeat.value.set(1, 1);
+          u.uCant.value = 0;
         }
       };
       mesh.userData.boundVR = true;
@@ -1421,6 +1432,7 @@ a.chip:hover { background: #3a3a3a; }
           activeId = 'vrFisheye';
           const fovEl = document.getElementById('vrFisheye');
           if (fovEl) fovEl.dataset.fov = (pickerState.degree === '200' ? '200' : '180');
+          if (fovEl) fovEl.dataset.cant = '0'; // user-picked fisheye is plain fisheye
         } else if (isNormal && pickerState.degree === '360') {
           activeId = 'vrSphere360';
         } else if (isNormal && pickerState.degree === '180') {

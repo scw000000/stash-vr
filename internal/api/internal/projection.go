@@ -9,9 +9,10 @@ import (
 // Projection describes how a VR scene should be rendered. Empty Geometry
 // means no VR detected — the renderer falls back to a flat virtual screen.
 type Projection struct {
-	Geometry string // "equirectangular" | "fisheye" | ""
-	FOV      int    // 180, 190, 200, 360 (or 0 if Geometry is "")
-	Stereo   string // "sbs" | "tb" | ""  ("" = mono)
+	Geometry string  // "equirectangular" | "fisheye" | ""
+	FOV      int     // 180, 190, 200, 360 (or 0 if Geometry is "")
+	Stereo   string  // "sbs" | "tb" | ""  ("" = mono)
+	Cant     float64 // RF52 canted-fisheye angle in degrees (0 for non-RF52)
 }
 
 // TagInput is the minimum tag shape Detect needs. Callers convert from
@@ -67,7 +68,7 @@ func Detect(tags []TagInput, basename string) Projection {
 	case hasMKX200:
 		p.Geometry, p.FOV = "fisheye", 200
 	case hasRF52:
-		p.Geometry, p.FOV = "fisheye", 180
+		p.Geometry, p.FOV, p.Cant = "fisheye", 180, 5.0
 	case hasFisheye:
 		p.Geometry, p.FOV = "fisheye", 180
 	case hasSphere:
@@ -122,7 +123,7 @@ func detectFromFilename(basename string) Projection {
 	case strings.Contains(lc, "fisheye180") || strings.Contains(lc, "_180_fisheye") || strings.Contains(lc, "fisheye"):
 		p.Geometry, p.FOV = "fisheye", 180
 	case strings.Contains(lc, "rf52"):
-		p.Geometry, p.FOV = "fisheye", 180
+		p.Geometry, p.FOV, p.Cant = "fisheye", 180, 5.0
 	case strings.Contains(lc, "_360") || strings.Contains(lc, "vr360"):
 		p.Geometry, p.FOV = "equirectangular", 360
 	case strings.Contains(lc, "_180") || strings.Contains(lc, "vr180"):
