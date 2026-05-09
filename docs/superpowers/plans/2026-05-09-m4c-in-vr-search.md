@@ -941,83 +941,91 @@ git commit -m "m4c: search field via DOM-overlay input with live debounced filte
 
 ---
 
-## Task 7: Filters panel — tabs, searchable lists, active chips
+## Task 7: Filters panel — 3-column layout, searchable lists, value-picker row, active chips
 
 **Files:**
 - Modify: `internal/static/browse_scene.gohtml`
 
-**Goal:** Click "Filters ▾" → standalone Filters panel beside the grid opens with 4 tabs (Performer / Studio / Tag / Other). Performer/Studio/Tag tabs each show a search field + scrollable filterable list. Other tab shows three value-picker rows. Active filters display as removable chips at the top of the panel. Single panel — no separate options panel.
+**Goal:** Click "Filters ▾" → standalone Filters panel beside the grid opens with three side-by-side columns (Performer / Studio / Tag), each with its own header, search field, and scrollable list. A bottom row holds value-pickers for Favorites / Stars / O-Counter. Active filters display as chips at the top. No tabs. No "Any" buttons — toggling clears.
 
-- [ ] **Step 1: Add the standalone Filters panel HTML**
+- [ ] **Step 1: Add the standalone Filters panel HTML (3 columns + bottom row)**
 
-The filters panel is a sibling of `vrBrowsePanel` (not a child). Both live directly under `vrControlsRoot` so M3c's panel-toggle hides them as a unit.
+The filters panel is a sibling of `vrBrowsePanel` (not a child). Both live directly under `vrControlsRoot`.
 
 Inside `vrControlsRoot`, **after** the closing `</a-entity>` of `vrBrowsePanel`, add:
 
 ```html
 <!-- Standalone Filters panel — sits to the right of the browse panel.
-     Single panel containing tabs, active-filter chips, search field, and
-     either a list (Performer/Studio/Tag tabs) or value pickers (Other tab). -->
-<a-entity id="vrFiltersPanel" position="2.6 1.4 -2.5" rotation="0 -15 0" visible="false">
-  <a-plane width="2.0" height="1.8" color="#000" material="opacity:0.95"></a-plane>
-  <a-text value="Filters" align="left" color="#fff" width="3" position="-0.90 0.80 0.01"></a-text>
-  <a-entity class="vr-btn" data-action="filters-close" position="0.88 0.80 0.01"
+     Three side-by-side columns (Performer / Studio / Tag) plus a bottom
+     row of value-pickers (Favorites / Stars / O-Counter). All sections
+     visible simultaneously; no tabs. -->
+<a-entity id="vrFiltersPanel" position="3.6 1.4 -2.5" rotation="0 -25 0" visible="false">
+  <a-plane width="3.0" height="1.8" color="#000" material="opacity:0.95"></a-plane>
+  <a-text value="Filters" align="left" color="#fff" width="3" position="-1.40 0.80 0.01"></a-text>
+  <a-entity class="vr-btn" data-action="filters-close" position="1.38 0.80 0.01"
             geometry="primitive:plane;width:0.18;height:0.14"
             material="color:#a01010;opacity:0.95">
     <a-text value="✕" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
   </a-entity>
 
   <!-- Active-filter chips area. JS populates with one chip per active filter. -->
-  <a-entity id="vrFiltersChips" position="0 0.60 0.01"></a-entity>
+  <a-entity id="vrFiltersChips" position="0 0.62 0.01"></a-entity>
 
-  <!-- Tab row. -->
-  <a-entity id="vrFiltersTabs" position="0 0.30 0.01">
-    <a-entity class="vr-btn vr-filter-tab" data-tab="performer" position="-0.75 0 0"
-              geometry="primitive:plane;width:0.45;height:0.14"
-              material="color:#3776c2;opacity:0.95">
-      <a-text value="Performer" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-    </a-entity>
-    <a-entity class="vr-btn vr-filter-tab" data-tab="studio" position="-0.25 0 0"
-              geometry="primitive:plane;width:0.45;height:0.14"
-              material="color:#2c5282;opacity:0.95">
-      <a-text value="Studio" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-    </a-entity>
-    <a-entity class="vr-btn vr-filter-tab" data-tab="tag" position="0.25 0 0"
-              geometry="primitive:plane;width:0.45;height:0.14"
-              material="color:#2c5282;opacity:0.95">
-      <a-text value="Tag" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-    </a-entity>
-    <a-entity class="vr-btn vr-filter-tab" data-tab="other" position="0.75 0 0"
-              geometry="primitive:plane;width:0.45;height:0.14"
-              material="color:#2c5282;opacity:0.95">
-      <a-text value="Other" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-    </a-entity>
-  </a-entity>
+  <!-- Three columns side-by-side. Each column owns its header label,
+       search field, and scrollable list. Column centers at x = -1.0, 0, 1.0
+       (column width 0.95m each). Header at panel-y 0.40, search at 0.27,
+       list starts at 0.16. -->
+  {{range $kind, $center := (dict "performer" -1.0 "studio" 0.0 "tag" 1.0)}}
+  <!-- (kind = performer | studio | tag) -->
+  {{end}}
 
-  <!-- Picker search field — used on Performer/Studio/Tag tabs only. Hidden on Other. -->
-  <a-plane id="vrPickerSearchBg" class="vr-search-bg vr-btn" data-action="picker-search-focus"
-           width="1.8" height="0.13" color="#222" material="opacity:0.9"
-           position="0 0.10 0.01" visible="true">
-    <a-text id="vrPickerSearchLabel" value="Search…" align="left" color="#888" width="3" position="-0.85 0 0.005"></a-text>
+  <!-- Performer column -->
+  <a-text value="Performer" align="center" color="#fff" width="2.5" position="-1.0 0.40 0.01"></a-text>
+  <a-plane id="vrPickerSearchBg-performer" class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="performer"
+           width="0.92" height="0.12" color="#222" material="opacity:0.9" position="-1.0 0.27 0.01">
+    <a-text id="vrPickerSearchLabel-performer" value="Search…" align="left" color="#888" width="3" position="-0.42 0 0.005"></a-text>
   </a-plane>
+  <a-entity id="vrFilterList-performer" data-kind="performer" position="-1.0 0.16 0.01"></a-entity>
 
-  <!-- Container for the list (Performer/Studio/Tag) or value pickers (Other). -->
-  <a-entity id="vrFiltersBody" position="0 -0.70 0.01"></a-entity>
+  <!-- Studio column -->
+  <a-text value="Studio" align="center" color="#fff" width="2.5" position="0.0 0.40 0.01"></a-text>
+  <a-plane id="vrPickerSearchBg-studio" class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="studio"
+           width="0.92" height="0.12" color="#222" material="opacity:0.9" position="0.0 0.27 0.01">
+    <a-text id="vrPickerSearchLabel-studio" value="Search…" align="left" color="#888" width="3" position="-0.42 0 0.005"></a-text>
+  </a-plane>
+  <a-entity id="vrFilterList-studio" data-kind="studio" position="0.0 0.16 0.01"></a-entity>
+
+  <!-- Tag column -->
+  <a-text value="Tag" align="center" color="#fff" width="2.5" position="1.0 0.40 0.01"></a-text>
+  <a-plane id="vrPickerSearchBg-tag" class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="tag"
+           width="0.92" height="0.12" color="#222" material="opacity:0.9" position="1.0 0.27 0.01">
+    <a-text id="vrPickerSearchLabel-tag" value="Search…" align="left" color="#888" width="3" position="-0.42 0 0.005"></a-text>
+  </a-plane>
+  <a-entity id="vrFilterList-tag" data-kind="tag" position="1.0 0.16 0.01"></a-entity>
+
+  <!-- Bottom row: value-pickers (Favorites / Stars / O-Counter). Single horizontal
+       row at panel-y -0.75. JS renders the buttons. -->
+  <a-entity id="vrFilterValuesRow" position="0 -0.75 0.01"></a-entity>
 </a-entity>
 ```
 
-The previous standalone `vrFilterOptions` panel is **removed** entirely — delete its `<a-entity>` block from the HTML.
+(Remove the `{{range}}` template-stub block above — it's just a comment showing the column-center mapping; only the explicit per-column HTML matters.)
+
+The previous standalone `vrFilterOptions` panel from earlier revisions of this plan is **removed** entirely — delete its `<a-entity>` block from the HTML if present.
 
 - [ ] **Step 2: Add filter state + chip rendering + browse-close cascade**
 
 In the IIFE (just below the `m4cState` block declared in Task 4), add the filter-state extensions and chip rendering. Task 6's grid-search functions are kept as-is and extended in Step 5 below.
 
 ```javascript
-m4cState.filterNames = { performer: '', studio: '', tag: '', studio_id: '' };
-m4cState.activeTab = 'performer';      // 'performer' | 'studio' | 'tag' | 'other'
-m4cState.lastScrollFocus = 'grid';     // 'grid' | 'filters'
-m4cState.cachedOptions = {};           // kind → [{id,name}, ...]
-m4cState.pickerQuery = '';             // current in-list search
+m4cState.filterNames    = { performer: '', studio: '', tag: '' };
+m4cState.lastScrollFocus = 'grid';     // 'grid' | 'list-performer' | 'list-studio' | 'list-tag' | 'none'
+m4cState.cachedOptions  = {};          // kind → [{id,name}, ...]
+m4cState.pickerQuery    = { performer: '', studio: '', tag: '' };
+m4cState.listScrollY    = { performer: 0, studio: 0, tag: 0 };
+
+const LIST_VISIBLE_ROWS = 5;
+const LIST_ROW_H = 0.10;
 
 function chipLabel(kind) {
   if (kind === 'performer') return m4cState.filterNames.performer ? 'Performer: ' + m4cState.filterNames.performer : '';
@@ -1025,8 +1033,8 @@ function chipLabel(kind) {
   if (kind === 'tag')       return m4cState.filterNames.tag       ? 'Tag: '       + m4cState.filterNames.tag       : '';
   if (kind === 'favorite' && m4cState.filters.favorite === 'only') return 'Favorites: Only';
   if (kind === 'favorite' && m4cState.filters.favorite === 'not')  return 'Favorites: Not';
-  if (kind === 'stars'    && m4cState.filters.stars > 0) return 'Stars: ' + (m4cState.filters.stars === 5 ? '5 only' : '≥' + m4cState.filters.stars);
-  if (kind === 'ocount'   && m4cState.filters.ocount > 0) return 'O-Counter: ≥' + m4cState.filters.ocount;
+  if (kind === 'stars'    && m4cState.filters.stars > 0) return 'Stars: ' + (m4cState.filters.stars === 5 ? '5 only' : m4cState.filters.stars + '+');
+  if (kind === 'ocount'   && m4cState.filters.ocount > 0) return 'O-Counter: ' + m4cState.filters.ocount + '+';
   return '';
 }
 
@@ -1035,7 +1043,7 @@ function renderActiveChips() {
   if (!root) return;
   while (root.firstChild) root.removeChild(root.firstChild);
   const kinds = ['performer', 'studio', 'tag', 'favorite', 'stars', 'ocount'];
-  let xOffset = -0.85;
+  let xOffset = -1.30;
   kinds.forEach(kind => {
     const lbl = chipLabel(kind);
     if (!lbl) return;
@@ -1055,7 +1063,8 @@ function renderActiveChips() {
     chip.appendChild(text);
     root.appendChild(chip);
     xOffset += 0.95;
-    if (xOffset > 0.85) xOffset = -0.85; // wrap if many chips; v1 caps visually
+    // Wrap to next row if too many; v1 caps at one row's worth.
+    if (xOffset > 1.30) xOffset = -1.30;
   });
 }
 
@@ -1063,16 +1072,23 @@ function clearChip(kind) {
   if (kind === 'performer' || kind === 'studio' || kind === 'tag') {
     m4cState.filters[kind] = '';
     m4cState.filterNames[kind] = '';
-  } else if (kind === 'favorite') m4cState.filters.favorite = '';
-  else if (kind === 'stars')    m4cState.filters.stars = 0;
-  else if (kind === 'ocount')   m4cState.filters.ocount = 0;
+    renderColumnList(kind);
+  } else if (kind === 'favorite') {
+    m4cState.filters.favorite = '';
+    renderValuesRow();
+  } else if (kind === 'stars') {
+    m4cState.filters.stars = 0;
+    renderValuesRow();
+  } else if (kind === 'ocount') {
+    m4cState.filters.ocount = 0;
+    renderValuesRow();
+  }
   renderActiveChips();
-  renderFiltersBody();
   fetchGrid(true);
 }
 ```
 
-Update `vrAction`'s `'browse-close'` branch (replacing the previous Task 6 version) to cascade to filters too:
+Update `vrAction`'s `'browse-close'` branch (replacing the previous Task 6 version) to cascade to filters:
 
 ```javascript
 } else if (action === 'browse-close') {
@@ -1084,132 +1100,105 @@ Update `vrAction`'s `'browse-close'` branch (replacing the previous Task 6 versi
   if (fp) {
     fp.setAttribute('visible', true);
     renderActiveChips();
-    selectTab(m4cState.activeTab || 'performer');
+    ['performer', 'studio', 'tag'].forEach(renderColumnList);
+    renderValuesRow();
   }
 } else if (action === 'filters-close') {
   document.getElementById('vrFiltersPanel').setAttribute('visible', false);
-} else if (action === 'filter-chip-clear') {
-  // Triggered by clicking a chip; element carries data-chip-kind.
-  // Resolved in the click delegate below.
 } else if (action === 'filters-clear') {
   m4cState.q = '';
   m4cState.filters = { performer: '', studio: '', tag: '', favorite: '', stars: 0, ocount: 0 };
   m4cState.filterNames = { performer: '', studio: '', tag: '' };
+  m4cState.pickerQuery = { performer: '', studio: '', tag: '' };
   const searchInput = document.getElementById('vrSearchInput');
   if (searchInput) searchInput.value = '';
   const lbl = document.getElementById('vrSearchLabel');
   if (lbl) { lbl.setAttribute('value', 'Search…'); lbl.setAttribute('color', '#888'); }
+  ['performer', 'studio', 'tag'].forEach(k => {
+    const pkLbl = document.getElementById('vrPickerSearchLabel-' + k);
+    if (pkLbl) { pkLbl.setAttribute('value', 'Search…'); pkLbl.setAttribute('color', '#888'); }
+  });
   renderActiveChips();
-  renderFiltersBody();
+  ['performer', 'studio', 'tag'].forEach(renderColumnList);
+  renderValuesRow();
   fetchGrid(true);
 } else if (action === 'picker-search-focus') {
-  showPickerSearchOverlay();
+  // The clicked element carries data-picker-kind; resolved by the click delegate below.
 }
 ```
 
-Wire the chip-click delegate (place it near the existing `.vr-btn` click forEach loop):
+Wire two delegates near the existing `.vr-btn` click forEach loop — chip-clear and picker-search-focus need `data-*` lookup:
 
 ```javascript
 document.addEventListener('click', function(evt) {
-  let el = evt.target;
-  while (el && !(el.dataset && el.dataset.action === 'filter-chip-clear')) el = el.parentElement;
-  if (el && el.dataset.chipKind) clearChip(el.dataset.chipKind);
+  // Chip clear.
+  let chip = evt.target;
+  while (chip && !(chip.dataset && chip.dataset.action === 'filter-chip-clear')) chip = chip.parentElement;
+  if (chip && chip.dataset.chipKind) {
+    clearChip(chip.dataset.chipKind);
+    return;
+  }
+  // Picker-search-focus: identify which column was tapped.
+  let bg = evt.target;
+  while (bg && !(bg.dataset && bg.dataset.action === 'picker-search-focus')) bg = bg.parentElement;
+  if (bg && bg.dataset.pickerKind) {
+    showPickerSearchOverlay(bg.dataset.pickerKind);
+  }
 });
 ```
 
-- [ ] **Step 3: Tab switching, list rendering, in-list search filter**
+- [ ] **Step 3: Per-column list rendering with caching**
 
 ```javascript
-function selectTab(tab) {
-  m4cState.activeTab = tab;
-  m4cState.pickerQuery = '';
-
-  // Highlight active tab.
-  document.querySelectorAll('.vr-filter-tab').forEach(t => {
-    const isActive = t.dataset.tab === tab;
-    t.setAttribute('material', 'color: ' + (isActive ? '#3776c2' : '#2c5282') + '; opacity:0.95');
+function ensureCachedOptions(kind) {
+  return new Promise(resolve => {
+    if (m4cState.cachedOptions[kind]) { resolve(m4cState.cachedOptions[kind]); return; }
+    fetch('/browse/filter-options/' + kind, { headers: { 'Accept': 'application/json' } })
+      .then(r => r.json())
+      .then(opts => { m4cState.cachedOptions[kind] = opts || []; resolve(m4cState.cachedOptions[kind]); })
+      .catch(err => { console.warn('stash-vr: filter options fetch failed', err); resolve([]); });
   });
-
-  // Show/hide search field based on tab.
-  const searchBg = document.getElementById('vrPickerSearchBg');
-  const searchLabel = document.getElementById('vrPickerSearchLabel');
-  if (searchBg) searchBg.setAttribute('visible', tab !== 'other');
-  if (searchLabel) {
-    searchLabel.setAttribute('value', 'Search…');
-    searchLabel.setAttribute('color', '#888');
-  }
-
-  renderFiltersBody();
 }
 
-document.querySelectorAll('.vr-filter-tab').forEach(t => {
-  t.addEventListener('click', () => selectTab(t.dataset.tab));
-});
-
-function renderFiltersBody() {
-  const body = document.getElementById('vrFiltersBody');
+function renderColumnList(kind) {
+  const body = document.getElementById('vrFilterList-' + kind);
   if (!body) return;
   while (body.firstChild) body.removeChild(body.firstChild);
 
-  if (m4cState.activeTab === 'other') {
-    renderOtherTab(body);
-    return;
-  }
-  // Performer/Studio/Tag list rendering.
-  const kind = m4cState.activeTab;
-  if (m4cState.cachedOptions[kind]) {
-    renderListTab(body, kind, m4cState.cachedOptions[kind]);
-  } else {
-    fetch('/browse/filter-options/' + kind, { headers: { 'Accept': 'application/json' } })
-      .then(r => r.json())
-      .then(opts => {
-        m4cState.cachedOptions[kind] = opts || [];
-        if (m4cState.activeTab === kind) renderListTab(body, kind, m4cState.cachedOptions[kind]);
-      })
-      .catch(err => console.warn('stash-vr: filter options fetch failed', err));
-  }
-}
-
-const LIST_VISIBLE_ROWS = 8;
-const LIST_ROW_H = 0.12;
-let listScrollY = 0;
-
-function renderListTab(body, kind, opts) {
-  const q = m4cState.pickerQuery.trim().toLowerCase();
-  const filtered = q
-    ? opts.filter(o => o.name.toLowerCase().includes(q))
-    : opts;
-  // The body container holds a clipped (visually) list of rows.
-  // v1 doesn't actually clip via shader — we just render all rows offset
-  // by listScrollY and rely on the panel background to hide overflow.
-  filtered.forEach((opt, i) => {
-    const row = document.createElement('a-entity');
-    row.classList.add('vr-btn', 'vr-filter-list-item');
-    row.dataset.kind = kind;
-    row.dataset.optId = String(opt.id);
-    row.dataset.optName = opt.name;
-    row.setAttribute('geometry', 'primitive:plane;width:1.8;height:0.10');
-    const isSelected = (m4cState.filters[kind] === opt.id);
-    row.setAttribute('material', 'color: ' + (isSelected ? '#3776c2' : '#222') + '; opacity:0.95');
-    const y = -i * LIST_ROW_H + listScrollY;
-    row.setAttribute('position', '0 ' + y.toFixed(3) + ' 0.005');
-    const text = document.createElement('a-text');
-    text.setAttribute('value', opt.name);
-    text.setAttribute('align', 'left');
-    text.setAttribute('color', '#fff');
-    text.setAttribute('width', '2.5');
-    text.setAttribute('position', '-0.85 0 0.005');
-    row.appendChild(text);
-    body.appendChild(row);
-    row.addEventListener('click', function() {
-      applyFilterPick(kind, opt.id, opt.name);
+  ensureCachedOptions(kind).then(opts => {
+    if (!body.parentNode) return; // panel closed
+    const q = (m4cState.pickerQuery[kind] || '').trim().toLowerCase();
+    const filtered = q ? opts.filter(o => o.name.toLowerCase().includes(q)) : opts;
+    const scrollY = m4cState.listScrollY[kind] || 0;
+    while (body.firstChild) body.removeChild(body.firstChild);
+    filtered.forEach((opt, i) => {
+      const row = document.createElement('a-entity');
+      row.classList.add('vr-btn');
+      row.dataset.kind = kind;
+      row.dataset.optId = String(opt.id);
+      row.setAttribute('geometry', 'primitive:plane;width:0.92;height:' + (LIST_ROW_H - 0.01).toFixed(2));
+      const isSelected = (m4cState.filters[kind] === opt.id);
+      row.setAttribute('material', 'color: ' + (isSelected ? '#3776c2' : '#222') + '; opacity:0.95');
+      const y = -i * LIST_ROW_H + scrollY;
+      row.setAttribute('position', '0 ' + y.toFixed(3) + ' 0.005');
+      const text = document.createElement('a-text');
+      text.setAttribute('value', opt.name);
+      text.setAttribute('align', 'left');
+      text.setAttribute('color', '#fff');
+      text.setAttribute('width', '2.5');
+      text.setAttribute('position', '-0.42 0 0.005');
+      row.appendChild(text);
+      body.appendChild(row);
+      row.addEventListener('click', function() {
+        m4cState.lastScrollFocus = 'list-' + kind;
+        applyFilterPick(kind, opt.id, opt.name);
+      });
     });
   });
 }
 
 function applyFilterPick(kind, id, name) {
   if (kind === 'performer' || kind === 'studio' || kind === 'tag') {
-    // Single-select: tapping the currently-selected name clears it.
     if (m4cState.filters[kind] === id) {
       m4cState.filters[kind] = '';
       m4cState.filterNames[kind] = '';
@@ -1217,80 +1206,75 @@ function applyFilterPick(kind, id, name) {
       m4cState.filters[kind] = id;
       m4cState.filterNames[kind] = name;
     }
+    renderColumnList(kind);
   } else if (kind === 'favorite') {
     m4cState.filters.favorite = m4cState.filters.favorite === id ? '' : id;
+    renderValuesRow();
   } else if (kind === 'stars') {
     const n = parseInt(id || '0', 10);
     m4cState.filters.stars = m4cState.filters.stars === n ? 0 : n;
+    renderValuesRow();
   } else if (kind === 'ocount') {
     const n = parseInt(id || '0', 10);
     m4cState.filters.ocount = m4cState.filters.ocount === n ? 0 : n;
+    renderValuesRow();
   }
   renderActiveChips();
-  renderFiltersBody();
   fetchGrid(true);
 }
 ```
 
-- [ ] **Step 4: Other tab rendering + value-picker buttons**
+- [ ] **Step 4: Bottom-row value pickers (no "Any")**
 
 ```javascript
-function renderOtherTab(body) {
-  // Three rows: Favorites, Stars, O-Counter. Each row is a label + flex of buttons.
-  const rows = [
-    {
-      kind: 'favorite', label: 'Favorites:',
-      opts: [
-        { id: '',     name: 'Any' },
-        { id: 'only', name: 'Only' },
-        { id: 'not',  name: 'Not' },
-      ]
-    },
-    {
-      kind: 'stars', label: 'Stars:',
-      opts: [
-        { id: '0', name: 'Any' },
-        { id: '1', name: '1+' },
-        { id: '2', name: '2+' },
-        { id: '3', name: '3+' },
-        { id: '4', name: '4+' },
-        { id: '5', name: '5 only' },
-      ]
-    },
-    {
-      kind: 'ocount', label: 'O-Counter:',
-      opts: [
-        { id: '0', name: 'Any' },
-        { id: '1', name: '1+' },
-        { id: '5', name: '5+' },
-        { id: '10', name: '10+' },
-      ]
-    },
+function renderValuesRow() {
+  const body = document.getElementById('vrFilterValuesRow');
+  if (!body) return;
+  while (body.firstChild) body.removeChild(body.firstChild);
+
+  // Single horizontal row: Favorites buttons (left), Stars buttons (middle),
+  // O-Counter buttons (right). No "Any" button — absence-of-selection means
+  // "any". Toggling the active button off clears the filter.
+  const groups = [
+    { kind: 'favorite', label: 'Favorites:', startX: -1.40, opts: [
+      { id: 'only', name: 'Only' },
+      { id: 'not',  name: 'Not'  },
+    ]},
+    { kind: 'stars', label: 'Stars:', startX: -0.55, opts: [
+      { id: '1', name: '1+' },
+      { id: '2', name: '2+' },
+      { id: '3', name: '3+' },
+      { id: '4', name: '4+' },
+      { id: '5', name: '5 only' },
+    ]},
+    { kind: 'ocount', label: 'O-Count:', startX: 0.78, opts: [
+      { id: '1',  name: '1+'  },
+      { id: '5',  name: '5+'  },
+      { id: '10', name: '10+' },
+    ]},
   ];
 
-  rows.forEach((row, rowIdx) => {
-    const yRow = -rowIdx * 0.18;
+  groups.forEach(g => {
     const lbl = document.createElement('a-text');
-    lbl.setAttribute('value', row.label);
+    lbl.setAttribute('value', g.label);
     lbl.setAttribute('align', 'left');
     lbl.setAttribute('color', '#fff');
     lbl.setAttribute('width', '2.5');
-    lbl.setAttribute('position', '-0.85 ' + yRow.toFixed(3) + ' 0.005');
+    lbl.setAttribute('position', g.startX.toFixed(2) + ' 0.10 0.005');
     body.appendChild(lbl);
 
-    // Buttons stacked horizontally to the right of the label.
-    let xOffset = -0.30;
-    row.opts.forEach(opt => {
+    let xOffset = g.startX;
+    g.opts.forEach(opt => {
       const btn = document.createElement('a-entity');
       btn.classList.add('vr-btn');
-      btn.setAttribute('geometry', 'primitive:plane;width:0.20;height:0.10');
+      btn.setAttribute('geometry', 'primitive:plane;width:0.18;height:0.10');
       const isSelected = (
-        (row.kind === 'favorite' && m4cState.filters.favorite === opt.id) ||
-        (row.kind === 'stars'    && String(m4cState.filters.stars)  === opt.id) ||
-        (row.kind === 'ocount'   && String(m4cState.filters.ocount) === opt.id)
+        (g.kind === 'favorite' && m4cState.filters.favorite === opt.id) ||
+        (g.kind === 'stars'    && String(m4cState.filters.stars)  === opt.id) ||
+        (g.kind === 'ocount'   && String(m4cState.filters.ocount) === opt.id)
       );
       btn.setAttribute('material', 'color: ' + (isSelected ? '#3776c2' : '#2c5282') + '; opacity:0.95');
-      btn.setAttribute('position', xOffset + ' ' + yRow.toFixed(3) + ' 0.005');
+      btn.setAttribute('position', xOffset.toFixed(2) + ' -0.04 0.005');
       const text = document.createElement('a-text');
       text.setAttribute('value', opt.name);
       text.setAttribute('align', 'center');
@@ -1299,19 +1283,22 @@ function renderOtherTab(body) {
       text.setAttribute('position', '0 0 0.005');
       btn.appendChild(text);
       body.appendChild(btn);
-      btn.addEventListener('click', function() { applyFilterPick(row.kind, opt.id, opt.name); });
-      xOffset += 0.22;
+      btn.addEventListener('click', function() {
+        m4cState.lastScrollFocus = 'none';
+        applyFilterPick(g.kind, opt.id, opt.name);
+      });
+      xOffset += 0.20;
     });
   });
 }
 ```
 
-- [ ] **Step 5: DOM-overlay input retargeting (grid search ↔ picker search)**
+- [ ] **Step 5: DOM-overlay input retargeting (grid + 3 picker columns)**
 
-The same `<input id="vrSearchInput">` is reused for both the grid search and the picker-list search. A `target` flag tracks which is in effect:
+The same `<input id="vrSearchInput">` is reused for the grid search and each of the three picker-list searches. `overlayTarget` extends to one of: `'grid'`, `'picker-performer'`, `'picker-studio'`, `'picker-tag'`.
 
 ```javascript
-let overlayTarget = 'grid'; // 'grid' | 'picker'
+let overlayTarget = 'grid';
 
 function showSearchOverlayForGrid() {
   overlayTarget = 'grid';
@@ -1324,21 +1311,28 @@ function showSearchOverlayForGrid() {
   setTimeout(() => input.focus(), 50);
 }
 
-function showPickerSearchOverlay() {
-  overlayTarget = 'picker';
+function showPickerSearchOverlay(kind) {
+  overlayTarget = 'picker-' + kind;
+  m4cState.lastScrollFocus = 'list-' + kind;
   const overlay = document.getElementById('vrDomOverlay');
   const input = document.getElementById('vrSearchInput');
   if (!overlay || !input) return;
-  input.placeholder = 'Search ' + (m4cState.activeTab || 'performer') + '…';
-  input.value = m4cState.pickerQuery || '';
+  input.placeholder = 'Search ' + kind + '…';
+  input.value = m4cState.pickerQuery[kind] || '';
   overlay.style.display = 'block';
   setTimeout(() => input.focus(), 50);
 }
 ```
 
-Replace the existing single `showSearchOverlay` with `showSearchOverlayForGrid` (rename, update the `vrAction` `'search-focus'` branch from Task 6).
+Replace the existing single `showSearchOverlay` (Task 6) with `showSearchOverlayForGrid`. Update `vrAction`'s `'search-focus'` branch:
 
-Update the `searchInput` `input` listener to dispatch by target:
+```javascript
+} else if (action === 'search-focus') {
+  showSearchOverlayForGrid();
+}
+```
+
+Replace the `searchInput.addEventListener('input', ...)` body from Task 6 with target-aware dispatch:
 
 ```javascript
 searchInput.addEventListener('input', function() {
@@ -1352,33 +1346,36 @@ searchInput.addEventListener('input', function() {
         lbl.setAttribute('color', m4cState.q ? '#fff' : '#888');
       }
       fetchGrid(true);
-    } else if (overlayTarget === 'picker') {
-      m4cState.pickerQuery = searchInput.value;
-      const pkLbl = document.getElementById('vrPickerSearchLabel');
+    } else if (overlayTarget && overlayTarget.startsWith('picker-')) {
+      const kind = overlayTarget.slice(7); // 'performer' | 'studio' | 'tag'
+      m4cState.pickerQuery[kind] = searchInput.value;
+      const pkLbl = document.getElementById('vrPickerSearchLabel-' + kind);
       if (pkLbl) {
-        pkLbl.setAttribute('value', m4cState.pickerQuery || 'Search…');
-        pkLbl.setAttribute('color', m4cState.pickerQuery ? '#fff' : '#888');
+        pkLbl.setAttribute('value', m4cState.pickerQuery[kind] || 'Search…');
+        pkLbl.setAttribute('color', m4cState.pickerQuery[kind] ? '#fff' : '#888');
       }
-      renderFiltersBody();
+      m4cState.listScrollY[kind] = 0;
+      renderColumnList(kind);
     }
-  }, overlayTarget === 'picker' ? 100 : 250);
+  }, overlayTarget === 'grid' ? 250 : 100);
 });
 ```
 
 (Picker search is local-only, so 100 ms debounce is fine.)
 
-- [ ] **Step 6: Scroll target handoff (grid vs filters list)**
+- [ ] **Step 6: Scroll target handoff (grid vs each list)**
 
-Track scroll focus when the user taps inside either panel. In the IIFE, near the click delegates:
+Track which column the user last interacted with. The applicable foci are: `grid`, `list-performer`, `list-studio`, `list-tag`, `none`. The `m3c:browse-scroll` event routes to whichever is current.
+
+In the IIFE, near the click delegates:
 
 ```javascript
+// Tapping a tile sets focus to grid (so subsequent thumbstick scrolls the grid).
+// applyFilterPick + renderColumnList already set 'list-<kind>'; bottom-row clicks
+// set 'none' (no scroll).
 document.getElementById('vrBrowsePanel').addEventListener('click', function(evt) {
-  // Tile clicks shouldn't change focus (handled by Task 8 swap).
-  if (evt.target.closest('.vr-tile')) return;
+  if (evt.target.closest('.vr-tile')) return; // tile click → handled by Task 8 swap
   m4cState.lastScrollFocus = 'grid';
-});
-document.getElementById('vrFiltersPanel').addEventListener('click', function() {
-  m4cState.lastScrollFocus = 'filters';
 });
 ```
 
@@ -1391,27 +1388,29 @@ scene.addEventListener('m3c:browse-scroll', function(e) {
   const browseOpen = bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true';
   if (!browseOpen) return;
 
-  if (m4cState.lastScrollFocus === 'filters') {
-    applyListScroll(e.detail.deltaSec, e.detail.stickY);
-  } else {
+  const focus = m4cState.lastScrollFocus;
+  if (focus === 'grid') {
     applyScroll(e.detail.deltaSec, e.detail.stickY);
+  } else if (focus === 'list-performer' || focus === 'list-studio' || focus === 'list-tag') {
+    const kind = focus.slice(5); // strip 'list-'
+    applyListScroll(kind, e.detail.deltaSec, e.detail.stickY);
   }
+  // focus === 'none' → no scroll
 });
 
-function applyListScroll(deltaSec, stickY) {
+function applyListScroll(kind, deltaSec, stickY) {
   const dy = -stickY * SCROLL_RATE * deltaSec;
-  const next = Math.max(0, Math.min(maxListScrollY(), listScrollY + dy));
-  if (next !== listScrollY) {
-    listScrollY = next;
-    renderFiltersBody();
+  const cur = m4cState.listScrollY[kind] || 0;
+  const next = Math.max(0, Math.min(maxListScrollY(kind), cur + dy));
+  if (next !== cur) {
+    m4cState.listScrollY[kind] = next;
+    renderColumnList(kind);
   }
 }
 
-function maxListScrollY() {
-  const kind = m4cState.activeTab;
-  if (kind === 'other') return 0;
+function maxListScrollY(kind) {
   const opts = m4cState.cachedOptions[kind] || [];
-  const q = m4cState.pickerQuery.trim().toLowerCase();
+  const q = (m4cState.pickerQuery[kind] || '').trim().toLowerCase();
   const count = q ? opts.filter(o => o.name.toLowerCase().includes(q)).length : opts.length;
   const totalH = count * LIST_ROW_H;
   const visibleH = LIST_VISIBLE_ROWS * LIST_ROW_H;
@@ -1419,39 +1418,41 @@ function maxListScrollY() {
 }
 ```
 
-The thumbstick handler from M3c (Task 5) is unchanged — it always emits `m3c:browse-scroll` when browse is open, and the delegate above routes to grid or list.
+The thumbstick handler from M3c (Task 5) is unchanged — it always emits `m3c:browse-scroll` when browse is open; the delegate above routes by focus.
 
 - [ ] **Step 7: Vet, build, manually verify**
 
 Run: `go vet ./...` then `go build ./...` — expect clean.
 
-Build, run on Quest 3. Open a scene with many performers, studios, tags. Enter VR, summon panel, click Browse. Verify (full §8 E from spec):
+Build, run on Quest 3. Open a scene. Enter VR, summon panel, click Browse, click Filters ▾. Verify (full §8 E from spec):
 
-- Click Filters ▾ → standalone Filters panel appears to the right of the grid.
-- 4 tabs visible (Performer, Studio, Tag, Other), Performer highlighted.
-- Performer list visible below tabs with search field above.
-- Tap search field → DOM overlay appears with focused input; Quest VR keyboard pops.
-- Type "Ali" → list narrows to performers whose name contains "Ali".
-- Tap "Alice" → chip "Performer: Alice ✕" appears at top of panel; row highlights blue; grid filters to Alice's scenes.
-- Tap chip ✕ → filter clears; chip disappears; row de-highlights; grid restores.
-- Switch to Studio tab → list of studios; same flow.
-- Switch to Tag tab → list of tags; same flow.
-- Switch to Other tab → list disappears, replaced by Favorites/Stars/O-Counter rows with value buttons.
-- Search field hidden on Other tab.
-- Tap "Only" under Favorites → button highlights; chip "Favorites: Only ✕" appears; grid filters.
+- Filters panel appears to the right of the grid (angled toward user). All sections visible at once: 3 columns + bottom value-row + chips area at top.
+- Each column shows a header label, a search field, and a list of names.
+- Bottom row shows Favorites buttons [Only][Not], Stars buttons [1+][2+][3+][4+][5 only], O-Counter buttons [1+][5+][10+]. No "Any" buttons.
+- Tap Performer column's search field → DOM overlay appears with focused input; Quest VR keyboard pops with placeholder "Search performer…".
+- Type "Ali" → only the Performer list narrows; Studio and Tag lists unchanged.
+- Tap "Alice" → row highlights blue; chip "Performer: Alice ✕" appears at top; grid filters.
+- Tap "Alice" again → row de-highlights; chip disappears. Grid restores.
+- Repeat search/select on Studio column independently.
+- Repeat on Tag column.
+- Tap "Only" under Favorites → button highlights; chip "Favorites: Only ✕" appears.
+- Tap "Only" again → de-highlights; chip clears.
 - Tap "3+" under Stars → button highlights; chip appears.
 - Tap "1+" under O-Counter → chip appears.
-- Push thumbstick Y after tapping inside filters → list scrolls (not grid).
-- Push thumbstick Y after tapping a tile → grid scrolls.
-- Tap "Clear all" on browse top strip → all chips clear; all values reset; grid restores.
-- Tap ✕ on filters panel → filters close, browse stays.
+- Tap inside Performer column then push thumbstick Y → only Performer list scrolls.
+- Tap inside Studio column then push thumbstick Y → only Studio list scrolls.
+- Tap inside Tag column then push thumbstick Y → only Tag list scrolls.
+- Tap a value-picker button then push thumbstick Y → nothing scrolls (focus = 'none').
+- Tap a grid tile area (not a tile itself) then push thumbstick Y → grid scrolls.
+- Tap "Clear all" on browse top strip → all chips clear; all column highlights de-activate; all value buttons de-highlight; grid restores.
+- Tap ✕ on filters panel → filters close; browse stays.
 - Tap ✕ on browse panel → both panels close.
 
 - [ ] **Step 8: Commit**
 
 ```
 git add internal/static/browse_scene.gohtml
-git commit -m "m4c: tabbed filters panel — searchable lists, active chips, scroll handoff"
+git commit -m "m4c: filters panel — 3 columns + value row, searchable lists, active chips"
 ```
 
 ---
