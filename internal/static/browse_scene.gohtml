@@ -942,15 +942,15 @@ a.chip:hover { background: #3a3a3a; }
     const TILE_GAP_Y = 0.06;        // vertical gap between rows
     const TITLE_GAP = 0.04;         // gap between cover bottom and title strip top
     const TITLE_STRIP_H = 0.08;     // height of the title text strip
-    const TILE_TOP_Y = 0.85;        // y-coordinate of the first row's center (below top strip)
+    const TILE_TOP_Y = 0.62;        // y-coordinate of the first row's center (clears top strip at y≈1.0)
     const TILE_Z = 0.02;            // z offset, in front of panel bg plane (z=0)
-    const MAX_ROT_DEG = 10;         // outermost columns rotate inward by this much
     let scrollY = 0;                // updated by Task 5 (vertical scroll)
 
-    // Returns [{x, y, z, rotY}] for each tile slot, given the current m4cCols,
-    // computed tile dimensions, and current scroll offset. The "gentle curve"
-    // look comes from rotY only — all tiles are coplanar at TILE_Z, so the
-    // panel background plane never occludes them.
+    // Returns [{x, y, z}] for each tile slot. Tiles are flat (no per-column
+    // rotation): rotated quads at the same z intersect each other at their
+    // edges, producing visible cross-cut artifacts. A flat grid avoids that.
+    // A true curved layout would require a single curved mesh with UV-mapped
+    // tile regions — out of scope for this redesign.
     function tileCellPositions(tileW, tileH, count) {
       const cols = m4cCols;
       const halfCols = (cols - 1) / 2;
@@ -962,10 +962,7 @@ a.chip:hover { background: #3a3a3a; }
           if (i >= count) break;
           const x = (col - halfCols) * (tileW + TILE_GAP_X);
           const y = TILE_TOP_Y - row * (tileH + TILE_GAP_Y) - scrollY;
-          const z = TILE_Z;
-          const colNorm = halfCols === 0 ? 0 : (col - halfCols) / halfCols;
-          const rotY = -colNorm * MAX_ROT_DEG;
-          positions.push({ x, y, z, rotY });
+          positions.push({ x, y, z: TILE_Z });
         }
       }
       return positions;
@@ -1006,24 +1003,35 @@ a.chip:hover { background: #3a3a3a; }
       plane.addEventListener('mouseenter', function() {
         const v = ensureVideo();
         v.currentTime = 0;
+        // Track this hover so that a stale (slow) play() resolution after
+        // the user has already moved off doesn't replace the cover.
+        const hoverToken = (tileEl._hoverToken = (tileEl._hoverToken || 0) + 1);
         const playPromise = v.play();
-        if (playPromise && playPromise.catch) {
-          playPromise.catch(function(err) {
-            // Common case: 404 because Stash hasn't generated a preview for
-            // this scene. Silently keep the cover.
-            console.debug('stash-vr: preview play() failed', err);
-          });
-        }
-        const mesh = plane.getObject3D('mesh');
-        if (!mesh) return;
-        const tex = new AFRAME.THREE.VideoTexture(v);
-        tex.minFilter = AFRAME.THREE.LinearFilter;
-        tex.magFilter = AFRAME.THREE.LinearFilter;
-        mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
-        mesh.material.needsUpdate = true;
+        if (!playPromise || !playPromise.then) return;
+        playPromise.then(function() {
+          // Only swap to VideoTexture once the video is actually playing
+          // (avoids the "pitch black" frame on no-preview scenes that
+          // 404 — play() rejects, cover stays). Also bail if the user
+          // already moved off this tile.
+          if (tileEl._hoverToken !== hoverToken) return;
+          const mesh = plane.getObject3D('mesh');
+          if (!mesh) return;
+          const tex = new AFRAME.THREE.VideoTexture(v);
+          tex.minFilter = AFRAME.THREE.LinearFilter;
+          tex.magFilter = AFRAME.THREE.LinearFilter;
+          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
+          mesh.material.needsUpdate = true;
+        }).catch(function(err) {
+          // Common case: 404 because Stash hasn't generated a preview
+          // for this scene. Cover stays untouched.
+          console.debug('stash-vr: preview play() failed', err);
+        });
       });
 
       plane.addEventListener('mouseleave', function() {
+        // Invalidate any in-flight play() resolution from the previous
+        // mouseenter so it can't replace the cover after we restore it.
+        tileEl._hoverToken = (tileEl._hoverToken || 0) + 1;
         const v = tileEl._previewVideo;
         if (v) {
           v.pause();
@@ -1150,7 +1158,6 @@ a.chip:hover { background: #3a3a3a; }
           }
         }
         el.setAttribute('position', { x: pos.x, y: pos.y, z: pos.z });
-        el.setAttribute('rotation', { x: 0, y: pos.rotY, z: 0 });
       });
     }
 
