@@ -778,6 +778,10 @@ a.chip:hover { background: #3a3a3a; }
     });
 
     scene.addEventListener('m3c:scale', function(e) {
+      // Suppress geometry scale while the browse panel is grabbing thumbstick
+      // Y for grid scrolling — otherwise the user scrolls the grid AND
+      // simultaneously rescales the cinema/immersive geometry.
+      if (m4cConsumeThumbY) return;
       const el = activeGeometry();
       if (!el || !el.object3D) return;
       const newScale = el.object3D.scale.x * e.detail.factor;
@@ -946,13 +950,13 @@ a.chip:hover { background: #3a3a3a; }
     const TILE_AREA_BOTTOM_Y = -1.05;  // bottom of visible tile area; tiles below are hidden
     const ARC_R              = 3.0;    // cylinder radius for curved tile layout
     const TILE_Z = 0.02;            // z offset, in front of panel bg plane (z=0); also outermost-tile depth
-    let scrollY = 0;                // updated by laser-drag scroll (Stage 4)
+    let scrollY = 0;                // updated by thumbstick scroll
     let m4cMaxScroll = 0;           // computed in relayoutTiles each pass
-    // Laser-drag scroll state. World-y at triggerdown anchors the drag so
-    // dy maps 1:1 to scroll delta; scrollY is clamped to [0, m4cMaxScroll].
-    let m4cScrollActive = false;
-    let m4cScrollAnchorWorldY = 0;
-    let m4cScrollAnchorScrollY = 0;
+    // Set true (in tickBrowseScroll) when the laser is hovering on the
+    // browse panel AND the panel is visible. Read by the m3c:scale handler
+    // to suppress geometry-scale binding while the user is scrolling
+    // the grid with the thumbstick.
+    let m4cConsumeThumbY = false;
 
     // Returns per-tile placement on a curved cylinder. Each tile's cover is
     // a partial cylinder segment (a-cylinder with theta-start/theta-length)
@@ -1432,18 +1436,80 @@ a.chip:hover { background: #3a3a3a; }
       }
     }
 
-    // Browse-panel laser-drag scroll. Maps world-y delta directly into
-    // scrollY (in panel-local meters). Laser drags down (dy<0) → scrollY
-    // increases → tile content scrolls up. Clamped to [0, m4cMaxScroll];
-    // triggers lazy-load when nearing the loaded-content bottom.
+    // Browse-panel thumbstick scroll. Polls the same axis source M3c uses
+    // (controller.gamepad.axes / tracked-controls.axis), so we never have
+    // to subscribe to thumbstickmoved events that may not fire on every
+    // platform. Active only while the browse panel is visible AND a laser
+    // is intersecting one of its surfaces — that's also the gate that tells
+    // m3c:scale to skip (so the user doesn't simultaneously scale the
+    // cinema/immersive geometry while scrolling the grid). M4c spec §4.4:
+    // stick-up (positive normalized y) → scroll up (decrease scrollY).
+    function _readThumbstickAxes(laserEl) {
+      if (!laserEl) return null;
+      const tc = laserEl.components && laserEl.components['tracked-controls'];
+      const ctrl = tc && tc.controller;
+      const axes = (ctrl && ctrl.gamepad && ctrl.gamepad.axes) || (tc && tc.axis) || null;
+      if (!axes || axes.length < 2) return null;
+      const safe = (n) => (typeof n === 'number' && !isNaN(n)) ? n : 0;
+      // Same dual-slot probe as m3c-controls._getThumbstick.
+      const x2 = axes.length >= 3 ? safe(axes[2]) : 0;
+      const y2 = axes.length >= 4 ? safe(axes[3]) : 0;
+      const x0 = safe(axes[0]);
+      const y0 = safe(axes[1]);
+      const x = Math.abs(x2) > 0.001 ? x2 : x0;
+      const y = Math.abs(y2) > 0.001 ? y2 : y0;
+      return { x: x, y: y };
+    }
+    function _laserIsOnBrowsePanel(laserEl) {
+      if (!laserEl) return false;
+      const rc = laserEl.components && laserEl.components.raycaster;
+      if (!rc) return false;
+      const its = rc.intersections || [];
+      if (!its.length) return false;
+      const target = its[0].el || (its[0].object && its[0].object.el);
+      if (!target || !target.classList) return false;
+      return target.classList.contains('vr-tile-cover') ||
+             target.classList.contains('vr-grid-bg') ||
+             target.classList.contains('vr-tile-detail');
+    }
+    let m4cLastScrollTickMs = 0;
     function tickBrowseScroll() {
-      if (!m4cScrollActive) return;
-      const hit = activeLaserIntersection();
-      if (!hit || !hit.point) return;
-      const dy = hit.point.y - m4cScrollAnchorWorldY;
-      const target = m4cScrollAnchorScrollY - dy;
+      const bp = document.getElementById('vrBrowsePanel');
+      const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
+      if (!bpVis) {
+        m4cConsumeThumbY = false;
+        m4cLastScrollTickMs = 0;
+        return;
+      }
+      // Pick whichever laser is currently on a browse-panel surface.
+      const lasers = ['vrLaserRight', 'vrLaserLeft'].map(id => document.getElementById(id));
+      let activeLaser = null;
+      for (let i = 0; i < lasers.length; i++) {
+        if (_laserIsOnBrowsePanel(lasers[i])) { activeLaser = lasers[i]; break; }
+      }
+      if (!activeLaser) {
+        m4cConsumeThumbY = false;
+        m4cLastScrollTickMs = 0;
+        return;
+      }
+      m4cConsumeThumbY = true;  // suppress m3c:scale while we own thumbstick
+
+      const ts = _readThumbstickAxes(activeLaser);
+      if (!ts) { m4cLastScrollTickMs = 0; return; }
+      // xr-standard: stick-up reads as negative y. Invert so positive = up.
+      const yNorm = -ts.y;
+      // Deadzone matches M3c's scale gate (0.3) so light drift doesn't scroll.
+      if (Math.abs(yNorm) < 0.3) { m4cLastScrollTickMs = 0; return; }
+
+      const now = performance.now();
+      const dt = m4cLastScrollTickMs ? Math.min(0.1, (now - m4cLastScrollTickMs) / 1000) : 1 / 60;
+      m4cLastScrollTickMs = now;
+      // Spec §4.4: 0.6 m/s at full deflection. Stick up → scroll up
+      // (decrease scrollY → reveal earlier tiles).
+      const rate = 0.6;
+      const target = scrollY - yNorm * rate * dt;
       const clamped = Math.max(0, Math.min(target, m4cMaxScroll));
-      if (Math.abs(clamped - scrollY) < 0.001) return;
+      if (Math.abs(clamped - scrollY) < 0.0001) return;
       scrollY = clamped;
       relayoutTiles();
       // Lazy-load when nearing the bottom of currently-loaded content. The
@@ -1541,24 +1607,11 @@ a.chip:hover { background: #3a3a3a; }
           scrubActive = true;
           const t = cursorToScrubT(intersection);
           if (t !== null) setVideoTime(t, false);
-        } else if (cl.contains('vr-grid-bg')) {
-          // Browse-panel background: laser-drag scrolls the tile grid.
-          // Only activate when the panel is actually visible (the bg plane
-          // can be hit even when invisible if the raycaster ignores
-          // visibility — guard explicitly).
-          const bp = document.getElementById('vrBrowsePanel');
-          const vis = bp && bp.getAttribute('visible');
-          if (bp && (vis === true || vis === 'true')) {
-            m4cScrollActive = true;
-            m4cScrollAnchorWorldY = (intersection.point && intersection.point.y) || 0;
-            m4cScrollAnchorScrollY = scrollY;
-          }
         }
       });
       laser.addEventListener('triggerup', function() {
         volActive = false;
         scrubActive = false;
-        m4cScrollActive = false;
       });
     });
 
