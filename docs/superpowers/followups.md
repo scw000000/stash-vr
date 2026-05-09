@@ -8,9 +8,6 @@ This doc is the canonical "what's left" index. New follow-ups surfaced during wo
 
 ## VR rendering / projection
 
-### M3a-followup: RF52 canting math
-Source: [M3a spec §3](specs/2026-05-08-m3a-multi-projection-rendering.md), risks. Currently RF52 renders as plain 180° fisheye. Adding a per-eye outward rotation matrix in the fisheye shader (one extra rotation per eye in `onBeforeRender`) realigns the stereo for canted-fisheye sources. **Improves visual correctness** for RF52 content; many users may not perceive the difference. Size: ~1-2 hours, isolated to `applyFisheye` in `browse_scene.gohtml`.
-
 ### M3a-followup: aspect-ratio fallback heuristic
 Source: [M3a spec §3](specs/2026-05-08-m3a-multi-projection-rendering.md), [SKYBOX UI reference §3.3](research/2026-05-08-skybox-ui-reference/reference.md). When neither tag nor filename gives a projection clue, SKYBOX falls back to `aspect_ratio > 1.8 → SBS`, etc. Stash-vr doesn't implement this. Requires reading `Files[0].Width`/`Height` from GraphQL. Size: small.
 

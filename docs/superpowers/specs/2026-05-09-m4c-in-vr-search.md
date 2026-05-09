@@ -301,6 +301,18 @@ When the browse panel is open:
 - B/Y short-press → in immersive: yaw recenter; in cinema: reset cinema plane (M3c untouched)
 - B/Y long-press → full recenter (M3c untouched)
 
+### 4.10a RF52 canting math (rendering correctness)
+
+**This is a rendering-correctness fix orthogonal to the in-VR search work, bundled into M4c at the user's direction so it ships in the same release window.**
+
+RF52 is a Japanese-VR canted-fisheye format. Each eye's lens was physically angled ~5° outward when the source was captured, matching natural eye geometry. M3a punted this — RF52 currently renders as plain 180° fisheye, which leaves a small but visible stereo error (each eye sees content slightly off-axis from where its lens was pointed at capture).
+
+**Fix:** in the fisheye shader, pre-rotate the sampling direction `d` by `±cant` around Y per eye before computing `(theta, phi)`. The sign depends on eye (left = inward-toward-center one way, right the other). Default cant is 0 (no-op for plain FISHEYE_180 / FISHEYE_190 / MKX200); when `Projection.Cant` is non-zero, the shader applies the rotation.
+
+**Source of truth for the cant value:** `internal/api/internal/projection.go`'s `Detect()` is updated to set `Projection.Cant = 5.0` when it identifies RF52 (via the `VR_RF52` tag or `RF52` filename token). Other geometries set `Cant = 0`. The picker UI doesn't expose cant — when the user manually re-picks FishEye via M3b's Format picker, cant goes to 0 (treats as plain fisheye); auto-detect re-applies cant on next page load.
+
+**No new UI.** The user's only signal that canting is in effect is improved depth perception on RF52 content.
+
 ### 4.10 Detail panel
 
 Tapping a tile's ⓘ badge opens a standalone **detail panel** that shows the scene's full metadata. The user reads the description, performer/studio chips, etc., then either taps "Play this scene" (which triggers the same seamless swap as tapping the tile cover) or "Close" to return to browsing.
@@ -478,6 +490,12 @@ On Quest 3 / Meta Browser, assuming M4a and M4b shipped:
 - [ ] Scroll to end of full result set → "No more scenes" sentinel; loadMore stops.
 - [ ] Click tile while previous swap is in flight → ignored (debounced) until first swap completes.
 - [ ] Network failure mid-swap → error overlay; restore previous scene.
+
+### K. RF52 canting (rendering correctness)
+- [ ] Open a scene tagged `VR_RF52` or with `RF52` in the filename. Click Enter VR.
+- [ ] Stereo separation feels correct — depth at the edges of FOV looks natural, no obvious eye-crossover.
+- [ ] Open a plain `VR_FISHEYE` 180° scene → still renders as before (cant = 0, no behavior change vs M3a).
+- [ ] Open the Format picker, manually re-select FishEye + 180° + SBS on an RF52 scene → cant resets to 0 (plain fisheye); reload → auto-detect restores cant.
 
 ## 9. Open follow-ups for next milestones
 

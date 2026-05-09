@@ -4,7 +4,7 @@
 
 **Goal:** Add a 3D scene-grid browse panel reachable from the M4b control panel, with text search via DOM overlay, six filter pickers, vertical scroll, configurable cols, and seamless scene swap (no VR re-entry).
 
-**Architecture:** Nine tasks. Task 1 is a DOM-overlay feasibility spike — confirm Meta Browser supports DOM overlay during a WebXR session before committing to the rest. Task 2 adds the server-side JSON endpoints. Tasks 3–4 build the browse panel UI: top strip, cylinder grid layout, tile entities with cover textures + ⓘ detail badge. Task 5 adds vertical scroll + lazy load + the M3c thumbstick handoff. Task 6 wires the DOM-overlay search field. Task 7 adds the 3-column filters panel with searchable lists. Task 8 implements the seamless scene swap with fade and the rich `/scene/{id}/meta` endpoint. Task 9 adds the standalone detail panel with chip-click filters.
+**Architecture:** Ten tasks. Task 1 is a DOM-overlay feasibility spike — confirm Meta Browser supports DOM overlay during a WebXR session before committing to the rest. Task 2 adds the server-side JSON endpoints. Tasks 3–4 build the browse panel UI: top strip, cylinder grid layout, tile entities with cover textures + ⓘ detail badge. Task 5 adds vertical scroll + lazy load + the M3c thumbstick handoff. Task 6 wires the DOM-overlay search field. Task 7 adds the 3-column filters panel with searchable lists. Task 8 implements the seamless scene swap with fade and the rich `/scene/{id}/meta` endpoint. Task 9 adds the standalone detail panel with chip-click filters. **Task 10 is RF52 canting math** — a rendering-correctness fix bundled in at the user's direction (orthogonal to in-VR search but ships in this release window).
 
 **Tech Stack:** Go 1.24, A-Frame 1.7, Three.js, vanilla JS, WebXR DOM Overlay Module.
 
@@ -2126,18 +2126,214 @@ git commit -m "m4c: tile detail badge + standalone detail panel with chip-click 
 
 ---
 
+## Task 10: RF52 canting math (rendering correctness)
+
+**Files:**
+- Modify: `internal/api/internal/projection.go`
+- Modify: `internal/static/browse_scene.gohtml`
+
+**Goal:** Pre-rotate the fisheye sampling direction by ±cant per eye for RF52 sources, fixing the small stereo error from M3a's punted canting.
+
+This task is a rendering-correctness fix orthogonal to the in-VR search work; bundled in M4c at the user's direction so it ships in the same release window. Touches the fisheye shader and the `Projection.Detect` mapping; no new UI.
+
+- [ ] **Step 1: Add `Cant` field to `Projection`**
+
+In [internal/api/internal/projection.go](../../../internal/api/internal/projection.go), find the `Projection` struct:
+
+```go
+type Projection struct {
+	Geometry string
+	FOV      int
+	Stereo   string
+}
+```
+
+Add a `Cant` field (degrees, signed; rotation around Y per eye, positive = right eye outward):
+
+```go
+type Projection struct {
+	Geometry string
+	FOV      int
+	Stereo   string
+	Cant     float64 // RF52 canted-fisheye angle in degrees (0 for non-RF52)
+}
+```
+
+In `Detect()`, find the RF52 branch (likely `case hasRF52:` or similar). Set `Cant = 5.0`:
+
+```go
+case hasRF52:
+	return Projection{Geometry: "fisheye", FOV: 180, Stereo: stereo, Cant: 5.0}
+```
+
+Other branches leave `Cant` as zero-value (0.0). Filename-detection RF52 path also sets `Cant = 5.0` — find both occurrences.
+
+- [ ] **Step 2: Emit cant on the fisheye entity in the template**
+
+In [internal/static/browse_scene.gohtml](../../../internal/static/browse_scene.gohtml), find the `vrFisheye` entity (it currently carries `data-fov`):
+
+```html
+<a-entity id="vrFisheye"
+          visible="..."
+          data-fov="..."
+          geometry="..."></a-entity>
+```
+
+Add `data-cant`:
+
+```html
+<a-entity id="vrFisheye"
+          visible="..."
+          data-fov="..."
+          data-cant="{{.Projection.Cant}}"
+          geometry="..."></a-entity>
+```
+
+- [ ] **Step 3: Add `uCant` uniform + per-eye rotation in the fisheye shader**
+
+In `applyFisheye`, locate the existing `material` definition with its `uniforms` map. Add a `uCant` uniform:
+
+```javascript
+uniforms: {
+  uMap:       { value: tex },
+  uFOV:       { value: fov },
+  uCant:      { value: 0.0 },     // signed radians; set per-eye in onBeforeRender
+  uEyeOffset: { value: new AFRAME.THREE.Vector2(0, 0) },
+  uEyeRepeat: { value: new AFRAME.THREE.Vector2(1, 1) }
+},
+```
+
+Update the fragment shader to rotate `d` around Y by `uCant` before computing `theta` and `phi`. Find the existing fragment shader inside `applyFisheye`:
+
+```glsl
+void main() {
+  vec3 d = normalize(vDir);
+  float theta = acos(-d.z);
+  float maxTheta = radians(uFOV * 0.5);
+  if (theta > maxTheta) discard;
+  float r = (theta / maxTheta) * 0.5;
+  float phi = atan(d.y, d.x);
+  vec2 uv = vec2(0.5 + r * cos(phi), 0.5 + r * sin(phi));
+  uv = uv * uEyeRepeat + uEyeOffset;
+  gl_FragColor = texture2D(uMap, uv);
+}
+```
+
+Replace with:
+
+```glsl
+uniform float uCant;
+void main() {
+  vec3 d = normalize(vDir);
+  // Pre-rotate d around Y by uCant (signed). For RF52 the call site
+  // sets uCant = -cant for left eye, +cant for right eye, in radians.
+  float c = cos(uCant);
+  float s = sin(uCant);
+  vec3 dr = vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
+  float theta = acos(-dr.z);
+  float maxTheta = radians(uFOV * 0.5);
+  if (theta > maxTheta) discard;
+  float r = (theta / maxTheta) * 0.5;
+  float phi = atan(dr.y, dr.x);
+  vec2 uv = vec2(0.5 + r * cos(phi), 0.5 + r * sin(phi));
+  uv = uv * uEyeRepeat + uEyeOffset;
+  gl_FragColor = texture2D(uMap, uv);
+}
+```
+
+(The `uniform float uCant;` declaration goes at the top alongside the existing `uniform` declarations, not inside `main()`.)
+
+- [ ] **Step 4: Set `uCant` per eye in `onBeforeRender`**
+
+In `applyFisheye`, the existing `mesh.onBeforeRender` reads stereo + eye and sets `uEyeOffset` / `uEyeRepeat`. Read the cant from the entity's `data-cant` attribute and apply per eye:
+
+Find the existing handler:
+
+```javascript
+mesh.onBeforeRender = function(renderer, sceneObj, cam) {
+  const xr = renderer.xr;
+  const stereo = scene.dataset.stereo || '';
+  const u = material.uniforms;
+  if (!xr || !xr.isPresenting || !stereo) {
+    u.uEyeOffset.value.set(0, 0);
+    u.uEyeRepeat.value.set(1, 1);
+    return;
+  }
+  const xrCam = xr.getCamera();
+  if (!xrCam || !xrCam.cameras || xrCam.cameras.length < 2) return;
+  const isLeft = cam === xrCam.cameras[0];
+  const isRight = cam === xrCam.cameras[1];
+  if (!isLeft && !isRight) return;
+  if (stereo === 'sbs') { ... }
+  else if (stereo === 'tb') { ... }
+  else { ... }
+};
+```
+
+Just before the stereo branches, set `uCant`:
+
+```javascript
+const cantDeg = parseFloat(el.dataset.cant || '0');
+const cantRad = cantDeg * Math.PI / 180;
+u.uCant.value = isLeft ? -cantRad : cantRad;
+```
+
+(Outside-of-XR / mono branches set `u.uCant.value = 0`.)
+
+- [ ] **Step 5: Drop cant when user manually picks via Format picker**
+
+The M3b picker re-applies projection state when the user picks a Type/Degree. The picker doesn't preserve cant — when the user picks "FishEye + 180° + SBS," it should be plain fisheye, not RF52-canted. Find `applyPickerState` in the IIFE. After the existing `data-fov` mutation:
+
+```javascript
+if (fovEl) fovEl.dataset.fov = (pickerState.degree === '200' ? '200' : '180');
+```
+
+Add (right after, in the same block):
+
+```javascript
+if (fovEl) fovEl.dataset.cant = '0'; // user-picked fisheye is plain fisheye
+```
+
+(Auto-detect's initial render still sees the server-rendered `data-cant` from §4.10a.)
+
+- [ ] **Step 6: Vet, build**
+
+Run: `go vet ./...` then `go build ./...`
+
+Expected: clean.
+
+- [ ] **Step 7: Manual verify on Quest 3**
+
+Open a scene tagged `VR_RF52` (or with `RF52` in its filename). Click Enter VR. Observe stereo separation — should feel more natural than M3a's plain-fisheye fallback. Open a plain `VR_FISHEYE 180°` scene → no behavior change vs M3a (cant is 0).
+
+Spec §8 K covers the full validation matrix:
+- RF52 scene → cant active, stereo feels correct.
+- Plain FISHEYE 180° → no behavior change.
+- RF52 → manually pick FishEye + 180° + SBS in Format picker → cant resets to 0; reload → auto-detect restores cant.
+
+- [ ] **Step 8: Commit**
+
+```
+git add internal/api/internal/projection.go internal/static/browse_scene.gohtml
+git commit -m "m4c: RF52 canting math — per-eye outward rotation in fisheye shader"
+```
+
+---
+
 ## Self-review checklist
 
 - **Spec coverage:**
   - Browse panel toggle (Task 3)
   - Configurable cols (Task 3)
-  - Tile rendering on cylinder (Task 4)
+  - Tile rendering on cylinder + ⓘ detail badge (Task 4)
   - Vertical scroll + lazy load (Task 5)
   - Search via DOM overlay (Tasks 1 + 6)
-  - 6 filter pickers + Clear all (Task 7)
-  - Seamless scene swap (Task 8)
+  - 3-column filters panel with searchable lists (Task 7)
+  - Seamless scene swap + rich /scene/{id}/meta endpoint (Task 8)
+  - Standalone detail panel with chip-click filters (Task 9)
+  - RF52 canting math (Task 10)
 - **No placeholders:** every code block is concrete. The M3c integration in Task 5 is described conceptually because it depends on M3c's actual handler structure — flagged in the step.
-- **Type consistency:** `GridTile`, `GridResponse`, `FilterOption`, `CaptionRef`, `SceneMarker` all defined and reused consistently. JS state shape `m4cState.filters` matches server query params.
-- **Frequent commits:** one per task. Eight commits total.
-- **Risks acknowledged:** Task 1 is a feasibility gate — if it fails, the rest of the plan needs revision. Tasks 4–8 each have a manual verification step on the headset, since these touch novel WebXR territory.
+- **Type consistency:** `GridTile`, `GridResponse`, `FilterOption`, `CaptionRef`, `SceneMarker`, `SceneMeta`, `EntityRef` all defined and reused consistently. JS state shape `m4cState.filters` matches server query params. The new `Projection.Cant` field flows through `Detect()` → template → `data-cant` → `uCant` uniform.
+- **Frequent commits:** one per task. Ten commits total.
+- **Risks acknowledged:** Task 1 is a feasibility gate — if it fails, the rest of the plan needs revision. Tasks 4–9 each have a manual verification step on the headset, since these touch novel WebXR territory. Task 10's cant sign convention may need flipping after on-headset validation — fix is one negation in step 4.
 - **YAGNI:** no auto-next, no scene previews, no multi-select, no saved filters, no sort options. All explicit deferrals from the spec.
