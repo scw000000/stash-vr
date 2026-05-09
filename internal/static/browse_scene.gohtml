@@ -370,51 +370,6 @@ a.chip:hover { background: #3a3a3a; }
     video.addEventListener('play', updatePlayPauseIcon);
     video.addEventListener('pause', updatePlayPauseIcon);
 
-    // Recover from WebGL context loss. Quest 3 drops the context after
-    // ~30s sleep; without preventDefault the browser won't restore it,
-    // and the video texture stays frozen even after re-entering VR
-    // (audio keeps playing because that pipeline is independent).
-    function refreshVideoTexture() {
-      if (!video || video.readyState < 2) return;
-      const wasPaused = video.paused;
-      const t = isFinite(video.currentTime) ? video.currentTime : 0;
-      try {
-        video.pause();
-        // Re-assigning currentTime forces the decoder to re-emit a
-        // frame, which the next render tick uploads to the GL texture.
-        video.currentTime = t;
-        if (!wasPaused) {
-          const p = video.play();
-          if (p && p.catch) p.catch(err => console.warn('stash-vr: video resume failed', err));
-        }
-      } catch (e) {
-        console.warn('stash-vr: video texture refresh failed', e);
-      }
-    }
-
-    scene.addEventListener('loaded', function() {
-      const canvas = scene.canvas;
-      if (!canvas) return;
-      canvas.addEventListener('webglcontextlost', function(e) {
-        console.warn('stash-vr: WebGL context lost — requesting restore');
-        e.preventDefault(); // critical: without this the browser doesn't restore
-      }, false);
-      canvas.addEventListener('webglcontextrestored', function() {
-        console.warn('stash-vr: WebGL context restored — refreshing video texture');
-        refreshVideoTexture();
-      }, false);
-    });
-
-    // Page-visibility backstop. Some sleep scenarios don't fully drop the
-    // GL context but still stall the decoder pipeline; refreshing on
-    // visibility return covers those cases cheaply.
-    document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) refreshVideoTexture();
-    });
-
-    // Entering VR fresh after a stall benefits from the same refresh.
-    scene.addEventListener('enter-vr', refreshVideoTexture);
-
     // Bind material + texture programmatically. aframe-stereo-component@1.4.0
     // doesn't work on A-Frame 1.7 (reads material as raw string at init), so
     // stereo is handled here directly.
@@ -453,6 +408,112 @@ a.chip:hover { background: #3a3a3a; }
       }
       return sharedTex;
     }
+    function disposeMeshMaterial(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const mesh = el.getObject3D('mesh');
+      if (!mesh) return;
+      mesh.userData.boundVR = false;
+      if (mesh.material) {
+        if (mesh.material.dispose) {
+          try { mesh.material.dispose(); } catch (e) {}
+        }
+        // The mesh keeps a default material; the next applySphere/applyFlat/
+        // applyFisheye will replace it with a fresh MeshBasicMaterial /
+        // ShaderMaterial wired to a live VideoTexture.
+      }
+    }
+    function teardownVideoTexture() {
+      // Dispose the shared VideoTexture so the next bind creates a fresh
+      // one wired to the currently-active GL context. Without this, a
+      // post-context-loss texture has dead GPU handles and renders black
+      // even though the <video> element is still decoding frames.
+      if (sharedTex) {
+        if (sharedTex.dispose) {
+          try { sharedTex.dispose(); } catch (e) {}
+        }
+        sharedTex = null;
+      }
+      ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'].forEach(disposeMeshMaterial);
+    }
+    function rebindActiveGeometry() {
+      const active = activeGeometry();
+      if (!active) return;
+      if (active.id === 'vrFlat') applyFlat();
+      else if (active.id === 'vrFisheye') applyFisheye();
+      else if (active.id === 'vrSphere180' || active.id === 'vrSphere360') applySphere();
+    }
+
+    // Recover from WebGL context loss + suspended XR sessions. Quest 3 drops
+    // the GL context after ~30s sleep; the VideoTexture and the materials
+    // that reference it become invalid (they hold GPU handles tied to the
+    // old context). Three.js doesn't auto-rebuild on context-restore — we
+    // dispose and rebind.
+    function refreshVideoTexture() {
+      teardownVideoTexture();
+      rebindActiveGeometry();
+      if (!video || video.readyState < 2) return;
+      const wasPaused = video.paused;
+      const t = isFinite(video.currentTime) ? video.currentTime : 0;
+      try {
+        video.pause();
+        // Re-assigning currentTime forces the decoder to re-emit a frame,
+        // which the next render tick uploads to the freshly-bound GL texture.
+        video.currentTime = t;
+        if (!wasPaused) {
+          const p = video.play();
+          if (p && p.catch) p.catch(err => console.warn('stash-vr: video resume failed', err));
+        }
+      } catch (e) {
+        console.warn('stash-vr: video texture refresh failed', e);
+      }
+    }
+
+    // First enter-vr: the initial bind path already handled it. Skip the
+    // teardown — only rebuild on second-and-later entries (post-suspend).
+    let enterVrCount = 0;
+    function onEnterVr() {
+      enterVrCount++;
+      if (enterVrCount === 1) {
+        // First entry: just kick the decoder, don't tear down a fresh bind.
+        if (video && video.readyState >= 2) {
+          try {
+            const t = isFinite(video.currentTime) ? video.currentTime : 0;
+            video.currentTime = t;
+          } catch (e) {}
+        }
+        return;
+      }
+      refreshVideoTexture();
+    }
+    scene.addEventListener('enter-vr', onEnterVr);
+
+    // WebGL context loss handlers (only available once the scene has
+    // initialized its renderer canvas).
+    scene.addEventListener('loaded', function() {
+      const canvas = scene.canvas;
+      if (!canvas) return;
+      canvas.addEventListener('webglcontextlost', function(e) {
+        console.warn('stash-vr: WebGL context lost — requesting restore');
+        e.preventDefault(); // critical: without this the browser doesn't restore
+      }, false);
+      canvas.addEventListener('webglcontextrestored', function() {
+        console.warn('stash-vr: WebGL context restored — rebuilding video texture');
+        refreshVideoTexture();
+      }, false);
+    });
+
+    // Page-visibility backstop. Refresh the decoder on visibility return so
+    // a stalled pipeline doesn't survive a quick tab-switch.
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden && video && video.readyState >= 2) {
+        try {
+          const t = isFinite(video.currentTime) ? video.currentTime : 0;
+          video.currentTime = t;
+        } catch (e) {}
+      }
+    });
+
     function bindSphereMesh(id) {
       const el = document.getElementById(id);
       if (!el || !window.AFRAME || !AFRAME.THREE) return;
@@ -795,11 +856,24 @@ a.chip:hover { background: #3a3a3a; }
       el.setAttribute('text', 'value', (Number.isInteger(v) ? v.toFixed(1) : v.toString()) + 'x');
     }
 
+    // <a-entity visible="false"> sets object3D.visible only on that entity,
+    // not on descendants — and Three.js' Raycaster checks each object's own
+    // visibility, so child buttons inside a hidden picker still raycast-hit
+    // and intercept laser clicks meant for whichever picker is actually
+    // visible. Walk the subtree to keep visibility consistent.
+    function setSubpanelVisible(panelId, visible) {
+      const panel = document.getElementById(panelId);
+      if (!panel) return;
+      panel.setAttribute('visible', visible);
+      if (panel.object3D) {
+        panel.object3D.traverse(function(obj) { obj.visible = visible; });
+      }
+    }
+
     function closeAllSubpanels(except) {
       ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker'].forEach(id => {
         if (id === except) return;
-        const el = document.getElementById(id);
-        if (el) el.setAttribute('visible', false);
+        setSubpanelVisible(id, false);
       });
     }
 
@@ -830,7 +904,7 @@ a.chip:hover { background: #3a3a3a; }
           const visible = picker.getAttribute('visible');
           const willShow = !(visible === true || visible === 'true');
           if (willShow) closeAllSubpanels('vrFormatPicker');
-          picker.setAttribute('visible', willShow);
+          setSubpanelVisible('vrFormatPicker', willShow);
         }
       } else if (action === 'help') {
         const help = document.getElementById('vrHelpPanel');
@@ -838,20 +912,19 @@ a.chip:hover { background: #3a3a3a; }
           const visible = help.getAttribute('visible');
           const willShow = !(visible === true || visible === 'true');
           if (willShow) closeAllSubpanels('vrHelpPanel');
-          help.setAttribute('visible', willShow);
+          setSubpanelVisible('vrHelpPanel', willShow);
         }
       } else if (action === 'help-close') {
-        const help = document.getElementById('vrHelpPanel');
-        if (help) help.setAttribute('visible', false);
+        setSubpanelVisible('vrHelpPanel', false);
       } else if (action === 'cc') {
         const sub = document.getElementById('vrSubtitlePicker');
         if (sub) {
           const visible = sub.getAttribute('visible');
           if (visible === true || visible === 'true') {
-            sub.setAttribute('visible', false);
+            setSubpanelVisible('vrSubtitlePicker', false);
           } else {
             closeAllSubpanels('vrSubtitlePicker');
-            sub.setAttribute('visible', true);
+            setSubpanelVisible('vrSubtitlePicker', true);
           }
         }
       } else if (action === 'scrub' || action === 'scrub-bg') {
@@ -1122,8 +1195,7 @@ a.chip:hover { background: #3a3a3a; }
     let currentLang = '';
 
     function handleCCPick(lang, type) {
-      const picker = document.getElementById('vrSubtitlePicker');
-      if (picker) picker.setAttribute('visible', false);
+      setSubpanelVisible('vrSubtitlePicker', false);
       if (!lang) {
         currentCues = [];
         currentLang = '';
