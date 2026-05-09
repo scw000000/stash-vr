@@ -712,6 +712,7 @@ a.chip:hover { background: #3a3a3a; }
       } else if (action === 'mute') {
         video.muted = !video.muted;
         updateMuteIcon();
+        refreshVolumeUI();
       } else if (action === 'speed') {
         speedIdx = (speedIdx + 1) % SPEEDS.length;
         video.playbackRate = SPEEDS[speedIdx];
@@ -815,18 +816,27 @@ a.chip:hover { background: #3a3a3a; }
       }
     }
 
-    function setVideoVolume(v) {
-      video.volume = Math.max(0, Math.min(1, v));
+    function refreshVolumeUI() {
+      const displayed = video.muted ? 0 : video.volume;
       const fill = document.getElementById('vrVolumeFill');
       const thumb = document.getElementById('vrVolumeThumb');
-      const w = video.volume * VOL_BAR_W;
+      const w = displayed * VOL_BAR_W;
       if (fill) {
-        fill.setAttribute('width', w);
+        // A-Frame plane width must be > 0; use a hairline minimum.
+        fill.setAttribute('width', Math.max(0.001, w));
         fill.setAttribute('position', { x: VOL_BAR_LEFT + w / 2, y: 0, z: 0.001 });
       }
       if (thumb) {
         thumb.setAttribute('position', { x: VOL_BAR_LEFT + w, y: 0, z: 0.005 });
       }
+    }
+
+    function setVideoVolume(v) {
+      video.volume = Math.max(0, Math.min(1, v));
+      // Dragging the slider unmutes — matches HTML5 video element semantics
+      // and avoids the user wondering why volume changes don't take effect.
+      if (video.muted && video.volume > 0) video.muted = false;
+      refreshVolumeUI();
     }
 
     document.querySelectorAll('.vr-vol-track, .vr-vol-thumb').forEach(el => {
