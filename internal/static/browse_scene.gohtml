@@ -371,13 +371,14 @@ a.chip:hover { background: #3a3a3a; }
     <a-text id="vrBrowseLoadMore" value="" align="center" color="#888" width="3"
             position="0 -1.05 0.01" visible="false"></a-text>
 
-    <!-- M4c debug overlay: shows what the right-hand laser's first
-         intersection is currently hitting. Updated every rAF from
-         tickBrowseScroll. Helps diagnose "invisible blocker" reports
-         without needing to open the console. Lives at the top of the
-         panel (above the top strip) so it doesn't overlap with grid. -->
-    <a-text id="vrM4cDebug" value="" align="center" color="#0ff" width="2.5"
-            position="0 1.18 3.05"></a-text>
+    <!-- M4c debug overlay: shows what each laser's first intersection is
+         hitting + thumbstick / scroll state. Lives just above the top
+         strip, in front of the bg surface (panel-local z=0.06 ≈ where
+         the buttons sit) so the user can read it from inside the panel.
+         Position z must be in [0, ~0.5]; z>HUB_Z (3.02) puts it BEHIND
+         the user since the user sits between panel back and hub. -->
+    <a-text id="vrM4cDebug" value="" align="center" color="#0ff" width="3.5"
+            position="0 1.20 0.06"></a-text>
   </a-entity>
 
   </a-entity><!-- /vrControlsRoot -->
