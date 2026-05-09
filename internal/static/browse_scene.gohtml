@@ -489,6 +489,14 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       // skip forward seek — matches vrAction('seek-fwd') precedent.
     });
 
+    scene.addEventListener('m3c:scale', function(e) {
+      const el = activeGeometry();
+      if (!el || !el.object3D) return;
+      const newScale = el.object3D.scale.x * e.detail.factor;
+      const clamped = Math.max(0.3, Math.min(5.0, newScale));
+      el.object3D.scale.setScalar(clamped);
+    });
+
     // Panel + lasers visibility is shared. M3c hides them by default and
     // toggles via m3c:panel-toggle (or programmatically on Enter VR /
     // Format-button taps). When hidden: lasers' raycaster also disabled
