@@ -1,55 +1,88 @@
 package browse
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
 	"stash-vr/internal/config"
+	"stash-vr/internal/library"
 	"stash-vr/internal/prefix"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 )
 
-// redirectBack issues a 303 to Referer (or /browse/scene/{id} fallback),
-// setting (or clearing) the `err` query param. Using url.Values.Set avoids
-// stacking multiple err= entries on consecutive failed POSTs.
-func (h *httpHandler) redirectBack(w http.ResponseWriter, r *http.Request, errMsg string) {
-	target := r.Header.Get("Referer")
-	if target == "" {
-		target = "/browse/scene/" + chi.URLParam(r, "id")
-	}
-	u, parseErr := url.Parse(target)
-	if parseErr != nil {
-		// Fallback: ignore broken Referer; redirect to the scene page without err param.
-		http.Redirect(w, r, "/browse/scene/"+chi.URLParam(r, "id"), http.StatusSeeOther)
+// writeState writes a 200 with the post-mutation SceneState as JSON.
+// Caller has already done refreshSceneCache(r, id) so the read sees
+// the just-written state.
+func (h *httpHandler) writeState(w http.ResponseWriter, r *http.Request, id string) {
+	state, err := buildSceneState(r.Context(), h.libraryService, id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "build state failed")
 		return
 	}
-	q := u.Query()
-	if errMsg == "" {
-		q.Del("err")
-	} else {
-		q.Set("err", errMsg)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(state); err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: encode SceneState")
 	}
-	u.RawQuery = q.Encode()
-	http.Redirect(w, r, u.String(), http.StatusSeeOther)
+}
+
+// writeErr writes an error envelope at the given status.
+func writeErr(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(SceneState{Err: msg})
+}
+
+// buildSceneState reads a fresh scene from the cache and projects it to
+// SceneState — applying the same FAVORITE_TAG and ancestor-tag filters
+// that scene.go's GET path applies. Centralized here so the GET render
+// and the POST response can never drift.
+func buildSceneState(ctx context.Context, svc *library.Service, id string) (SceneState, error) {
+	vd, err := svc.GetScene(ctx, id, false)
+	if err != nil || vd == nil || vd.SceneParts == nil {
+		return SceneState{}, err
+	}
+	state := SceneState{}
+	if vd.SceneParts.Rating100 != nil {
+		state.Rating1to5 = *vd.SceneParts.Rating100 / 20
+	}
+	if vd.SceneParts.O_counter != nil {
+		state.OCounter = *vd.SceneParts.O_counter
+	}
+	state.Organized = vd.SceneParts.Organized
+	favTag := config.Application().FavoriteTag
+	for _, t := range vd.SceneParts.Tags {
+		if t == nil {
+			continue
+		}
+		name := t.TagParts.Name
+		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
+			continue
+		}
+		if favTag != "" && name == favTag {
+			state.IsFavorite = true
+			continue
+		}
+		state.Tags = append(state.Tags, EntityRef{ID: t.TagParts.Id, Name: name})
+	}
+	return state, nil
 }
 
 func (h *httpHandler) sceneRatingHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := r.ParseForm(); err != nil {
-		h.redirectBack(w, r, "bad form")
+		writeErr(w, http.StatusBadRequest, "bad form")
 		return
 	}
 	val, parseErr := strconv.Atoi(r.PostForm.Get("value"))
 	if parseErr != nil || val < 0 || val > 5 {
-		h.redirectBack(w, r, "bad rating")
+		writeErr(w, http.StatusBadRequest, "bad rating")
 		return
 	}
-
-	// If the user clicked the same star that's already set, clear the rating.
 	if val > 0 {
 		vd, err := h.libraryService.GetScene(r.Context(), id, true)
 		currentVal := 0
@@ -60,38 +93,32 @@ func (h *httpHandler) sceneRatingHandler(w http.ResponseWriter, r *http.Request)
 			val = 0
 		}
 	}
-
-	// Translate 0..5 into UpdateRating's *float32 in the 1..5 range. 0 -> nil clears.
 	var rating5 *float32
 	if val > 0 {
 		f := float32(val)
 		rating5 = &f
 	}
-
 	if err := h.libraryService.UpdateRating(r.Context(), id, rating5); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: update rating")
-		h.redirectBack(w, r, "rating update failed")
+		writeErr(w, http.StatusInternalServerError, "rating update failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
-	h.redirectBack(w, r, "")
+	h.writeState(w, r, id)
 }
 
 func (h *httpHandler) sceneFavoriteHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-
 	favTag := config.Application().FavoriteTag
 	if favTag == "" {
-		h.redirectBack(w, r, "FAVORITE_TAG not configured")
+		writeErr(w, http.StatusBadRequest, "FAVORITE_TAG not configured")
 		return
 	}
-
 	vd, err := h.libraryService.GetScene(r.Context(), id, true)
 	if err != nil || vd == nil || vd.SceneParts == nil {
-		h.redirectBack(w, r, "scene not found")
+		writeErr(w, http.StatusInternalServerError, "scene not found")
 		return
 	}
-
 	currentlyFav := false
 	for _, t := range vd.SceneParts.Tags {
 		if t == nil {
@@ -102,30 +129,29 @@ func (h *httpHandler) sceneFavoriteHandler(w http.ResponseWriter, r *http.Reques
 			break
 		}
 	}
-
 	if err := h.libraryService.UpdateFavorite(r.Context(), id, !currentlyFav); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: toggle favorite")
-		h.redirectBack(w, r, "favorite toggle failed")
+		writeErr(w, http.StatusInternalServerError, "favorite toggle failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
-	h.redirectBack(w, r, "")
+	h.writeState(w, r, id)
 }
 
 func (h *httpHandler) sceneTagAddHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := r.ParseForm(); err != nil {
-		h.redirectBack(w, r, "bad form")
+		writeErr(w, http.StatusBadRequest, "bad form")
 		return
 	}
 	tagName := strings.TrimSpace(r.PostForm.Get("tag"))
 	if tagName == "" {
-		h.redirectBack(w, r, "empty tag")
+		writeErr(w, http.StatusBadRequest, "empty tag")
 		return
 	}
 	vd, err := h.libraryService.GetScene(r.Context(), id, true)
 	if err != nil || vd == nil || vd.SceneParts == nil {
-		h.redirectBack(w, r, "scene not found")
+		writeErr(w, http.StatusInternalServerError, "scene not found")
 		return
 	}
 	current := make([]string, 0, len(vd.SceneParts.Tags)+1)
@@ -134,7 +160,6 @@ func (h *httpHandler) sceneTagAddHandler(w http.ResponseWriter, r *http.Request)
 		if t == nil {
 			continue
 		}
-		// Skip ancestor-only tags injected by decorateTags.
 		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
 			continue
 		}
@@ -148,27 +173,27 @@ func (h *httpHandler) sceneTagAddHandler(w http.ResponseWriter, r *http.Request)
 	}
 	if err := h.libraryService.UpdateTags(r.Context(), id, current); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Str("tag", tagName).Msg("browse: add tag")
-		h.redirectBack(w, r, "tag add failed")
+		writeErr(w, http.StatusInternalServerError, "tag add failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
-	h.redirectBack(w, r, "")
+	h.writeState(w, r, id)
 }
 
 func (h *httpHandler) sceneTagRemoveHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := r.ParseForm(); err != nil {
-		h.redirectBack(w, r, "bad form")
+		writeErr(w, http.StatusBadRequest, "bad form")
 		return
 	}
 	tagName := strings.TrimSpace(r.PostForm.Get("tag"))
 	if tagName == "" {
-		h.redirectBack(w, r, "empty tag")
+		writeErr(w, http.StatusBadRequest, "empty tag")
 		return
 	}
 	vd, err := h.libraryService.GetScene(r.Context(), id, true)
 	if err != nil || vd == nil || vd.SceneParts == nil {
-		h.redirectBack(w, r, "scene not found")
+		writeErr(w, http.StatusInternalServerError, "scene not found")
 		return
 	}
 	remaining := make([]string, 0, len(vd.SceneParts.Tags))
@@ -186,56 +211,56 @@ func (h *httpHandler) sceneTagRemoveHandler(w http.ResponseWriter, r *http.Reque
 	}
 	if err := h.libraryService.UpdateTags(r.Context(), id, remaining); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Str("tag", tagName).Msg("browse: remove tag")
-		h.redirectBack(w, r, "tag remove failed")
+		writeErr(w, http.StatusInternalServerError, "tag remove failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
-	h.redirectBack(w, r, "")
+	h.writeState(w, r, id)
 }
 
 func (h *httpHandler) sceneOIncrementHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.libraryService.IncrementO(r.Context(), id); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: increment O")
-		h.redirectBack(w, r, "O increment failed")
+		writeErr(w, http.StatusInternalServerError, "O increment failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
-	h.redirectBack(w, r, "")
+	h.writeState(w, r, id)
 }
 
 func (h *httpHandler) sceneODecrementHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.libraryService.DecrementO(r.Context(), id); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: decrement O")
-		h.redirectBack(w, r, "O decrement failed")
+		writeErr(w, http.StatusInternalServerError, "O decrement failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
-	h.redirectBack(w, r, "")
+	h.writeState(w, r, id)
 }
 
 func (h *httpHandler) sceneOrganizedHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	vd, err := h.libraryService.GetScene(r.Context(), id, true)
 	if err != nil || vd == nil || vd.SceneParts == nil {
-		h.redirectBack(w, r, "scene not found")
+		writeErr(w, http.StatusInternalServerError, "scene not found")
 		return
 	}
 	newState := !vd.SceneParts.Organized
 	if err := h.libraryService.SetOrganized(r.Context(), id, newState); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: toggle organized")
-		h.redirectBack(w, r, "organized toggle failed")
+		writeErr(w, http.StatusInternalServerError, "organized toggle failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
-	h.redirectBack(w, r, "")
+	h.writeState(w, r, id)
 }
 
 // refreshSceneCache forceFetches the scene to refresh the in-memory cache.
-// Called after a successful mutation so that the next read (typically the
-// post-redirect detail page) reflects the new state. Errors are logged but
-// not surfaced — the mutation itself already succeeded.
+// Called after a successful mutation so that buildSceneState reads the
+// new state. Errors are logged but not surfaced — the mutation already
+// succeeded.
 func (h *httpHandler) refreshSceneCache(r *http.Request, id string) {
 	if _, err := h.libraryService.GetScene(r.Context(), id, true); err != nil {
 		log.Ctx(r.Context()).Warn().Err(err).Str("id", id).Msg("browse: refresh scene cache after mutation")

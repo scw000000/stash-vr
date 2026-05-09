@@ -37,10 +37,9 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 	baseURL := apiinternal.GetBaseUrl(r)
 
 	data := SceneDetailData{
-		ID:         id,
-		Title:      vd.Title(),
-		BackURL:    backURL(r),
-		ErrMessage: r.URL.Query().Get("err"),
+		ID:      id,
+		Title:   vd.Title(),
+		BackURL: backURL(r),
 	}
 
 	if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Screenshot != nil {

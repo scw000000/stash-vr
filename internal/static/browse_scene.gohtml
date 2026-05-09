@@ -60,7 +60,7 @@ a.chip:hover { background: #3a3a3a; }
 <body>
 <div class="wrap">
 <a class="back" href="{{.BackURL}}">← Back</a>
-{{if .ErrMessage}}<div class="errbanner">{{.ErrMessage}}</div>{{end}}
+<div class="errbanner" id="errbanner" hidden></div>
 {{if .DirectStreamURL}}
 <video id="sceneVideo" class="player" controls playsinline autoplay preload="metadata" src="{{.DirectStreamURL}}"{{if .ThumbnailURL}} poster="{{.ThumbnailURL}}"{{end}}></video>
 {{else if .ThumbnailURL}}

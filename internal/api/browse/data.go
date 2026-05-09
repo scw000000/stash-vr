@@ -77,9 +77,19 @@ type SceneDetailData struct {
 	Organized       bool
 	DirectStreamURL string
 	Projection      apiinternal.Projection
-	ErrMessage      string
 
 	// StarSlice is a 5-element placeholder used purely so the template can
 	// {{range $i, $_ := .StarSlice}} 0..4 to render the five star buttons.
 	StarSlice [5]struct{}
+}
+
+// SceneState is the JSON returned by every mutation POST. The client
+// uses it to update the DOM in place.
+type SceneState struct {
+	Rating1to5 int         `json:"rating1to5"`
+	IsFavorite bool        `json:"isFavorite"`
+	OCounter   int         `json:"oCounter"`
+	Organized  bool        `json:"organized"`
+	Tags       []EntityRef `json:"tags"`
+	Err        string      `json:"err,omitempty"`
 }
