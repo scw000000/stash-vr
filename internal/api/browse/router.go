@@ -26,6 +26,7 @@ func Router(libraryService *library.Service) http.Handler {
 	r.Post("/scene/{id}/favorite", h.sceneFavoriteHandler)
 	r.Post("/scene/{id}/tags/add", h.sceneTagAddHandler)
 	r.Post("/scene/{id}/tags/remove", h.sceneTagRemoveHandler)
+	r.Post("/scene/{id}/projection", h.sceneProjectionHandler)
 	r.Post("/scene/{id}/o/increment", h.sceneOIncrementHandler)
 	r.Post("/scene/{id}/o/decrement", h.sceneODecrementHandler)
 	r.Post("/scene/{id}/organized", h.sceneOrganizedHandler)
