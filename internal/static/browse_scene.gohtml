@@ -83,6 +83,11 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
             geometry="primitive:plane;width:4;height:2.25"
             position="0 1.6 -3"></a-entity>
 
+  <!-- All in-VR control surfaces (playback panel, Format picker, help panel)
+       live under this wrapper so M3c can toggle them as a unit. Hidden by
+       default; trigger summons. -->
+  <a-entity id="vrControlsRoot" visible="false">
+
   <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
   <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
     <a-plane width="1.85" height="0.4" color="#000" material="opacity:0.65"></a-plane>
@@ -176,9 +181,11 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     </a-entity>
   </a-entity>
 
+  </a-entity><!-- /vrControlsRoot -->
+
   <!-- Laser controllers for raycast-clicking the panel buttons. -->
-  <a-entity laser-controls="hand: right" raycaster="objects: .vr-btn; far: 5"></a-entity>
-  <a-entity laser-controls="hand: left"  raycaster="objects: .vr-btn; far: 5"></a-entity>
+  <a-entity id="vrLaserRight" laser-controls="hand: right" raycaster="objects: .vr-btn; far: 5; enabled: false" visible="false"></a-entity>
+  <a-entity id="vrLaserLeft"  laser-controls="hand: left"  raycaster="objects: .vr-btn; far: 5; enabled: false" visible="false"></a-entity>
 
   <!-- M3c controller-mapping component. Hosts the trigger state machine,
        gamepad polling, and B/Y long-press timer. Emits semantic events
@@ -371,6 +378,31 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       const el = document.getElementById(id);
       if (el) el.addEventListener('object3dset', applyAll);
     });
+
+    // Panel + lasers visibility is shared. M3c hides them by default and
+    // toggles via m3c:panel-toggle (or programmatically on Enter VR /
+    // Format-button taps). When hidden: lasers' raycaster also disabled
+    // so stray controller poses don't fire phantom button clicks.
+    function setPanelVisible(visible) {
+      const root = document.getElementById('vrControlsRoot');
+      const lr   = document.getElementById('vrLaserRight');
+      const ll   = document.getElementById('vrLaserLeft');
+      if (root) root.setAttribute('visible', visible ? 'true' : 'false');
+      [lr, ll].forEach(el => {
+        if (!el) return;
+        el.setAttribute('visible', visible ? 'true' : 'false');
+        const rc = el.getAttribute('raycaster') || {};
+        // raycaster is a component; pass an object update.
+        el.setAttribute('raycaster', Object.assign({}, rc, { enabled: !!visible }));
+      });
+    }
+    function isPanelVisible() {
+      const root = document.getElementById('vrControlsRoot');
+      if (!root) return false;
+      const v = root.getAttribute('visible');
+      // A-Frame returns boolean true/false after parse; before parse it's a string.
+      return v === true || v === 'true';
+    }
 
     // In-VR control panel: raycast clicks fire on .vr-btn entities (via
     // A-Frame's laser-controls + cursor pipeline). Each button has a
