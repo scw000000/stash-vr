@@ -296,7 +296,7 @@ a.chip:hover { background: #3a3a3a; }
        tile grid + load-more sentinel are populated by Tasks 4-5. -->
   <a-entity id="vrBrowsePanel" position="0 1.4 -2.5" rotation="-15 0 0" visible="false">
     <a-plane class="vr-grid-bg vr-btn" data-action="grid-bg" width="3.6" height="2.4"
-             color="#000" material="opacity:0.85"></a-plane>
+             color="#000" material="opacity:0.95"></a-plane>
 
     <!-- Top strip (Tasks 6 + 7 fill these). Skeleton placeholders. -->
     <a-entity id="vrBrowseTopStrip" position="0 1.0 0.01">
@@ -934,27 +934,38 @@ a.chip:hover { background: #3a3a3a; }
         });
     }
 
-    // Tile geometry + cylinder layout constants.
-    const TILE_W = 0.6;
-    const TILE_H = 0.34;
-    const TILE_GAP = 0.06;
-    const ARC_RADIUS = 3.0;
-    const ARC_HALF = Math.PI / 3; // ±60°
-    let scrollY = 0; // updated by Task 5
+    // Tile rendering geometry. Computed at relayout time from m4cCols
+    // and the panel's usable area. Constants here are the layout *parameters*;
+    // derived per-tile dimensions live inside relayoutTiles().
+    const PANEL_USABLE_W = 3.4;     // panel width (3.6) minus 0.1m padding each side
+    const TILE_GAP_X = 0.06;        // horizontal gap between tiles
+    const TILE_GAP_Y = 0.06;        // vertical gap between rows
+    const TITLE_GAP = 0.04;         // gap between cover bottom and title strip top
+    const TITLE_STRIP_H = 0.08;     // height of the title text strip
+    const TILE_TOP_Y = 0.85;        // y-coordinate of the first row's center (below top strip)
+    const TILE_Z = 0.02;            // z offset, in front of panel bg plane (z=0)
+    const MAX_ROT_DEG = 10;         // outermost columns rotate inward by this much
+    let scrollY = 0;                // updated by Task 5 (vertical scroll)
 
-    function tileCellPositions() {
-      // Returns [{x, y, z, rotY}] for each tile slot, given cols and current scroll.
+    // Returns [{x, y, z, rotY}] for each tile slot, given the current m4cCols,
+    // computed tile dimensions, and current scroll offset. The "gentle curve"
+    // look comes from rotY only — all tiles are coplanar at TILE_Z, so the
+    // panel background plane never occludes them.
+    function tileCellPositions(tileW, tileH, count) {
       const cols = m4cCols;
-      const arcStep = (2 * ARC_HALF) / Math.max(cols, 1);
+      const halfCols = (cols - 1) / 2;
       const positions = [];
-      const rows = Math.ceil(m4cState.tiles.length / cols);
+      const rows = Math.ceil(count / cols);
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
-          const arcOffset = (col - (cols - 1) / 2) * arcStep;
-          const x = ARC_RADIUS * Math.sin(arcOffset);
-          const z = -ARC_RADIUS * Math.cos(arcOffset) + 1.0; // shift toward user
-          const y = 0.6 - row * (TILE_H + TILE_GAP) - scrollY;
-          positions.push({ x, y, z, rotY: -arcOffset * 180 / Math.PI });
+          const i = row * cols + col;
+          if (i >= count) break;
+          const x = (col - halfCols) * (tileW + TILE_GAP_X);
+          const y = TILE_TOP_Y - row * (tileH + TILE_GAP_Y) - scrollY;
+          const z = TILE_Z;
+          const colNorm = halfCols === 0 ? 0 : (col - halfCols) / halfCols;
+          const rotY = -colNorm * MAX_ROT_DEG;
+          positions.push({ x, y, z, rotY });
         }
       }
       return positions;
@@ -975,6 +986,12 @@ a.chip:hover { background: #3a3a3a; }
       const root = document.getElementById('vrBrowseTiles');
       if (!root) return;
 
+      const cols = m4cCols;
+      const tileW = (PANEL_USABLE_W - (cols - 1) * TILE_GAP_X) / cols;
+      const tileCoverH = tileW * 9 / 16;
+      const tileH = tileCoverH + TITLE_GAP + TITLE_STRIP_H;
+      const badgeR = Math.min(0.04, tileW * 0.07);
+
       // Remove tile entities for tiles no longer in state.tiles.
       const expected = new Set(m4cState.tiles.map(t => t.id));
       Array.from(root.children).forEach(child => {
@@ -983,55 +1000,63 @@ a.chip:hover { background: #3a3a3a; }
         }
       });
 
-      // Add new tile entities for any missing.
-      const positions = tileCellPositions();
+      const positions = tileCellPositions(tileW, tileH, m4cState.tiles.length);
+
       m4cState.tiles.forEach((tile, i) => {
         const pos = positions[i];
         let el = root.querySelector('a-entity[data-scene-id="' + CSS.escape(tile.id) + '"]');
         if (!el) {
+          // Build a new tile entity from scratch.
           el = document.createElement('a-entity');
           el.classList.add('vr-tile');
           el.dataset.sceneId = tile.id;
           el.dataset.projection = JSON.stringify(tile.projection);
           el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
+          el.dataset.previewUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/preview';
 
-          // Cover plane — tap → seamless scene swap (Play). The class
-          // .vr-tile-cover is the click target; .vr-btn allows raycaster.
+          // Cover plane — tap → seamless scene swap (Task 8).
           const plane = document.createElement('a-plane');
           plane.classList.add('vr-btn', 'vr-tile-cover');
-          plane.setAttribute('width', TILE_W);
-          plane.setAttribute('height', TILE_W * 9 / 16);
+          plane.setAttribute('width', tileW);
+          plane.setAttribute('height', tileCoverH);
           plane.setAttribute('material', 'color:#222;opacity:1;shader:flat');
+          plane.setAttribute('position', '0 0 ' + TILE_Z);
           el.appendChild(plane);
 
-          // ⓘ detail badge — small circle in the top-right corner of the
-          // tile. Tap → opens the detail panel (Task 9).
+          // ⓘ detail badge — top-right corner of the cover. Radius shrinks
+          // for narrow tiles at high col counts but caps at 0.04m.
           const detailBadge = document.createElement('a-entity');
           detailBadge.classList.add('vr-btn', 'vr-tile-detail');
-          detailBadge.setAttribute('geometry', 'primitive:circle;radius:0.04');
+          detailBadge.setAttribute('geometry', 'primitive:circle;radius:' + badgeR.toFixed(3));
           detailBadge.setAttribute('material', 'color:#000;opacity:0.85;shader:flat');
-          const badgeX = (TILE_W / 2) - 0.05;
-          const badgeY = ((TILE_W * 9 / 16) / 2) - 0.05;
-          detailBadge.setAttribute('position', badgeX.toFixed(3) + ' ' + badgeY.toFixed(3) + ' 0.01');
+          const badgeX = (tileW / 2) - badgeR - 0.005;
+          const badgeY = (tileCoverH / 2) - badgeR - 0.005;
+          detailBadge.setAttribute('position', badgeX.toFixed(3) + ' ' + badgeY.toFixed(3) + ' ' + (TILE_Z + 0.005).toFixed(3));
           const badgeText = document.createElement('a-text');
           badgeText.setAttribute('value', 'ⓘ');
           badgeText.setAttribute('align', 'center');
           badgeText.setAttribute('color', '#fff');
-          badgeText.setAttribute('width', '1.5');
+          badgeText.setAttribute('width', (badgeR * 8).toFixed(3));
           badgeText.setAttribute('position', '0 0 0.005');
           detailBadge.appendChild(badgeText);
           el.appendChild(detailBadge);
 
+          // Title strip — text below the cover. width = tileW so the text
+          // geometry matches the tile width (this was the 2.5 bug from M4c
+          // Task 4: width was the rendered text-geometry width in meters,
+          // not the wrap width).
           const titleEl = document.createElement('a-text');
           titleEl.setAttribute('value', tile.title);
           titleEl.setAttribute('align', 'center');
           titleEl.setAttribute('color', '#fff');
-          titleEl.setAttribute('width', '2.5');
-          titleEl.setAttribute('wrap-count', '22');
-          titleEl.setAttribute('position', '0 -' + ((TILE_W * 9 / 16) / 2 + 0.06) + ' 0.005');
+          titleEl.setAttribute('width', tileW);
+          titleEl.setAttribute('wrap-count', '20');
+          titleEl.setAttribute('height', TITLE_STRIP_H);
+          const titleY = -(tileCoverH / 2 + TITLE_GAP + TITLE_STRIP_H / 2);
+          titleEl.setAttribute('position', '0 ' + titleY.toFixed(3) + ' ' + (TILE_Z + 0.005).toFixed(3));
           el.appendChild(titleEl);
 
-          // Texture loads async; bind once available.
+          // Bind cover texture once available.
           const tex = getTileTexture(tile.thumbnailURL);
           if (tex) {
             plane.addEventListener('loaded', function() {
@@ -1043,6 +1068,27 @@ a.chip:hover { background: #3a3a3a; }
           }
 
           root.appendChild(el);
+        } else {
+          // Existing tile: cols may have changed → resize cover, badge, title.
+          const plane = el.querySelector('a-plane.vr-tile-cover');
+          if (plane) {
+            plane.setAttribute('width', tileW);
+            plane.setAttribute('height', tileCoverH);
+          }
+          const badge = el.querySelector('.vr-tile-detail');
+          if (badge) {
+            badge.setAttribute('geometry', 'primitive:circle;radius:' + badgeR.toFixed(3));
+            const bx = (tileW / 2) - badgeR - 0.005;
+            const by = (tileCoverH / 2) - badgeR - 0.005;
+            badge.setAttribute('position', bx.toFixed(3) + ' ' + by.toFixed(3) + ' ' + (TILE_Z + 0.005).toFixed(3));
+          }
+          const title = el.querySelector('a-text:not(.vr-tile-detail a-text)');
+          if (title) {
+            title.setAttribute('width', tileW);
+            title.setAttribute('height', TITLE_STRIP_H);
+            const ty = -(tileCoverH / 2 + TITLE_GAP + TITLE_STRIP_H / 2);
+            title.setAttribute('position', '0 ' + ty.toFixed(3) + ' ' + (TILE_Z + 0.005).toFixed(3));
+          }
         }
         el.setAttribute('position', { x: pos.x, y: pos.y, z: pos.z });
         el.setAttribute('rotation', { x: 0, y: pos.rotY, z: 0 });
