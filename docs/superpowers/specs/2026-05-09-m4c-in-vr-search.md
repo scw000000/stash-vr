@@ -139,19 +139,62 @@ When `scrollY` reaches within 1 row of `totalContentHeight`, fire `loadMore()` w
 
 The cols cycle button reads current value, increments mod 4 in `[3, 4, 5, 6]`, writes back. Triggers a layout-only reflow (no re-fetch, just re-position existing tile entities).
 
-### 4.6 Filters panel (standalone, beside the grid)
+### 4.6 Filters panel (standalone, tabbed, with searchable lists)
 
 The filters panel is a **standalone sibling** of the browse panel — not a child or overlay. Both panels live under `vrControlsRoot` and are visible together: the browse grid stays visible while the user adjusts filters.
 
-`<a-entity id="vrFiltersPanel" position="2.6 1.4 -2.5" rotation="0 -15 0" visible="false">` sits to the **right** of the browse panel (which is centered at `0 1.4 -2.5` and is 3.6 m wide). The slight `-15°` Y-rotation angles it toward the user. Width 1.8 m, height ~1.6 m.
+`<a-entity id="vrFiltersPanel" position="2.6 1.4 -2.5" rotation="0 -15 0" visible="false">` sits to the **right** of the browse panel (which is centered at `0 1.4 -2.5` and is 3.6 m wide). The slight `-15°` Y-rotation angles it toward the user. Width 2.0 m, height ~1.8 m.
 
 When the user clicks "Filters ▾" on the browse panel's top strip, this standalone panel toggles its visibility. When the browse panel closes, the filters panel is hidden too (they share lifecycle).
 
-The third-level **filter options panel** (the picker for Performer/Studio/Tag/etc. lists) is also standalone — it appears further to the right of the filters panel (`4.4 1.4 -2.5`, rotation `0 -25 0`, width 1.8 m). When a picker row is clicked, the options panel opens; clicking an option closes it. Three panels can be visible simultaneously: grid (left), filters (middle-right), options (far right).
+**No separate options sub-panel.** Performer/Studio/Tag lists can be hundreds of entries each; the previous "click row → open options sub-panel" pattern doesn't scale. Instead, the filters panel itself contains tabs, searchable lists, and value pickers.
 
-The arc of three side-by-side panels covers a wider horizontal FOV than a single panel; the user turns their head slightly to scan from grid to filters to options. Acceptable in VR.
+#### Layout
 
-Contents of the filters panel: 6 picker rows + a Close ✕ button. ("Clear all" stays on the browse panel's top strip — it's a global reset, not a filter.)
+```
+┌────────────────────────────────────────┐
+│  Filters                          ✕    │
+├────────────────────────────────────────┤   ← Active filter chips area (visible
+│  [ Performer: Alice ✕ ]                │     only when ≥1 filter is active).
+│  [ Tag: POV ✕ ]                        │     Each chip removes its own filter.
+├────────────────────────────────────────┤
+│ [ Performer ][ Studio ][ Tag ][ Other ]│   ← 4 tabs. Active tab highlighted.
+├────────────────────────────────────────┤
+│  [ Search Performer… ]                 │   ← In-panel search field
+│                                        │     (only on Performer/Studio/Tag tabs).
+├────────────────────────────────────────┤
+│   Alice                                │
+│   Bob                                  │
+│   Charlie                              │   ← Scrollable list. Thumbstick Y
+│   Dan                                  │     scrolls when the panel is the
+│   ...                                  │     focused scroll target.
+│   Zoe                                  │
+└────────────────────────────────────────┘
+```
+
+When the **Other** tab is selected, the search field and list are replaced with three value-picker rows:
+
+```
+├────────────────────────────────────────┤
+│  Favorites:  [ Any ][ Only ][ Not ]    │
+│  Stars:      [ Any ][ 1+ ][ 2+ ][ 3+ ] │
+│              [ 4+ ][ 5 only ]          │
+│  O-Counter:  [ Any ][ 1+ ][ 5+ ][ 10+ ]│
+└────────────────────────────────────────┘
+```
+
+#### Behaviour
+
+- **Tabs.** Tap a tab → switches the panel content. The search field and list re-render to that tab's data. Default tab on first open: Performer.
+- **Search field.** Same DOM-overlay `<input>` mechanism as the grid search (§4.3). When the user taps the picker's search field, the overlay's input retargets: typed characters now filter the current list (live, debounced 100 ms — faster than grid search since it's local-only filtering).
+- **List rendering.** For Performer/Studio/Tag, the panel fetches all options once on first tab activation (cached via `localStorage` for the session). Filtering is client-side: an array filter on the `name` property, `includes` (case-insensitive). Visible window: ~8 rows; thumbstick Y scrolls within the list.
+- **List item selection.** Tap a name → applies as the active filter for that kind. The chip area shows the new chip; the list does NOT close (user can change selection by tapping a different name). To clear, either tap the chip's ✕ or tap "Clear all" on the browse top strip.
+- **Other tab values.** Each value-picker row is a flex of buttons. Tap one → applies; the chip area updates. The active value's button is visually highlighted.
+- **Active filter chips.** One chip per active filter, max 6 (one per kind). Each chip text reads "Performer: Alice" / "Tag: POV" / "Favorites: Only" / "Stars: 3+" / "O-Counter: 5+" / "Studio: StudioX." Tap ✕ → clears that filter, refreshes the grid.
+- **Single-select v1.** Each kind allows one active value. Multi-select for Performer/Tag is M4c-followup.
+- **Scroll target.** The grid is the default scroll target. When the user last interacted with the filters panel (tap any element inside it), the list within filters becomes the scroll target until they tap on the grid again. State variable `lastScrollFocus = 'grid' | 'filters'` tracked in JS. Thumbstick Y reads this on each tick.
+- **Close ✕** dismisses the filters panel without clearing filters. Active filters persist; the panel can be reopened to keep editing.
+- **Closing the browse panel** also closes the filters panel.
 
 ```
 ┌──────────────────────────────────┐
@@ -352,14 +395,22 @@ On Quest 3 / Meta Browser, assuming M4a and M4b shipped:
 
 ### E. Filter pickers
 - [ ] Tap Filters ▾ → standalone Filters panel appears to the right of the grid (slightly angled toward user). Grid stays visible alongside.
-- [ ] Tap Performer ▸ → standalone Options panel appears further to the right of Filters. Three panels visible at once: grid, filters, options.
-- [ ] Pick a performer → options panel closes; filters panel updates with name; filters stays open; grid filters to matching scenes.
-- [ ] Repeat for Studio, Tag.
-- [ ] Tap Favorites → toggle Any / Favorites only / Not favorites.
-- [ ] Tap Stars ▸ → option list. Pick ≥3 stars → grid filters.
-- [ ] Tap O-Counter ▸ → option list. Pick ≥1 → grid filters.
-- [ ] Tap "Clear all" on browse top strip → all filter values reset to None / Any; grid restores.
-- [ ] Close browse panel ✕ → all three panels (browse, filters, options) close together.
+- [ ] Filters panel shows 4 tabs (Performer / Studio / Tag / Other) with Performer active by default.
+- [ ] List of performer names visible below the tab row, with a search field above it.
+- [ ] Tap search field → DOM-overlay input focuses; Quest VR keyboard pops.
+- [ ] Type "Ali" → list narrows to performers whose name contains "Ali".
+- [ ] Tap "Alice" → active filter chip "Performer: Alice ✕" appears at top of panel; grid filters to Alice's scenes.
+- [ ] Tap chip ✕ → filter clears; chip disappears; grid restores.
+- [ ] Tap Studio tab → list of studios; same flow.
+- [ ] Tap Tag tab → list of tags; same flow.
+- [ ] Tap Other tab → list disappears, replaced by three value-picker rows: Favorites, Stars, O-Counter.
+- [ ] Tap "Only" under Favorites → chip "Favorites: Only ✕" appears; grid filters; the "Only" button highlights as active.
+- [ ] Tap "≥3 ★" under Stars → chip appears; grid filters.
+- [ ] Tap "≥1" under O-Counter → chip appears; grid filters.
+- [ ] Push thumbstick Y while filters panel is the focused scroll target → list inside filters scrolls (not the grid).
+- [ ] Push thumbstick Y after tapping a grid tile → grid scrolls (not filters).
+- [ ] Tap "Clear all" on browse top strip → all filter chips clear; all values reset; grid restores.
+- [ ] Close browse panel ✕ → both panels (browse + filters) close together.
 
 ### F. Scene swap (different projection)
 - [ ] Currently watching DOME 180° SBS. Open browse, click a fisheye tile → fade out, video swaps, projection swaps, fade in. Fisheye plays.
