@@ -11,6 +11,15 @@ type Entity struct {
 	SceneCount int
 }
 
+// EntityRef is a clickable chip target on the scene detail page —
+// performer, studio, or tag. ID drives the link href; Name is the
+// display text. JSON tags keep the wire format lowercase so the
+// browser-side AJAX layer reads {id, name}.
+type EntityRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // SidebarData holds the three lists that populate the sidebar.
 type SidebarData struct {
 	Performers []Entity
@@ -56,13 +65,13 @@ type SceneDetailData struct {
 	Title        string
 	ThumbnailURL string
 	BackURL      string // from Referer, fallback "/browse"
-	Performers   string
-	Studio       string
+	Performers   []EntityRef
+	Studio       *EntityRef // nil if the scene has no studio
 	Date         string // YYYY-MM-DD or empty
 	Duration     string
 	Rating1to5   int    // 0 = unrated; 1..5 set
 	IsFavorite   bool
-	Tags         []string // tag names currently on the scene (chips), excluding favorite tag and ancestor-injected tags
+	Tags         []EntityRef // chip-renderable tags, excluding favorite tag and ancestor-injected tags
 	AllTagNames  []string // for the <datalist> autocomplete
 	OCounter        int
 	Organized       bool

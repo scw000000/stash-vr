@@ -54,17 +54,15 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 		data.DirectStreamURL = "/browse/scene/" + url.PathEscape(id) + "/stream"
 	}
 
-	performerNames := make([]string, 0, len(vd.SceneParts.Performers))
 	for _, p := range vd.SceneParts.Performers {
 		if p == nil {
 			continue
 		}
-		performerNames = append(performerNames, p.Name)
+		data.Performers = append(data.Performers, EntityRef{ID: p.Id, Name: p.Name})
 	}
-	data.Performers = strings.Join(performerNames, ", ")
 
 	if vd.SceneParts.Studio != nil {
-		data.Studio = vd.SceneParts.Studio.Name
+		data.Studio = &EntityRef{ID: vd.SceneParts.Studio.Id, Name: vd.SceneParts.Studio.Name}
 	}
 	if vd.SceneParts.Date != nil {
 		data.Date = *vd.SceneParts.Date
@@ -96,7 +94,7 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 			data.IsFavorite = true
 			continue
 		}
-		data.Tags = append(data.Tags, name)
+		data.Tags = append(data.Tags, EntityRef{ID: t.TagParts.Id, Name: name})
 	}
 	basename := ""
 	if len(vd.SceneParts.Files) > 0 && vd.SceneParts.Files[0] != nil {

@@ -13,7 +13,14 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #
 .errbanner { background: #5a1a1a; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; }
 .thumb { width: 100%; max-height: 480px; object-fit: contain; background: #000; border-radius: 6px; margin-bottom: 16px; }
 h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
-.meta { color: #aaa; margin-bottom: 24px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 24px; }
+.meta .meta-text { color: #aaa; }
+.chip-perf { background: #2a2a2a; }
+.chip-studio { background: #2a2a3a; }
+a.chip { color: #ddd; text-decoration: none; }
+a.chip:hover { background: #3a3a3a; }
+.chip a { color: inherit; text-decoration: none; }
+.chip a:hover { color: #fff; }
 .section { margin-bottom: 20px; }
 .section h2 { font-size: 0.85rem; text-transform: uppercase; color: #888; margin: 0 0 8px 0; letter-spacing: 0.05em; }
 
@@ -887,7 +894,12 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 </script>
 {{end}}
 <h1>{{.Title}}</h1>
-<p class="meta">{{if .Performers}}{{.Performers}}{{end}}{{if and .Performers .Studio}} · {{end}}{{.Studio}}{{if .Date}} · {{.Date}}{{end}}{{if .Duration}} · {{.Duration}}{{end}}</p>
+<div class="meta">
+{{range .Performers}}<a class="chip chip-perf" href="/browse/perf/{{.ID}}">{{.Name}}</a>{{end}}
+{{with .Studio}}<a class="chip chip-studio" href="/browse/studio/{{.ID}}">{{.Name}}</a>{{end}}
+{{if .Date}}<span class="meta-text">{{.Date}}</span>{{end}}
+{{if .Duration}}<span class="meta-text">{{.Duration}}</span>{{end}}
+</div>
 
 <div class="section">
 <h2>Rating</h2>
@@ -910,7 +922,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 <h2>Tags</h2>
 <div class="tags">
 {{range .Tags}}
-<span class="chip">{{.}}<form method="post" action="/browse/scene/{{$.ID}}/tags/remove" style="display:inline"><button name="tag" value="{{.}}">✕</button></form></span>
+<span class="chip"><a href="/browse/tag/{{.ID}}">{{.Name}}</a><form method="post" action="/browse/scene/{{$.ID}}/tags/remove" style="display:inline"><button name="tag" value="{{.Name}}">✕</button></form></span>
 {{end}}
 <form method="post" action="/browse/scene/{{.ID}}/tags/add" class="addtag">
 <input list="all-tags" name="tag" placeholder="Add tag…" autocomplete="off">
