@@ -859,7 +859,7 @@ a.chip:hover { background: #3a3a3a; }
       el.setAttribute('value', formatTime(video.currentTime || 0) + ' / ' + formatTime(video.duration || 0));
     }
 
-    const captionsData = JSON.parse({{ marshal .Captions }}) || [];
+    const captionsData = {{ marshal .Captions }} || [];
 
     // Picker layout — buttons in a wrapping flex of up to 4 per row.
     function renderSubtitlePicker() {
@@ -1030,7 +1030,7 @@ a.chip:hover { background: #3a3a3a; }
 
     // null when the scene has no markers (server emits JSON null). Coerce to
     // [] so .length / forEach are always safe.
-    const sceneMarkers = JSON.parse({{ marshal .SceneMarkers }}) || [];
+    const sceneMarkers = {{ marshal .SceneMarkers }} || [];
     const sceneDurationSec = {{ printf "%f" .DurationSec }};
 
     function tForMarkerX(secs) {
