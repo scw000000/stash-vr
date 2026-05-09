@@ -43,6 +43,19 @@
         el.addEventListener('triggerdown', e => this._onTriggerDown(hand, e));
         el.addEventListener('triggerup',   e => this._onTriggerUp(hand, e));
       });
+
+      // A (right) and X (left) mirror trigger clicks — single → panel toggle,
+      // double → play/pause. No raycast branch, no drag (only the trigger
+      // captures pose during hold).
+      this._onAxClickUp = this._onAxClickUp.bind(this);
+      const rightLaser = this._lasers.right;
+      const leftLaser  = this._lasers.left;
+      if (rightLaser) {
+        rightLaser.addEventListener('abuttonup', this._onAxClickUp);
+      }
+      if (leftLaser) {
+        leftLaser.addEventListener('xbuttonup', this._onAxClickUp);
+      }
     },
 
     _newTriggerState: function() {
@@ -116,6 +129,26 @@
         this._pendingClick = pending;
       }
       st.phase = 'idle';
+    },
+
+    _onAxClickUp: function() {
+      // Same double-click window as the trigger. No raycast / no drag.
+      const now = performance.now();
+      if (this._pendingClick && (now - this._pendingClick.time) <= this.DOUBLE_CLICK_MS) {
+        clearTimeout(this._pendingClick.timer);
+        this._pendingClick = null;
+        this.sceneEl.emit('m3c:play-pause');
+        return;
+      }
+      if (this._pendingClick) clearTimeout(this._pendingClick.timer);
+      const pending = { time: now, timer: 0 };
+      pending.timer = setTimeout(() => {
+        if (this._pendingClick === pending) {
+          this._pendingClick = null;
+          this.sceneEl.emit('m3c:panel-toggle');
+        }
+      }, this.DOUBLE_CLICK_MS);
+      this._pendingClick = pending;
     },
 
     tick: function(time, delta) {
