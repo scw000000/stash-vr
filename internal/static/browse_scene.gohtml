@@ -371,14 +371,17 @@ a.chip:hover { background: #3a3a3a; }
     <a-text id="vrBrowseLoadMore" value="" align="center" color="#888" width="3"
             position="0 -1.05 0.01" visible="false"></a-text>
 
-    <!-- M4c debug overlay: shows what each laser's first intersection is
-         hitting + thumbstick / scroll state. Lives just above the top
-         strip, in front of the bg surface (panel-local z=0.06 ≈ where
-         the buttons sit) so the user can read it from inside the panel.
-         Position z must be in [0, ~0.5]; z>HUB_Z (3.02) puts it BEHIND
-         the user since the user sits between panel back and hub. -->
-    <a-text id="vrM4cDebug" value="" align="center" color="#0ff" width="3.5"
-            position="0 1.20 0.06"></a-text>
+  </a-entity>
+
+  <!-- M4c debug overlay — at scene root so it's always visible, not
+       hidden when the browse panel is closed. World position 1.5m in
+       front of user at slightly-below eye level so it doesn't block
+       the main view but is easy to glance at. Updated every rAF from
+       tickBrowseScroll. Cyan + low opacity black panel for legibility. -->
+  <a-entity id="vrM4cDebug" position="0 1.0 -1.5">
+    <a-plane width="1.6" height="0.18" color="#000" material="opacity:0.4"></a-plane>
+    <a-text id="vrM4cDebugText" value="" align="center" color="#0ff" width="2.2"
+            position="0 0 0.005" wrap-count="40"></a-text>
   </a-entity>
 
   </a-entity><!-- /vrControlsRoot -->
@@ -978,8 +981,13 @@ a.chip:hover { background: #3a3a3a; }
       const totalArcDeg = text.length * charDeg;
       const centerDeg   = thetaStart + thetaLength / 2;
       const startDeg    = centerDeg - totalArcDeg / 2;
+      // Glyph size: with wrap-count=4 and width = 6× charArcLen, the MSDF
+      // font scale ≈ 1.5× the slot width, so the rendered glyph fills its
+      // arc slot instead of looking tiny inside a wide padded wrap box.
+      // Long titles whose charDeg shrinks still get readable chars.
       const charArcLen  = R * (charDeg * Math.PI / 180);
-      const aTextWidth  = (charArcLen * 10).toFixed(3);
+      const aTextWidth  = (charArcLen * 6).toFixed(3);
+      const aTextWrap   = '4';
 
       for (let i = 0; i < text.length; i++) {
         // char[0] at the LARGEST theta (left side from user view), char[N-1]
@@ -999,7 +1007,7 @@ a.chip:hover { background: #3a3a3a; }
         t.setAttribute('align', 'center');
         t.setAttribute('color', color);
         t.setAttribute('width', aTextWidth);
-        t.setAttribute('wrap-count', '10');
+        t.setAttribute('wrap-count', aTextWrap);
         t.setAttribute('position', x.toFixed(3) + ' ' + y.toFixed(3) + ' ' + z.toFixed(3));
         t.setAttribute('rotation', '0 ' + yawDeg.toFixed(2) + ' 0');
         parentEl.appendChild(t);
@@ -1821,7 +1829,7 @@ a.chip:hover { background: #3a3a3a; }
 
     let m4cLastScrollTickMs = 0;
     function _setDbg(line1, line2) {
-      const dbg = document.getElementById('vrM4cDebug');
+      const dbg = document.getElementById('vrM4cDebugText');
       if (!dbg) return;
       dbg.setAttribute('value', (line1 || '') + (line2 ? '\n' + line2 : ''));
     }
