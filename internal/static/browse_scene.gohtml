@@ -100,7 +100,7 @@ a.chip:hover { background: #3a3a3a; }
 
   <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
   <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
-    <a-plane width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
+    <a-plane class="vr-panel-bg" width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
 
     <!-- Row 1 (top): title left, time right. -->
     <a-text id="vrTitle" value="{{.Title}}" align="left" color="#fff" width="3.0"
@@ -193,7 +193,7 @@ a.chip:hover { background: #3a3a3a; }
     the JS tap handler reads to update state.
   -->
   <a-entity id="vrFormatPicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-    <a-plane width="2.4" height="1.2" color="#000" material="opacity:0.7"></a-plane>
+    <a-plane class="vr-panel-bg" width="2.4" height="1.2" color="#000" material="opacity:0.7"></a-plane>
     <a-text value="Format" align="left" color="#fff" width="3.5" position="-1.1 0.5 0.01"></a-text>
 
     <!-- Row 1: Type -->
@@ -250,7 +250,7 @@ a.chip:hover { background: #3a3a3a; }
 
   <!-- M3c help cheatsheet. Hidden by default; toggled by the "?" button. -->
   <a-entity id="vrHelpPanel" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-    <a-plane width="2.4" height="1.5" color="#000" material="opacity:0.75"></a-plane>
+    <a-plane class="vr-panel-bg" width="2.4" height="1.5" color="#000" material="opacity:0.75"></a-plane>
     <a-text value="Controls" align="left" color="#fff" width="3.5" position="-1.1 0.65 0.01"></a-text>
 
     <a-text value="Trigger (no hit) · single"  align="left" color="#aaa" width="3" position="-1.1  0.42 0.01"></a-text>
@@ -280,7 +280,7 @@ a.chip:hover { background: #3a3a3a; }
        picker-render time populates the buttons row and resizes the
        background plane to fit. -->
   <a-entity id="vrSubtitlePicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-    <a-plane id="vrSubtitlePickerBg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
+    <a-plane id="vrSubtitlePickerBg" class="vr-panel-bg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
     <a-text id="vrSubtitlePickerTitle" value="Subtitles" align="left" color="#fff" width="3" position="-0.85 0.13 0.01"></a-text>
     <a-entity id="vrSubtitlePickerButtons" position="0 0 0.01"></a-entity>
   </a-entity>
@@ -294,8 +294,8 @@ a.chip:hover { background: #3a3a3a; }
        neutralize raycast hits via enabled: false; the controller model
        remains visible, matching SKYBOX. setPanelVisible toggles these
        two raycaster props (not the entity's visible). -->
-  <a-entity id="vrLaserRight" laser-controls="hand: right" raycaster="objects: .vr-btn; far: 5; enabled: false; showLine: false"></a-entity>
-  <a-entity id="vrLaserLeft"  laser-controls="hand: left"  raycaster="objects: .vr-btn; far: 5; enabled: false; showLine: false"></a-entity>
+  <a-entity id="vrLaserRight" laser-controls="hand: right" raycaster="objects: .vr-btn, .vr-panel-bg; far: 5; enabled: false; showLine: false"></a-entity>
+  <a-entity id="vrLaserLeft"  laser-controls="hand: left"  raycaster="objects: .vr-btn, .vr-panel-bg; far: 5; enabled: false; showLine: false"></a-entity>
 
   <!-- M3c controller-mapping component. Hosts the trigger state machine,
        gamepad polling, and B/Y long-press timer. Emits semantic events
@@ -865,9 +865,41 @@ a.chip:hover { background: #3a3a3a; }
       const panel = document.getElementById(panelId);
       if (!panel) return;
       panel.setAttribute('visible', visible);
+      // Three.js Raycaster ignores visibility entirely, so the laser still
+      // hits hidden sub-panel descendants and intercepts clicks. Rebuild
+      // the laser raycaster's objects selector so it includes only the
+      // currently-visible sub-panels' targets.
       if (panel.object3D) {
         panel.object3D.traverse(function(obj) { obj.visible = visible; });
       }
+      updateRaycasterTargets();
+    }
+
+    // Keep the laser raycaster's `objects` selector in sync with current
+    // sub-panel visibility. Three.js Raycaster doesn't honor object.visible
+    // (own or ancestor), so without this, hidden sub-panel buttons still
+    // intercept clicks at their world position. Always include the main
+    // panel's targets + all panel backgrounds (so trigger lands on the
+    // dark area between buttons count as a panel hit and don't fire
+    // m3c:panel-toggle). Only include a sub-panel's targets while it is
+    // actually visible.
+    function updateRaycasterTargets() {
+      const parts = ['#vrControls .vr-btn', '#vrControls .vr-panel-bg'];
+      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const v = el.getAttribute('visible');
+        const isVisible = (v === true || v === 'true');
+        if (isVisible) {
+          parts.push('#' + id + ' .vr-btn');
+          parts.push('#' + id + ' .vr-panel-bg');
+        }
+      });
+      const selector = parts.join(', ');
+      ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
+        const laser = document.getElementById(id);
+        if (laser) laser.setAttribute('raycaster', 'objects', selector);
+      });
     }
 
     function closeAllSubpanels(except) {
@@ -1029,8 +1061,8 @@ a.chip:hover { background: #3a3a3a; }
       el.addEventListener('mouseup', function() { volActive = false; });
     });
 
-    // Drag sampling itself happens in tickSliders() inside rafLoop.
-    // The cleared listener stays as a backstop: if the laser leaves all
+    // Drag sampling itself happens in tickSliders() inside the m4b-tickers
+    // component. The cleared listener stays as a backstop: if the laser leaves all
     // targets mid-drag, the matching mouseup fires on whatever the laser
     // landed on (often nothing), so we end the drag here instead.
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
@@ -1165,6 +1197,14 @@ a.chip:hover { background: #3a3a3a; }
       });
     }
     scene.addEventListener('loaded', renderSubtitlePicker);
+    // Refresh raycaster targets after the scene loads. A-Frame fires
+    // 'loaded' listeners in registration order, so by the time this runs
+    // renderSubtitlePicker has already created the dynamic subtitle
+    // language buttons. Without this, the initial selector is whatever
+    // the static markup specifies and any sub-panel that flips visible
+    // before a subsequent setSubpanelVisible call would have stale
+    // targets.
+    scene.addEventListener('loaded', updateRaycasterTargets);
 
     // Parses VTT and SRT. Both share the cue-timing line shape
     //   HH:MM:SS.mmm --> HH:MM:SS.mmm   (VTT uses '.', SRT uses ',')
@@ -1260,18 +1300,15 @@ a.chip:hover { background: #3a3a3a; }
       }
     }
 
-    // Single rAF loop drives all per-frame work (Tasks 4 + 5 hook in here).
-    // Each tick wrapped in try/catch so one ticker's error doesn't kill the
-    // loop and freeze every per-frame UI update.
-    function rafLoop() {
-      const now = performance.now();
-      try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
-      try { tickSliders(); }       catch (e) { console.warn('stash-vr: tickSliders', e); }
-      try { tickScrubBar(); }      catch (e) { console.warn('stash-vr: tickScrubBar', e); }
-      try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
-      requestAnimationFrame(rafLoop);
-    }
-    requestAnimationFrame(rafLoop);
+    // Per-frame work runs from an A-Frame component's tick callback rather
+    // than window.requestAnimationFrame because the WebXR spec freezes
+    // window.rAF callbacks while an XRSession is presenting. A-Frame's
+    // tick system bridges window.rAF (out of XR) and XRSession.rAF (in XR)
+    // so it fires reliably in both modes — which is exactly when the user
+    // is actually looking at the HUD. Each tick is wrapped in try/catch
+    // so one ticker's error doesn't kill the loop and freeze every
+    // per-frame UI update. The component is registered + attached at the
+    // bottom of the IIFE after all four tick* functions are declared.
 
     // ============================================================
     // Scrub bar: per-frame fill/thumb advance, drag-to-seek, scene
@@ -1407,8 +1444,8 @@ a.chip:hover { background: #3a3a3a; }
     }
     scene.addEventListener('loaded', buildSceneMarkerDots);
 
-    // Drag sampling happens in tickSliders() inside rafLoop. Keep the
-    // cleared listener so a laser that leaves all targets mid-drag ends
+    // Drag sampling happens in tickScrubBar() inside the m4b-tickers
+    // component. Keep the cleared listener so a laser that leaves all targets mid-drag ends
     // the scrub cleanly (mouseup may fire on nothing).
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
       const laser = document.getElementById(id);
@@ -1656,6 +1693,25 @@ a.chip:hover { background: #3a3a3a; }
       });
     });
     scene.addEventListener('exit-vr', show2D);
+
+    // Register the per-frame ticker component now that all four tick*
+    // function declarations above are in scope (they're hoisted, but
+    // attaching the component after the rest of setup runs keeps the
+    // boot order obvious). Attaching to <a-scene> means tick() fires on
+    // every render frame — including XR frames, unlike window.rAF which
+    // is paused while an XRSession is presenting.
+    if (typeof AFRAME !== 'undefined') {
+      AFRAME.registerComponent('m4b-tickers', {
+        tick: function() {
+          const now = performance.now();
+          try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
+          try { tickSliders(); }       catch (e) { console.warn('stash-vr: tickSliders', e); }
+          try { tickScrubBar(); }      catch (e) { console.warn('stash-vr: tickScrubBar', e); }
+          try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
+        }
+      });
+      scene.setAttribute('m4b-tickers', '');
+    }
   })();
 </script>
 {{end}}
