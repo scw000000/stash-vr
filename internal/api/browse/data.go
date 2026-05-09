@@ -96,6 +96,30 @@ type SceneDetailData struct {
 	StarSlice [5]struct{}
 }
 
+// GridTile is one tile in the JSON grid response used by the in-VR
+// browser. Mirrors Card but exposes the projection metadata so the
+// client can pick an appropriate render path or icon.
+type GridTile struct {
+	ID           string                 `json:"id"`
+	Title        string                 `json:"title"`
+	ThumbnailURL string                 `json:"thumbnailURL"`
+	Projection   apiinternal.Projection `json:"projection"`
+}
+
+// GridResponse is the JSON envelope returned by GET /browse/grid.
+type GridResponse struct {
+	Tiles      []GridTile `json:"tiles"`
+	NextCursor string     `json:"nextCursor,omitempty"`
+	HasMore    bool       `json:"hasMore"`
+}
+
+// FilterOption is one entry in the JSON returned by
+// GET /browse/filter-options/{kind}.
+type FilterOption struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // SceneState is the JSON returned by every mutation POST. The client
 // uses it to update the DOM in place.
 type SceneState struct {
