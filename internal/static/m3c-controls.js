@@ -26,7 +26,7 @@
       // Drag thresholds (spec §4.1).
       this.DRAG_DIST_M = 0.05; // 5 cm
       this.DRAG_HOLD_MS = 250;
-      this.DOUBLE_CLICK_MS = 300;
+      this.DOUBLE_CLICK_MS = 400;
       this._pendingClick = null;
 
       this._onTriggerDown = this._onTriggerDown.bind(this);
@@ -150,8 +150,15 @@
     },
 
     remove: function() {
+      // Cancel any pending single-click timer so it doesn't fire after
+      // the component is gone (would call this.sceneEl.emit on a
+      // possibly-torn-down scene).
+      if (this._pendingClick) {
+        clearTimeout(this._pendingClick.timer);
+        this._pendingClick = null;
+      }
       // Listeners attached to laser-controls entities are torn down by
-      // their entity removal; nothing global to clean.
+      // their entity removal.
     }
   });
 })();
