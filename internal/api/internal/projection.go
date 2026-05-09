@@ -153,3 +153,31 @@ func detectFromFilename(basename string) Projection {
 
 	return p
 }
+
+// TagsForProjection returns the VR_* projection tag names that represent
+// the given Projection. Empty Projection (no VR / Cinema) returns nil.
+// Used by the projection-override handler to decide which tags to add
+// to a scene after the user picks a format in the in-VR menu.
+func TagsForProjection(p Projection) []string {
+	if p.Geometry == "" {
+		return nil
+	}
+	var tags []string
+	switch {
+	case p.Geometry == "fisheye" && p.FOV == 200:
+		tags = append(tags, TagVR_MKX200)
+	case p.Geometry == "fisheye":
+		tags = append(tags, TagVR_FISHEYE)
+	case p.Geometry == "equirectangular" && p.FOV == 360:
+		tags = append(tags, TagVR_SPHERE)
+	case p.Geometry == "equirectangular":
+		tags = append(tags, TagVR_DOME)
+	}
+	switch p.Stereo {
+	case "sbs":
+		tags = append(tags, TagVR_SBS)
+	case "tb":
+		tags = append(tags, TagVR_TB)
+	}
+	return tags
+}

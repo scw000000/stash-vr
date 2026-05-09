@@ -90,3 +90,47 @@ func TestDetect(t *testing.T) {
 		})
 	}
 }
+
+func TestTagsForProjection(t *testing.T) {
+	cases := []struct {
+		name string
+		p    Projection
+		want []string
+	}{
+		// Empty Projection → nil (no projection tags).
+		{name: "empty", p: Projection{}, want: nil},
+		{name: "geometry empty, fov set is still empty", p: Projection{FOV: 180, Stereo: "sbs"}, want: nil},
+
+		// Equirectangular 180 (DOME) variants.
+		{name: "DOME mono", p: Projection{Geometry: "equirectangular", FOV: 180}, want: []string{"VR_DOME"}},
+		{name: "DOME SBS", p: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "sbs"}, want: []string{"VR_DOME", "VR_SBS"}},
+		{name: "DOME TB", p: Projection{Geometry: "equirectangular", FOV: 180, Stereo: "tb"}, want: []string{"VR_DOME", "VR_TB"}},
+
+		// Equirectangular 360 (SPHERE) variants.
+		{name: "SPHERE mono", p: Projection{Geometry: "equirectangular", FOV: 360}, want: []string{"VR_SPHERE"}},
+		{name: "SPHERE SBS", p: Projection{Geometry: "equirectangular", FOV: 360, Stereo: "sbs"}, want: []string{"VR_SPHERE", "VR_SBS"}},
+		{name: "SPHERE TB", p: Projection{Geometry: "equirectangular", FOV: 360, Stereo: "tb"}, want: []string{"VR_SPHERE", "VR_TB"}},
+
+		// Fisheye 180 variants → VR_FISHEYE.
+		{name: "FISHEYE 180 mono", p: Projection{Geometry: "fisheye", FOV: 180}, want: []string{"VR_FISHEYE"}},
+		{name: "FISHEYE 180 SBS", p: Projection{Geometry: "fisheye", FOV: 180, Stereo: "sbs"}, want: []string{"VR_FISHEYE", "VR_SBS"}},
+		{name: "FISHEYE 180 TB", p: Projection{Geometry: "fisheye", FOV: 180, Stereo: "tb"}, want: []string{"VR_FISHEYE", "VR_TB"}},
+
+		// Fisheye 200 variants → VR_MKX200 (more-specific lens).
+		{name: "MKX200 mono", p: Projection{Geometry: "fisheye", FOV: 200}, want: []string{"VR_MKX200"}},
+		{name: "MKX200 SBS", p: Projection{Geometry: "fisheye", FOV: 200, Stereo: "sbs"}, want: []string{"VR_MKX200", "VR_SBS"}},
+		{name: "MKX200 TB", p: Projection{Geometry: "fisheye", FOV: 200, Stereo: "tb"}, want: []string{"VR_MKX200", "VR_TB"}},
+
+		// Fisheye 190 falls through to VR_FISHEYE (no specific 190 tag).
+		{name: "FISHEYE 190 SBS → VR_FISHEYE", p: Projection{Geometry: "fisheye", FOV: 190, Stereo: "sbs"}, want: []string{"VR_FISHEYE", "VR_SBS"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := TagsForProjection(c.p)
+			if !reflect.DeepEqual(got, c.want) {
+				t.Errorf("TagsForProjection(%+v) = %v, want %v", c.p, got, c.want)
+			}
+		})
+	}
+}
