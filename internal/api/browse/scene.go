@@ -68,6 +68,33 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 		data.Duration = formatDuration(vd.SceneParts.Files[0].Duration)
 	}
 
+	// Captions: language tracks for the subtitle picker.
+	for _, c := range vd.SceneParts.Captions {
+		if c == nil {
+			continue
+		}
+		data.Captions = append(data.Captions, CaptionRef{
+			LanguageCode: c.Language_code,
+			CaptionType:  c.Caption_type,
+		})
+	}
+
+	// Scene markers: chapter dots on the scrub bar.
+	for _, m := range vd.SceneParts.Scene_markers {
+		if m == nil {
+			continue
+		}
+		data.SceneMarkers = append(data.SceneMarkers, SceneMarker{
+			Seconds: m.Seconds,
+			Title:   m.Title,
+		})
+	}
+
+	// Duration in seconds: needed for marker positioning + scrub-bar math.
+	if len(vd.SceneParts.Files) > 0 && vd.SceneParts.Files[0] != nil {
+		data.DurationSec = vd.SceneParts.Files[0].Duration
+	}
+
 	if vd.SceneParts.Rating100 != nil {
 		data.Rating1to5 = *vd.SceneParts.Rating100 / 20
 	}

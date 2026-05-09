@@ -20,6 +20,16 @@ type EntityRef struct {
 	Name string `json:"name"`
 }
 
+type CaptionRef struct {
+	LanguageCode string `json:"languageCode"`
+	CaptionType  string `json:"captionType"`
+}
+
+type SceneMarker struct {
+	Seconds float64 `json:"seconds"`
+	Title   string  `json:"title"`
+}
+
 // SidebarData holds the three lists that populate the sidebar.
 type SidebarData struct {
 	Performers []Entity
@@ -72,6 +82,9 @@ type SceneDetailData struct {
 	Rating1to5   int    // 0 = unrated; 1..5 set
 	IsFavorite   bool
 	Tags         []EntityRef // chip-renderable tags, excluding favorite tag and ancestor-injected tags
+	Captions     []CaptionRef
+	SceneMarkers []SceneMarker
+	DurationSec  float64 // duration in seconds; 0 if unknown
 	AllTagNames  []string // for the <datalist> autocomplete
 	OCounter        int
 	Organized       bool
