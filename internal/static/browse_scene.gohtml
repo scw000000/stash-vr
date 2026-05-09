@@ -419,14 +419,17 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     });
 
     // Resolve the currently-rendering geometry entity. M3b ensures
-    // exactly one of the four has visible="true" at any time.
+    // exactly one of the four has visible=true at any time. Read the
+    // Three.js object3D.visible property directly (unambiguous boolean)
+    // instead of getAttribute (which returned strings before A-Frame
+    // parsed and booleans after, leading to flaky resolution at handler
+    // time).
     function activeGeometry() {
       const ids = ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'];
       for (let i = 0; i < ids.length; i++) {
         const el = document.getElementById(ids[i]);
-        if (!el) continue;
-        const v = el.getAttribute('visible');
-        if (v === true || v === 'true') return el;
+        if (!el || !el.object3D) continue;
+        if (el.object3D.visible) return el;
       }
       return null;
     }
@@ -478,23 +481,26 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     function recenterYaw() {
       const r = scene.renderer;
       if (!r || !r.xr || !r.xr.isPresenting) return;
-      const session = r.xr.getSession();
       const baseSpace = r.xr.getReferenceSpace();
-      if (!session || !baseSpace) return;
+      if (!baseSpace) return;
       const cam = r.xr.getCamera();
       if (!cam) return;
       // Extract yaw from camera world matrix.
+      // Three.js column-major: cols 8,9,10 are camera's local +Z (which is
+      // OPPOSITE to forward; camera looks at -localZ). Forward = (-e[8], -e[9], -e[10]).
+      // Yaw measured from -Z (canonical forward) = atan2(forward.x, -forward.z)
+      //                                          = atan2(-e[8], e[10]).
       const e = cam.matrixWorld.elements;
-      // Three.js column-major: cols 8,9,10 are camera's local +Z (which is OPPOSITE
-      // to forward; camera looks at -localZ). Forward = (-e[8], -e[9], -e[10]).
-      // Yaw measured from -Z axis (canonical forward) = atan2(forward.x, -forward.z)
-      //                                                 = atan2(-e[8], e[10]).
       const yaw = Math.atan2(-e[8], e[10]);
       const sinH = Math.sin(-yaw / 2);
       const cosH = Math.cos(-yaw / 2);
-      // Quaternion for rotation about Y axis by -yaw.
+      // Yaw-only recenter: NO translation. Translating the offset by the
+      // user's xz position causes the camera and tracked controllers to
+      // desync (Three.js camera follows new ref space; tracked-controls-webxr
+      // may sample its pose differently). SKYBOX-style "recenter" is also
+      // yaw-only — re-orient without warping you to a different position.
       const offset = new XRRigidTransform(
-        { x: cam.position.x, y: 0, z: cam.position.z, w: 1 },
+        { x: 0, y: 0, z: 0, w: 1 },
         { x: 0, y: sinH, z: 0, w: cosH }
       );
       try {
@@ -538,13 +544,16 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       el.object3D.scale.setScalar(clamped);
     });
 
-    // Panel + lasers visibility is shared. We don't toggle the entity's
-    // visible attribute on the laser-controls entities — A-Frame's
-    // tracked-controls (autoHide: true) overrides it every tick. Instead
-    // we hide the laser by toggling raycaster.showLine + enabled. The
-    // controller model stays visible (mirrors SKYBOX behavior).
+    // Panel + lasers visibility is shared. tracked-controls' autoHide=true
+    // would force el.object3D.visible = !!controller every tick, fighting
+    // any visible attribute we set. We disable autoHide on each laser
+    // entity once the controller connects, then own visibility ourselves.
+    // We toggle BOTH the entity's visible (which hides the controller
+    // model) AND the raycaster's showLine + enabled (which hide the
+    // laser line and stop phantom raycast clicks).
     function setLaserActive(el, active) {
       if (!el) return;
+      el.setAttribute('visible', active ? 'true' : 'false');
       el.setAttribute('raycaster', 'enabled', !!active);
       el.setAttribute('raycaster', 'showLine', !!active);
     }
@@ -562,12 +571,19 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       return v === true || v === 'true';
     }
     // laser-controls re-applies its raycaster config (including showLine: true)
-    // whenever a controller (re)connects, which would clobber our hidden state.
-    // Re-apply the current panel-driven setting after any (re)connect.
+    // whenever a controller (re)connects, and tracked-controls' autoHide
+    // re-asserts entity visibility every tick. Disable autoHide and then
+    // re-apply our hidden-state on each (re)connect.
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      const reapply = () => setLaserActive(el, isPanelVisible());
+      const reapply = () => {
+        // Defer: tracked-controls' init may not have populated this.data yet.
+        // setAttribute pushes the override through A-Frame's component update
+        // flow even if the component data isn't fully initialized.
+        el.setAttribute('tracked-controls', 'autoHide', false);
+        setLaserActive(el, isPanelVisible());
+      };
       el.addEventListener('controllerconnected', reapply);
       el.addEventListener('controllermodelready', reapply);
     });
