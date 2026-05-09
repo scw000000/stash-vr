@@ -295,12 +295,14 @@ a.chip:hover { background: #3a3a3a; }
        the playback panel. Top strip is wired in Task 3 (this task);
        tile grid + load-more sentinel are populated by Tasks 4-5. -->
   <a-entity id="vrBrowsePanel" position="0 1.4 -2.5" rotation="-15 0 0" visible="false">
-    <!-- Curved bg: partial-arc cylinder sharing the tile-cover hub
-         (panel-local z=3.02 = TILE_Z + ARC_R). Centered at A-Frame
-         theta=180° (faces user); 85° arc covers the 3.4m chord of
-         tile content (~64.93°) plus ~10° margin per side. -->
+    <!-- Curved bg: partial-arc cylinder. Hub at panel-local z=3.02 (HUB_Z),
+         shared with the tile covers (R=3.0) and top-strip buttons (R=2.97).
+         BG R=3.02 → bg surface lands at panel-local z=0 (the panel back),
+         so tiles (z=0.02) and buttons (z=0.05) sit clearly in front and
+         don't z-fight. 85° arc covers the 3.4m chord of tile content
+         (~64.93°) plus ~10° margin per side. -->
     <a-cylinder class="vr-grid-bg vr-btn" data-action="grid-bg"
-                radius="3.0"
+                radius="3.02"
                 height="2.4"
                 position="0 0 3.02"
                 theta-start="137.5"
@@ -309,34 +311,61 @@ a.chip:hover { background: #3a3a3a; }
                 material="shader: flat; side: double; color: #000; opacity: 0.95">
     </a-cylinder>
 
-    <!-- Top strip (Tasks 6 + 7 fill these). Skeleton placeholders.
-         z=0.05 keeps the flat top-strip buttons in front of the curved
-         bg surface (which sits at panel-local z≈0.02). -->
-    <a-entity id="vrBrowseTopStrip" position="0 1.0 0.05">
-      <a-plane class="vr-search-bg vr-btn" data-action="search-focus" width="1.2" height="0.16"
-               color="#222" material="opacity:0.9" position="-1.0 0 0">
-        <a-text value="Search…" align="left" color="#888" width="3" position="-0.55 0 0.005"></a-text>
-      </a-plane>
-      <a-entity class="vr-btn" data-action="filters" position="-0.10 0 0"
-                geometry="primitive:plane;width:0.45;height:0.16"
-                material="color:#2c5282;opacity:0.95">
-        <a-text value="Filters ▾" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-      </a-entity>
-      <a-entity class="vr-btn" data-action="filters-clear" position="0.40 0 0"
-                geometry="primitive:plane;width:0.45;height:0.16"
-                material="color:#2c5282;opacity:0.95">
-        <a-text value="Clear all" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-      </a-entity>
-      <a-entity class="vr-btn" data-action="cols-cycle" id="vrColsBtn" position="0.95 0 0"
-                geometry="primitive:plane;width:0.40;height:0.16"
-                material="color:#2c5282;opacity:0.95">
-        <a-text id="vrColsLabel" value="Cols: 4" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-      </a-entity>
-      <a-entity class="vr-btn" data-action="browse-close" position="1.45 0 0"
-                geometry="primitive:plane;width:0.20;height:0.16"
-                material="color:#a01010;opacity:0.95">
-        <a-text value="✕" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
-      </a-entity>
+    <!-- Top strip — five curved buttons sharing the panel hub. The wrapper
+         is positioned at panel-local (0, 1.0, 3.02) so the cylinder hub for
+         the buttons sits at the same hub as bg/tiles. Each button is its
+         own a-cylinder primitive at default position (0,0,0) inside this
+         wrapper, with its own theta-start / theta-length spanning its arc.
+         BTN_R=2.97 → button surface at panel-local z=0.05 (in front of
+         tiles at 0.02, in front of bg at 0). Text labels are positioned
+         at the surface point of the button's angular center, with a
+         matching yaw rotation so the label faces the user along the arc.
+
+         Angular layout (mirroring the original flat x_center positions):
+         search:  x=-1.0,  w=1.2  →  arc center at θ=-19.7°, span 23.1°
+         filters: x=-0.10, w=0.45 →  arc center at θ= -1.93°, span 8.68°
+         clear:   x= 0.40, w=0.45 →  arc center at θ=  7.74°, span 8.68°
+         cols:    x= 0.95, w=0.40 →  arc center at θ= 18.65°, span 7.71°
+         close:   x= 1.45, w=0.20 →  arc center at θ= 29.32°, span 3.86°
+         A-Frame θ = 180 - our_θ. theta-start = aFrameCenter - span/2. -->
+    <a-entity id="vrBrowseTopStrip" position="0 1.0 3.02">
+      <!-- Search bar bg — also serves as a click target that focuses the
+           in-VR search input (data-action="search-focus"). -->
+      <a-cylinder class="vr-search-bg vr-btn" data-action="search-focus"
+                  radius="2.97" height="0.16" open-ended="true"
+                  theta-start="188.15" theta-length="23.10"
+                  material="shader: flat; color: #222; opacity: 0.9; side: double">
+        <a-text value="Search…" align="left" color="#888" width="3"
+                position="-1.0 0 -2.97" rotation="0 19.70 0"></a-text>
+      </a-cylinder>
+      <a-cylinder class="vr-btn" data-action="filters"
+                  radius="2.97" height="0.16" open-ended="true"
+                  theta-start="177.59" theta-length="8.68"
+                  material="shader: flat; color: #2c5282; opacity: 0.95; side: double">
+        <a-text value="Filters ▾" align="center" color="#fff" width="2.5"
+                position="-0.10 0 -2.969" rotation="0 1.93 0"></a-text>
+      </a-cylinder>
+      <a-cylinder class="vr-btn" data-action="filters-clear"
+                  radius="2.97" height="0.16" open-ended="true"
+                  theta-start="167.92" theta-length="8.68"
+                  material="shader: flat; color: #2c5282; opacity: 0.95; side: double">
+        <a-text value="Clear all" align="center" color="#fff" width="2.5"
+                position="0.40 0 -2.943" rotation="0 -7.74 0"></a-text>
+      </a-cylinder>
+      <a-cylinder class="vr-btn" data-action="cols-cycle" id="vrColsBtn"
+                  radius="2.97" height="0.16" open-ended="true"
+                  theta-start="157.49" theta-length="7.71"
+                  material="shader: flat; color: #2c5282; opacity: 0.95; side: double">
+        <a-text id="vrColsLabel" value="Cols: 4" align="center" color="#fff" width="2.5"
+                position="0.95 0 -2.815" rotation="0 -18.65 0"></a-text>
+      </a-cylinder>
+      <a-cylinder class="vr-btn" data-action="browse-close"
+                  radius="2.97" height="0.16" open-ended="true"
+                  theta-start="148.75" theta-length="3.86"
+                  material="shader: flat; color: #a01010; opacity: 0.95; side: double">
+        <a-text value="✕" align="center" color="#fff" width="3.5"
+                position="1.45 0 -2.591" rotation="0 -29.32 0"></a-text>
+      </a-cylinder>
     </a-entity>
 
     <!-- Tile grid root (Task 4 populates). -->
@@ -960,9 +989,16 @@ a.chip:hover { background: #3a3a3a; }
     const TITLE_GAP = 0.04;         // gap between cover bottom and title strip top
     const TITLE_STRIP_H = 0.08;     // height of the title text strip
     const TILE_AREA_TOP_Y    = 0.85;   // top edge of first row (panel-local y); fixed regardless of cols
-    const TILE_AREA_BOTTOM_Y = -1.05;  // bottom of visible tile area; tiles below are hidden
-    const ARC_R              = 3.0;    // cylinder radius for curved tile layout
-    const TILE_Z = 0.02;            // z offset, in front of panel bg plane (z=0); also outermost-tile depth
+    const TILE_AREA_BOTTOM_Y = -1.05;  // bottom of visible tile area; tiles clipped below
+    // Concentric cylinder radii — bg, tiles, and top-strip buttons share the
+    // same hub at panel-local z = HUB_Z, but use different radii so their
+    // surfaces don't z-fight. Smaller radius = surface farther from hub =
+    // closer to user (since hub is on user's side, concave-toward-user).
+    const HUB_Z              = 3.02;   // shared cylinder hub (panel-local +z)
+    const BG_R               = 3.02;   // bg surface lands at panel-local z=0
+    const ARC_R              = 3.00;   // tile cover surface at z=0.02 (in front of bg)
+    const BTN_R              = 2.97;   // top-strip button surface at z=0.05 (in front of tiles)
+    const TILE_Z = HUB_Z - ARC_R;     // 0.02 — for back-compat reads only
     let scrollY = 0;                // updated by thumbstick scroll
     let m4cMaxScroll = 0;           // computed in relayoutTiles each pass
     // Set true (in tickBrowseScroll) when the laser is hovering on the
@@ -970,6 +1006,64 @@ a.chip:hover { background: #3a3a3a; }
     // to suppress geometry-scale binding while the user is scrolling
     // the grid with the thumbstick.
     let m4cConsumeThumbY = false;
+
+    // ─── Tile cover: clip planes + UV-mirror helper ──────────────────────
+    // The tile covers are partial cylinders viewed from the inside (hub on
+    // user's side). The inside face is the *back* face of the geometry, so
+    // the texture's U coordinate appears mirrored. We compensate by flipping
+    // texture.repeat.x = -1 / offset.x = 1 each time we set/replace a
+    // texture on a cover material.
+    //
+    // Clipping: tiles must not render outside the panel's visible band.
+    // We use two THREE.Plane clip planes in panel-local coords (top + bottom
+    // of TILE_AREA), transformed to world coords once the panel is in the
+    // scene. The same plane *array* is shared across all tile covers so we
+    // can mutate-in-place without re-assigning per material.
+    const m4cClipPlanes = [
+      new AFRAME.THREE.Plane(new AFRAME.THREE.Vector3(0,  1, 0), -TILE_AREA_BOTTOM_Y),
+      new AFRAME.THREE.Plane(new AFRAME.THREE.Vector3(0, -1, 0),  TILE_AREA_TOP_Y),
+    ];
+    let m4cClipPlanesReady = false;
+    function setupBrowseClipping() {
+      // Idempotent: enable local clipping on the renderer and recompute
+      // clip planes in world coords from the panel's worldMatrix. Called
+      // every time the panel becomes visible (cheap; one matrix multiply).
+      const panelEl = document.getElementById('vrBrowsePanel');
+      if (!scene.renderer || !panelEl || !panelEl.object3D) return;
+      scene.renderer.localClippingEnabled = true;
+      panelEl.object3D.updateWorldMatrix(true, false);
+      const mat = panelEl.object3D.matrixWorld;
+      // Reset planes to panel-local, then transform to world in-place. THREE.Plane
+      // doesn't have a "set local" method, so we re-init from the original normals
+      // each time before applying the matrix.
+      m4cClipPlanes[0].set(new AFRAME.THREE.Vector3(0,  1, 0), -TILE_AREA_BOTTOM_Y);
+      m4cClipPlanes[1].set(new AFRAME.THREE.Vector3(0, -1, 0),  TILE_AREA_TOP_Y);
+      m4cClipPlanes[0].applyMatrix4(mat);
+      m4cClipPlanes[1].applyMatrix4(mat);
+      m4cClipPlanesReady = true;
+    }
+
+    // Apply the standard cover-material settings (UV mirror + clipping +
+    // double-sided + flat shader) to a Three.js material that's about to be
+    // shown on a tile cover cylinder. `texture` is the map being applied.
+    // For sprite mode (3x3 grid), pass {sprite: true} so we negate within
+    // the per-frame repeat.x = 1/SCOLS and offset.x = c/SCOLS dance.
+    function applyCoverMaterial(material, texture, opts) {
+      if (texture) {
+        texture.wrapS = AFRAME.THREE.RepeatWrapping;
+        if (!opts || !opts.sprite) {
+          texture.repeat.x = -1;
+          texture.offset.x =  1;
+        }
+        texture.needsUpdate = true;
+      }
+      material.side = AFRAME.THREE.DoubleSide;
+      if (m4cClipPlanesReady) {
+        material.clippingPlanes = m4cClipPlanes;
+        material.clipShadows = false;
+      }
+      material.needsUpdate = true;
+    }
 
     // Returns per-tile placement on a curved cylinder. Each tile's cover is
     // a partial cylinder segment (a-cylinder with theta-start/theta-length)
@@ -1099,8 +1193,8 @@ a.chip:hover { background: #3a3a3a; }
           const tex = new AFRAME.THREE.VideoTexture(v);
           tex.minFilter = AFRAME.THREE.LinearFilter;
           tex.magFilter = AFRAME.THREE.LinearFilter;
-          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex, side: AFRAME.THREE.DoubleSide });
-          mesh.material.needsUpdate = true;
+          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
+          applyCoverMaterial(mesh.material, tex);
         }).catch(function(err) {
           if (tileEl._hoverToken !== hoverToken) return;
           // WebM unavailable (common: Stash hasn't generated a preview).
@@ -1130,8 +1224,8 @@ a.chip:hover { background: #3a3a3a; }
         const coverTex = coverURL ? tileTextures[coverURL] : null;
         const mesh = plane.getObject3D('mesh');
         if (mesh && coverTex) {
-          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: coverTex, side: AFRAME.THREE.DoubleSide });
-          mesh.material.needsUpdate = true;
+          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: coverTex });
+          applyCoverMaterial(mesh.material, coverTex);
         }
       });
     }
@@ -1147,17 +1241,23 @@ a.chip:hover { background: #3a3a3a; }
         spriteTex.minFilter = AFRAME.THREE.LinearFilter;
         spriteTex.magFilter = AFRAME.THREE.LinearFilter;
         const SCOLS = 3, SROWS = 3;
-        spriteTex.repeat.set(1 / SCOLS, 1 / SROWS);
+        // Mirror via negative repeat.x (cylinder-inside view); offset.x then
+        // shifts the negated cell into place per-frame in showFrame().
+        spriteTex.repeat.set(-1 / SCOLS, 1 / SROWS);
         const mesh = plane.getObject3D('mesh');
         if (!mesh) return;
-        mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: spriteTex, side: AFRAME.THREE.DoubleSide });
-        mesh.material.needsUpdate = true;
+        mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: spriteTex });
+        applyCoverMaterial(mesh.material, spriteTex, { sprite: true });
         let frame = 0;
         function showFrame() {
           const c = frame % SCOLS;
           const r = Math.floor(frame / SCOLS) % SROWS;
-          // THREE UVs: (0,0) is bottom-left; sprite-sheet rows are top-to-bottom.
-          spriteTex.offset.set(c / SCOLS, 1 - (r + 1) / SROWS);
+          // U: with repeat.x = -1/SCOLS, range is from offset.x (at u=0) to
+          // offset.x - 1/SCOLS (at u=1). For cell c, we want the texture
+          // U range [c/SCOLS, (c+1)/SCOLS] to land on geometry u in [0,1],
+          // mirrored, so offset.x = (c+1)/SCOLS.
+          // V: (0,0) is bottom-left; sprite rows are top-to-bottom, so y=1-(r+1)/SROWS.
+          spriteTex.offset.set((c + 1) / SCOLS, 1 - (r + 1) / SROWS);
           spriteTex.needsUpdate = true;
         }
         showFrame();
@@ -1256,6 +1356,15 @@ a.chip:hover { background: #3a3a3a; }
             'shader: flat; side: double; color: #fff; src: url(' + tile.thumbnailURL + ')');
           plane.setAttribute('theta-start',  pos.thetaStartDeg);
           plane.setAttribute('theta-length', pos.thetaLengthDeg);
+          // Once A-Frame has loaded the texture, run our cover-material
+          // settings: mirror UV on the inside-of-cylinder view, attach the
+          // panel-band clipping planes, force needsUpdate. Fires again if
+          // the material src is later changed (e.g. retry after error).
+          plane.addEventListener('materialtextureloaded', function() {
+            const mesh = plane.getObject3D('mesh');
+            if (!mesh || !mesh.material) return;
+            applyCoverMaterial(mesh.material, mesh.material.map || null);
+          });
           // No position offset — cylinder local origin is on the hub axis,
           // and the tile entity is positioned at the hub itself.
           el.appendChild(plane);
@@ -1334,15 +1443,50 @@ a.chip:hover { background: #3a3a3a; }
         const popOffset = el._hoverPopped ? 0.04 : 0;
         el.setAttribute('position', { x: pos.x, y: pos.y, z: pos.z + popOffset });
         el.setAttribute('rotation', { x: 0, y: 0, z: 0 });
-        // Visibility clip: hide tiles whose center sits outside the band.
-        // Keeps panels from rendering past their bottom edge into world.
+        // Tile entity stays visible whenever its cover bbox overlaps the
+        // panel band — the cover material's clippingPlanes do the partial
+        // render at the top/bottom edges. We hide the entire tile only when
+        // the cover is fully outside the band (saves draw calls and avoids
+        // text/badge bleed past the edge).
+        const coverTop = pos.y + tileCoverH / 2;
+        const coverBot = pos.y - tileCoverH / 2;
         if (el.object3D) {
-          el.object3D.visible = (pos.y >= TILE_AREA_BOTTOM_Y && pos.y <= TILE_AREA_TOP_Y);
+          el.object3D.visible = (coverTop > TILE_AREA_BOTTOM_Y && coverBot < TILE_AREA_TOP_Y);
+        }
+        // Title/badge use independent bool visibility (their text/circle
+        // materials don't carry clippingPlanes — MSDF text shader doesn't
+        // support them, and we don't bother for the small badge circle).
+        // Hide them once their *center* leaves the band; the cover's clip
+        // planes still render the cover correctly behind them.
+        const titleAbsY = pos.y + titleY;
+        const badgeAbsY = pos.y + badgeLocalY;
+        const titleNode = el.querySelector(':scope > a-text');
+        if (titleNode && titleNode.object3D) {
+          titleNode.object3D.visible = (titleAbsY > TILE_AREA_BOTTOM_Y && titleAbsY < TILE_AREA_TOP_Y);
+        }
+        const badgeNode = el.querySelector(':scope > .vr-tile-detail');
+        if (badgeNode && badgeNode.object3D) {
+          badgeNode.object3D.visible = (badgeAbsY > TILE_AREA_BOTTOM_Y && badgeAbsY < TILE_AREA_TOP_Y);
         }
       });
     }
 
     function onBrowsePanelOpen() {
+      // First open: enable renderer local clipping + compute the band's
+      // world-space planes from the panel's transform. Cheap to call again
+      // on every open (the panel's transform doesn't change, but this lets
+      // us recover if the user resized/relocated the panel later).
+      setupBrowseClipping();
+      // Re-apply clip planes to existing tile cover materials (those whose
+      // texture loaded *before* setupBrowseClipping ran on first open).
+      document.querySelectorAll('#vrBrowseTiles .vr-tile-cover').forEach(function(c) {
+        const mesh = c.getObject3D && c.getObject3D('mesh');
+        if (mesh && mesh.material) {
+          mesh.material.clippingPlanes = m4cClipPlanes;
+          mesh.material.clipShadows = false;
+          mesh.material.needsUpdate = true;
+        }
+      });
       fetchGrid(true);
     }
 
