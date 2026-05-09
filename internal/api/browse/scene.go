@@ -134,6 +134,11 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Disable browser caching of the scene-player page. The HTML is
+	// re-rendered per request anyway (and embeds JS that depends on the
+	// current binary), so caching it just means stale code after a
+	// stash-vr upgrade until the user manually clears the cache.
+	w.Header().Set("Cache-Control", "no-store")
 	if err := sceneTmpl.Execute(w, data); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: render scene detail")
 	}
