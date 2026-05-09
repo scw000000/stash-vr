@@ -785,6 +785,36 @@ a.chip:hover { background: #3a3a3a; }
       return Math.max(0, Math.min(1, (local.x - VOL_BAR_LEFT) / VOL_BAR_W));
     }
 
+    // Pick whichever laser currently has a non-empty intersection list.
+    // raycaster-intersection only fires on list change, so for per-frame
+    // sampling during a drag we poll the raycaster component directly.
+    function activeLaserIntersection() {
+      const ids = ['vrLaserRight', 'vrLaserLeft'];
+      for (let i = 0; i < ids.length; i++) {
+        const el = document.getElementById(ids[i]);
+        if (!el) continue;
+        const rc = el.components && el.components.raycaster;
+        if (!rc) continue;
+        const its = rc.intersections || [];
+        if (its.length) return its[0];
+      }
+      return null;
+    }
+
+    function tickSliders() {
+      if (!volActive && !scrubActive) return;
+      const hit = activeLaserIntersection();
+      if (!hit) return;
+      if (volActive) {
+        const v = cursorToVol(hit);
+        if (v !== null) setVideoVolume(v);
+      }
+      if (scrubActive) {
+        const t = cursorToScrubT(hit);
+        if (t !== null) setVideoTime(t, true);
+      }
+    }
+
     function setVideoVolume(v) {
       video.volume = Math.max(0, Math.min(1, v));
       const fill = document.getElementById('vrVolumeFill');
@@ -811,23 +841,14 @@ a.chip:hover { background: #3a3a3a; }
       el.addEventListener('mouseup', function() { volActive = false; });
     });
 
-    // While drag is active, sample the laser intersection each tick.
-    // raycaster-intersection fires on the raycaster entity (the laser),
-    // not on the scene; listen on both lasers.
+    // Drag sampling itself happens in tickSliders() inside rafLoop.
+    // The cleared listener stays as a backstop: if the laser leaves all
+    // targets mid-drag, the matching mouseup fires on whatever the laser
+    // landed on (often nothing), so we end the drag here instead.
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
       const laser = document.getElementById(id);
       if (!laser) return;
-      laser.addEventListener('raycaster-intersection', function(evt) {
-        if (!volActive) return;
-        const its = evt.detail && evt.detail.intersections;
-        if (!its || !its.length) return;
-        const v = cursorToVol(its[0]);
-        if (v !== null) setVideoVolume(v);
-      });
       laser.addEventListener('raycaster-intersection-cleared', function() {
-        // If the laser leaves all targets while a drag is in flight, end the
-        // drag — the matching mouseup fires on whatever the laser landed on
-        // (often nothing), so we won't otherwise see it.
         volActive = false;
       });
     });
@@ -1012,6 +1033,7 @@ a.chip:hover { background: #3a3a3a; }
     function rafLoop() {
       const now = performance.now();
       tickTimeDisplay(now);
+      tickSliders();
       tickScrubBar();
       tickSubtitles();
       requestAnimationFrame(rafLoop);
@@ -1152,18 +1174,12 @@ a.chip:hover { background: #3a3a3a; }
     }
     scene.addEventListener('loaded', buildSceneMarkerDots);
 
-    // While scrubActive, sample raycaster intersections per laser to update
-    // the seek position. Mirrors the volume-slider drag pattern below.
+    // Drag sampling happens in tickSliders() inside rafLoop. Keep the
+    // cleared listener so a laser that leaves all targets mid-drag ends
+    // the scrub cleanly (mouseup may fire on nothing).
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
       const laser = document.getElementById(id);
       if (!laser) return;
-      laser.addEventListener('raycaster-intersection', function(evt) {
-        if (!scrubActive) return;
-        const its = evt.detail && evt.detail.intersections;
-        if (!its || !its.length) return;
-        const t = cursorToScrubT(its[0]);
-        if (t !== null) setVideoTime(t, true);
-      });
       laser.addEventListener('raycaster-intersection-cleared', function() {
         scrubActive = false;
       });
