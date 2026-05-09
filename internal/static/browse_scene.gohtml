@@ -1046,9 +1046,11 @@ a.chip:hover { background: #3a3a3a; }
           mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
           mesh.material.needsUpdate = true;
         }).catch(function(err) {
-          // Common case: 404 because Stash hasn't generated a preview
-          // for this scene. Cover stays untouched.
-          console.debug('stash-vr: preview play() failed', err);
+          if (tileEl._hoverToken !== hoverToken) return;
+          // WebM unavailable (common: Stash hasn't generated a preview).
+          // Fall back to cycling through the sprite sheet.
+          console.debug('stash-vr: preview play() failed; trying sprite', err);
+          startSpriteCycle(tileEl, plane);
         });
       });
 
@@ -1061,6 +1063,7 @@ a.chip:hover { background: #3a3a3a; }
           v.pause();
           v.currentTime = 0;
         }
+        stopSpriteCycle(tileEl);
         const coverURL = tileEl.dataset.thumbnailUrl;
         const coverTex = coverURL ? tileTextures[coverURL] : null;
         const mesh = plane.getObject3D('mesh');
@@ -1069,6 +1072,48 @@ a.chip:hover { background: #3a3a3a; }
           mesh.material.needsUpdate = true;
         }
       });
+    }
+
+    // Sprite-sheet fallback when WebM preview is missing. Stash convention:
+    // a 3x3 grid of 9 frames at /browse/scene/{id}/sprite. Cycle frames by
+    // updating the texture's UV offset every 250ms (~4 fps cinema feel).
+    function startSpriteCycle(tileEl, plane) {
+      if (tileEl._spriteIntervalId) return;
+      const spriteUrl = '/browse/scene/' + encodeURIComponent(tileEl.dataset.sceneId) + '/sprite';
+      const loader = new AFRAME.THREE.TextureLoader();
+      loader.load(spriteUrl, function(spriteTex) {
+        spriteTex.minFilter = AFRAME.THREE.LinearFilter;
+        spriteTex.magFilter = AFRAME.THREE.LinearFilter;
+        const SCOLS = 3, SROWS = 3;
+        spriteTex.repeat.set(1 / SCOLS, 1 / SROWS);
+        const mesh = plane.getObject3D('mesh');
+        if (!mesh) return;
+        mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: spriteTex });
+        mesh.material.needsUpdate = true;
+        let frame = 0;
+        function showFrame() {
+          const c = frame % SCOLS;
+          const r = Math.floor(frame / SCOLS) % SROWS;
+          // THREE UVs: (0,0) is bottom-left; sprite-sheet rows are top-to-bottom.
+          spriteTex.offset.set(c / SCOLS, 1 - (r + 1) / SROWS);
+          spriteTex.needsUpdate = true;
+        }
+        showFrame();
+        tileEl._spriteIntervalId = setInterval(function() {
+          frame = (frame + 1) % (SCOLS * SROWS);
+          showFrame();
+        }, 250);
+      }, undefined, function(err) {
+        // Sprite also unavailable — silently keep cover.
+        console.debug('stash-vr: sprite unavailable', err);
+      });
+    }
+
+    function stopSpriteCycle(tileEl) {
+      if (tileEl._spriteIntervalId) {
+        clearInterval(tileEl._spriteIntervalId);
+        tileEl._spriteIntervalId = null;
+      }
     }
 
     function relayoutTiles() {
