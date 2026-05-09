@@ -110,8 +110,13 @@ a.chip:hover { background: #3a3a3a; }
 
     <!-- Row 2: scrub bar (drag thumb to seek; click bar to seek; click marker dot to jump). -->
     <a-entity id="vrScrubBar" position="0 0.05 0.01">
-      <a-plane class="vr-scrub-bg vr-btn" data-action="scrub-bg" width="2.8" height="0.04"
-               color="#444" material="opacity:0.95"></a-plane>
+      <!-- Transparent hit plane: matches thumb height so clicks register
+           anywhere within the thumb's vertical span, not only the thin bar. -->
+      <a-plane class="vr-scrub-bg vr-btn" data-action="scrub-bg" width="2.8" height="0.10"
+               material="opacity:0;transparent:true" position="0 0 0.0001"></a-plane>
+      <!-- Visual bar: thin grey line, no slider class so raycast passes through. -->
+      <a-plane width="2.8" height="0.04" color="#444" material="opacity:0.95"
+               position="0 0 0.0002"></a-plane>
       <a-plane id="vrScrubFill" width="0.001" height="0.04" color="#3776c2"
                material="opacity:0.95" position="-1.4 0 0.001"></a-plane>
       <a-entity id="vrScrubMarkers"></a-entity>
@@ -787,7 +792,7 @@ a.chip:hover { background: #3a3a3a; }
       if (!el) return;
       const v = SPEEDS[speedIdx];
       // Show "1.0x" not "1x"; show "1.25x" not "1.2500x".
-      el.setAttribute('value', (Number.isInteger(v) ? v.toFixed(1) : v.toString()) + 'x');
+      el.setAttribute('text', 'value', (Number.isInteger(v) ? v.toFixed(1) : v.toString()) + 'x');
     }
 
     function closeAllSubpanels(except) {
@@ -932,7 +937,10 @@ a.chip:hover { background: #3a3a3a; }
       video.volume = Math.max(0, Math.min(1, v));
       // Dragging the slider unmutes — matches HTML5 video element semantics
       // and avoids the user wondering why volume changes don't take effect.
-      if (video.muted && video.volume > 0) video.muted = false;
+      if (video.muted && video.volume > 0) {
+        video.muted = false;
+        updateMuteIcon();
+      }
       refreshVolumeUI();
     }
 
@@ -963,6 +971,48 @@ a.chip:hover { background: #3a3a3a; }
     // Backstop: any mouseup anywhere ends the drag. Cheap; runs only on click.
     scene.addEventListener('mouseup', function() { volActive = false; });
 
+    // Slider drag — driven by controller-level triggerdown/up events on the
+    // lasers themselves. The cursor synthetic mousedown/mouseup events
+    // proved unreliable for sustained drags (cursor emits mouseup as soon
+    // as the laser leaves the hit entity, killing the active flag). Use
+    // the same event source M3c uses for its trigger state machine.
+    function _laserHitTarget(intersection) {
+      if (!intersection) return null;
+      return intersection.el || (intersection.object && intersection.object.el) || null;
+    }
+
+    ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
+      const laser = document.getElementById(id);
+      if (!laser) return;
+      laser.addEventListener('triggerdown', function() {
+        const rc = laser.components && laser.components.raycaster;
+        if (!rc) return;
+        const its = rc.intersections || [];
+        if (!its.length) return;
+        const intersection = its[0];
+        const target = _laserHitTarget(intersection);
+        if (!target || !target.classList) return;
+        const cl = target.classList;
+        if (cl.contains('vr-vol-track') || cl.contains('vr-vol-thumb')) {
+          volActive = true;
+          const v = cursorToVol(intersection);
+          if (v !== null) setVideoVolume(v);
+        } else if (cl.contains('vr-scrub-marker')) {
+          // Marker click: jump to its seconds (no drag).
+          const secs = parseFloat(target.dataset.markerSeconds);
+          if (!isNaN(secs)) setVideoTime(secs, false);
+        } else if (cl.contains('vr-scrub') || cl.contains('vr-scrub-bg')) {
+          scrubActive = true;
+          const t = cursorToScrubT(intersection);
+          if (t !== null) setVideoTime(t, false);
+        }
+      });
+      laser.addEventListener('triggerup', function() {
+        volActive = false;
+        scrubActive = false;
+      });
+    });
+
     // Initialize volume to 1.0; this also positions the fill + thumb at the right edge.
     setVideoVolume(1.0);
 
@@ -984,7 +1034,9 @@ a.chip:hover { background: #3a3a3a; }
       lastTimeUpdateMs = nowMs;
       const el = document.getElementById('vrTime');
       if (!el) return;
-      el.setAttribute('value', formatTime(video.currentTime || 0) + ' / ' + formatTime(video.duration || 0));
+      const cur = formatTime(video.currentTime || 0);
+      const dur = formatTime(video.duration || 0);
+      el.setAttribute('text', 'value', cur + ' / ' + dur);
     }
 
     const captionsData = {{ marshal .Captions }} || [];
@@ -1129,7 +1181,7 @@ a.chip:hover { background: #3a3a3a; }
       }
       if (active) {
         const txt = document.getElementById('vrSubtitleText');
-        if (txt) txt.setAttribute('value', active.text);
+        if (txt) txt.setAttribute('text', 'value', active.text);
         plane.setAttribute('visible', 'true');
       } else {
         plane.setAttribute('visible', 'false');
@@ -1137,12 +1189,14 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     // Single rAF loop drives all per-frame work (Tasks 4 + 5 hook in here).
+    // Each tick wrapped in try/catch so one ticker's error doesn't kill the
+    // loop and freeze every per-frame UI update.
     function rafLoop() {
       const now = performance.now();
-      tickTimeDisplay(now);
-      tickSliders();
-      tickScrubBar();
-      tickSubtitles();
+      try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
+      try { tickSliders(); }       catch (e) { console.warn('stash-vr: tickSliders', e); }
+      try { tickScrubBar(); }      catch (e) { console.warn('stash-vr: tickScrubBar', e); }
+      try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
       requestAnimationFrame(rafLoop);
     }
     requestAnimationFrame(rafLoop);
@@ -1246,7 +1300,7 @@ a.chip:hover { background: #3a3a3a; }
 
     function bindMarkerTooltip(el) {
       el.addEventListener('raycaster-intersected', function() {
-        markerTip.setAttribute('value', el.dataset.markerTitle || '');
+        markerTip.setAttribute('text', 'value', el.dataset.markerTitle || '');
         const pos = el.getAttribute('position');
         const x = (pos && typeof pos === 'object') ? pos.x : 0;
         markerTip.setAttribute('position', x.toFixed(3) + ' 0.10 0.01');

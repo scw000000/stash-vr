@@ -115,7 +115,7 @@
       if (!rc) return false;
       const its = rc.intersections || [];
       if (!its.length) return false;
-      const target = its[0].object && its[0].object.el;
+      const target = its[0].el || (its[0].object && its[0].object.el);
       if (!target || !target.classList) return false;
       const sliderClasses = ['vr-scrub', 'vr-scrub-bg', 'vr-scrub-marker',
                              'vr-vol-track', 'vr-vol-thumb'];
