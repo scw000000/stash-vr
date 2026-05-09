@@ -90,7 +90,7 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 
   <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
   <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
-    <a-plane width="1.85" height="0.4" color="#000" material="opacity:0.65"></a-plane>
+    <a-plane width="2.15" height="0.4" color="#000" material="opacity:0.65"></a-plane>
     <a-entity class="vr-btn" data-action="playpause" position="-0.75 0 0.01"
               geometry="primitive:plane;width:0.28;height:0.28"
               material="color:#2c5282;opacity:0.95">
@@ -111,7 +111,12 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
               material="color:#2c5282;opacity:0.95">
       <a-text value="Format" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="exit" position="0.45 0 0.01"
+    <a-entity class="vr-btn" data-action="help" position="0.45 0 0.01"
+              geometry="primitive:plane;width:0.28;height:0.28"
+              material="color:#2c5282;opacity:0.95">
+      <a-text value="?" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
+    </a-entity>
+    <a-entity class="vr-btn" data-action="exit" position="0.75 0 0.01"
               geometry="primitive:plane;width:0.28;height:0.28"
               material="color:#a01010;opacity:0.95">
       <a-text value="Exit VR" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
@@ -178,6 +183,34 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     <a-entity class="vr-btn picker-btn" data-pick-row="auto" data-pick-value="auto" position="0.0 -0.46 0.01"
               geometry="primitive:plane;width:0.80;height:0.16" material="color:#3776c2;opacity:0.95">
       <a-text value="Auto (re-detect)" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+    </a-entity>
+  </a-entity>
+
+  <!-- M3c help cheatsheet. Hidden by default; toggled by the "?" button. -->
+  <a-entity id="vrHelpPanel" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
+    <a-plane width="2.4" height="1.5" color="#000" material="opacity:0.75"></a-plane>
+    <a-text value="Controls" align="left" color="#fff" width="3.5" position="-1.1 0.65 0.01"></a-text>
+
+    <a-text value="Trigger (no hit) · single"  align="left" color="#aaa" width="3" position="-1.1  0.42 0.01"></a-text>
+    <a-text value="Toggle panel"               align="left" color="#fff" width="3" position=" 0.05 0.42 0.01"></a-text>
+    <a-text value="Trigger · double"           align="left" color="#aaa" width="3" position="-1.1  0.30 0.01"></a-text>
+    <a-text value="Play / Pause"               align="left" color="#fff" width="3" position=" 0.05 0.30 0.01"></a-text>
+    <a-text value="Trigger · hold + move"      align="left" color="#aaa" width="3" position="-1.1  0.18 0.01"></a-text>
+    <a-text value="Drag screen"                align="left" color="#fff" width="3" position=" 0.05 0.18 0.01"></a-text>
+    <a-text value="A or X · single / double"   align="left" color="#aaa" width="3" position="-1.1  0.06 0.01"></a-text>
+    <a-text value="Toggle panel / Play-Pause"  align="left" color="#fff" width="3" position=" 0.05 0.06 0.01"></a-text>
+    <a-text value="Thumbstick L / R"           align="left" color="#aaa" width="3" position="-1.1 -0.06 0.01"></a-text>
+    <a-text value="-10s / +10s"                align="left" color="#fff" width="3" position=" 0.05 -0.06 0.01"></a-text>
+    <a-text value="Thumbstick U / D"           align="left" color="#aaa" width="3" position="-1.1 -0.18 0.01"></a-text>
+    <a-text value="Zoom in / out"              align="left" color="#fff" width="3" position=" 0.05 -0.18 0.01"></a-text>
+    <a-text value="B or Y · short"             align="left" color="#aaa" width="3" position="-1.1 -0.30 0.01"></a-text>
+    <a-text value="Reset screen / Recenter"    align="left" color="#fff" width="3" position=" 0.05 -0.30 0.01"></a-text>
+    <a-text value="B or Y · long-press"        align="left" color="#aaa" width="3" position="-1.1 -0.42 0.01"></a-text>
+    <a-text value="Full recenter"              align="left" color="#fff" width="3" position=" 0.05 -0.42 0.01"></a-text>
+
+    <a-entity class="vr-btn" data-action="help-close" position="1.05 0.65 0.01"
+              geometry="primitive:plane;width:0.18;height:0.18" material="color:#a01010;opacity:0.95">
+      <a-text value="X" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
     </a-entity>
   </a-entity>
 
@@ -548,6 +581,15 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
           const visible = picker.getAttribute('visible');
           picker.setAttribute('visible', !visible);
         }
+      } else if (action === 'help') {
+        const help = document.getElementById('vrHelpPanel');
+        if (help) {
+          const visible = help.getAttribute('visible');
+          help.setAttribute('visible', !visible);
+        }
+      } else if (action === 'help-close') {
+        const help = document.getElementById('vrHelpPanel');
+        if (help) help.setAttribute('visible', false);
       }
     }
     document.querySelectorAll('.vr-btn').forEach(btn => {
