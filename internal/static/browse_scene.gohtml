@@ -145,41 +145,46 @@ a.chip:hover { background: #3a3a3a; }
                 material="color:#fff" position="0.20 0 0.005"></a-entity>
     </a-entity>
 
-    <!-- 7 buttons to the right of the volume widget. -->
-    <a-entity class="vr-btn" data-action="cc" id="vrCCBtn" position="-0.40 -0.20 0.01"
-              geometry="primitive:plane;width:0.28;height:0.20"
+    <!-- 8 buttons to the right of the volume widget (Browse added in M4c). -->
+    <a-entity class="vr-btn" data-action="cc" id="vrCCBtn" position="-0.55 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95"
               visible="{{if .Captions}}true{{else}}false{{end}}">
       <a-text value="CC" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="playpause" position="-0.08 -0.20 0.01"
-              geometry="primitive:plane;width:0.28;height:0.20"
+    <a-entity class="vr-btn" data-action="playpause" position="-0.25 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-image id="vrPlayIcon"  width="0.14" height="0.14" position="0 0 0.005"></a-image>
       <a-image id="vrPauseIcon" width="0.14" height="0.14" position="0 0 0.005" visible="false"></a-image>
     </a-entity>
-    <a-entity class="vr-btn" data-action="speed" position="0.24 -0.20 0.01"
-              geometry="primitive:plane;width:0.28;height:0.20"
+    <a-entity class="vr-btn" data-action="speed" position="0.05 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text id="vrSpeedLabel" value="1.0x" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="loop" id="vrLoopBtn" position="0.56 -0.20 0.01"
-              geometry="primitive:plane;width:0.28;height:0.20"
+    <a-entity class="vr-btn" data-action="loop" id="vrLoopBtn" position="0.35 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-image id="vrLoopIcon" width="0.14" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
-    <a-entity class="vr-btn" data-action="format" position="0.88 -0.20 0.01"
-              geometry="primitive:plane;width:0.28;height:0.20"
+    <a-entity class="vr-btn" data-action="browse" position="0.65 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
+              material="color:#2c5282;opacity:0.95">
+      <a-text value="Browse" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+    </a-entity>
+    <a-entity class="vr-btn" data-action="format" position="0.95 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-image id="vrFormatIcon" width="0.16" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
-    <a-entity class="vr-btn" data-action="help" position="1.20 -0.20 0.01"
-              geometry="primitive:plane;width:0.28;height:0.20"
+    <a-entity class="vr-btn" data-action="help" position="1.25 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text value="?" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="exit" position="1.52 -0.20 0.01"
-              geometry="primitive:plane;width:0.28;height:0.20"
+    <a-entity class="vr-btn" data-action="exit" position="1.55 -0.20 0.01"
+              geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#a01010;opacity:0.95">
       <a-image id="vrExitIcon" width="0.14" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
@@ -284,6 +289,49 @@ a.chip:hover { background: #3a3a3a; }
     <a-plane id="vrSubtitlePickerBg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
     <a-text id="vrSubtitlePickerTitle" value="Subtitles" align="left" color="#fff" width="3" position="-0.85 0.13 0.01"></a-text>
     <a-entity id="vrSubtitlePickerButtons" position="0 0 0.01"></a-entity>
+  </a-entity>
+
+  <!-- M4c browse panel. Hidden by default; toggled by the Browse button on
+       the playback panel. Top strip is wired in Task 3 (this task);
+       tile grid + load-more sentinel are populated by Tasks 4-5. -->
+  <a-entity id="vrBrowsePanel" position="0 1.4 -2.5" rotation="-15 0 0" visible="false">
+    <a-plane class="vr-grid-bg vr-btn" data-action="grid-bg" width="3.6" height="2.4"
+             color="#000" material="opacity:0.85"></a-plane>
+
+    <!-- Top strip (Tasks 6 + 7 fill these). Skeleton placeholders. -->
+    <a-entity id="vrBrowseTopStrip" position="0 1.0 0.01">
+      <a-plane class="vr-search-bg vr-btn" data-action="search-focus" width="1.2" height="0.16"
+               color="#222" material="opacity:0.9" position="-1.0 0 0">
+        <a-text value="Search…" align="left" color="#888" width="3" position="-0.55 0 0.005"></a-text>
+      </a-plane>
+      <a-entity class="vr-btn" data-action="filters" position="-0.10 0 0"
+                geometry="primitive:plane;width:0.45;height:0.16"
+                material="color:#2c5282;opacity:0.95">
+        <a-text value="Filters ▾" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+      </a-entity>
+      <a-entity class="vr-btn" data-action="filters-clear" position="0.40 0 0"
+                geometry="primitive:plane;width:0.45;height:0.16"
+                material="color:#2c5282;opacity:0.95">
+        <a-text value="Clear all" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+      </a-entity>
+      <a-entity class="vr-btn" data-action="cols-cycle" id="vrColsBtn" position="0.95 0 0"
+                geometry="primitive:plane;width:0.40;height:0.16"
+                material="color:#2c5282;opacity:0.95">
+        <a-text id="vrColsLabel" value="Cols: 4" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+      </a-entity>
+      <a-entity class="vr-btn" data-action="browse-close" position="1.45 0 0"
+                geometry="primitive:plane;width:0.20;height:0.16"
+                material="color:#a01010;opacity:0.95">
+        <a-text value="✕" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
+      </a-entity>
+    </a-entity>
+
+    <!-- Tile grid root (Task 4 populates). -->
+    <a-entity id="vrBrowseTiles"></a-entity>
+
+    <!-- "Loading more..." sentinel (Task 5 toggles). -->
+    <a-text id="vrBrowseLoadMore" value="" align="center" color="#888" width="3"
+            position="0 -1.05 0.01" visible="false"></a-text>
   </a-entity>
 
   </a-entity><!-- /vrControlsRoot -->
@@ -807,11 +855,26 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function closeAllSubpanels(except) {
-      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker'].forEach(id => {
+      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker', 'vrBrowsePanel'].forEach(id => {
         if (id === except) return;
         const el = document.getElementById(id);
         if (el) el.setAttribute('visible', false);
       });
+    }
+
+    // M4c: persisted column-count for the browse grid. Cycles 3→4→5→6→3.
+    let m4cCols = parseInt(localStorage.getItem('m4c.cols') || '4', 10);
+    if (m4cCols < 3 || m4cCols > 6) m4cCols = 4;
+
+    function updateColsLabel() {
+      const el = document.getElementById('vrColsLabel');
+      if (el) el.setAttribute('value', 'Cols: ' + m4cCols);
+    }
+    updateColsLabel();
+
+    // Stub for Task 4 — invoked when the browse panel becomes visible.
+    function onBrowsePanelOpen() {
+      // Tile fetch + render fills this in Task 4.
     }
 
     function vrAction(action) {
@@ -854,6 +917,23 @@ a.chip:hover { background: #3a3a3a; }
       } else if (action === 'help-close') {
         const help = document.getElementById('vrHelpPanel');
         if (help) help.setAttribute('visible', false);
+      } else if (action === 'browse') {
+        const bp = document.getElementById('vrBrowsePanel');
+        if (bp) {
+          const visible = bp.getAttribute('visible');
+          const willShow = !(visible === true || visible === 'true');
+          if (willShow) closeAllSubpanels('vrBrowsePanel');
+          bp.setAttribute('visible', willShow);
+          if (willShow) onBrowsePanelOpen();
+        }
+      } else if (action === 'browse-close') {
+        const bp = document.getElementById('vrBrowsePanel');
+        if (bp) bp.setAttribute('visible', false);
+      } else if (action === 'cols-cycle') {
+        m4cCols = (m4cCols >= 6) ? 3 : (m4cCols + 1);
+        localStorage.setItem('m4c.cols', String(m4cCols));
+        updateColsLabel();
+        if (typeof relayoutTiles === 'function') relayoutTiles(); // Task 4 defines
       } else if (action === 'cc') {
         const sub = document.getElementById('vrSubtitlePicker');
         if (sub) {
