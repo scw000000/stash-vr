@@ -3,6 +3,7 @@ package browse
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -43,8 +44,11 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 // and the POST response can never drift.
 func buildSceneState(ctx context.Context, svc *library.Service, id string) (SceneState, error) {
 	vd, err := svc.GetScene(ctx, id, false)
-	if err != nil || vd == nil || vd.SceneParts == nil {
+	if err != nil {
 		return SceneState{}, err
+	}
+	if vd == nil || vd.SceneParts == nil {
+		return SceneState{}, fmt.Errorf("scene %s not found", id)
 	}
 	state := SceneState{}
 	if vd.SceneParts.Rating100 != nil {
