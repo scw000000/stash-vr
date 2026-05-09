@@ -1053,6 +1053,11 @@ a.chip:hover { background: #3a3a3a; }
       }
 
       plane.addEventListener('mouseenter', function() {
+        // Hover affordance: scale the cylinder slightly so the user gets
+        // visible feedback even if both the WebM preview and the sprite
+        // sheet are unavailable (which is the common case on libraries
+        // that haven't generated previews yet).
+        if (plane.object3D) plane.object3D.scale.set(1.05, 1.05, 1.05);
         const v = ensureVideo();
         v.currentTime = 0;
         // Track this hover so that a stale (slow) play() resolution after
@@ -1083,6 +1088,9 @@ a.chip:hover { background: #3a3a3a; }
       });
 
       plane.addEventListener('mouseleave', function() {
+        // Always reset the hover scale, regardless of which fallback path
+        // (video / sprite / nothing) was active for this tile.
+        if (plane.object3D) plane.object3D.scale.set(1, 1, 1);
         // Invalidate any in-flight play() resolution from the previous
         // mouseenter so it can't replace the cover after we restore it.
         tileEl._hoverToken = (tileEl._hoverToken || 0) + 1;
