@@ -1782,7 +1782,9 @@ a.chip:hover { background: #3a3a3a; }
     // Falls back silently to the current path on any failure.
     // ============================================================
     (function spikeWebXRLayers() {
-      if (!new URLSearchParams(location.search).has('spike-layers')) return;
+      const spikeFlag = new URLSearchParams(location.search).get('spike-layers');
+      if (!spikeFlag) return;
+      const forceMode = (spikeFlag === 'force');
 
       function tintMuteButton(color) {
         // The mute button is the only entity with data-action="mute" in
@@ -1886,19 +1888,28 @@ a.chip:hover { background: #3a3a3a; }
           // 'layers' feature granted), updateRenderState({layers}) would
           // strand it — bail in that case.
           const existingLayers = (xrSession.renderState && xrSession.renderState.layers) || null;
-          if (!existingLayers || !existingLayers.length) {
-            spikeStatus('failed', 'legacy-baselayer');
+          const onLegacyBaseLayer = !existingLayers || !existingLayers.length;
+
+          if (onLegacyBaseLayer && !forceMode) {
+            spikeStatus('failed', 'legacy-baselayer (try ?spike-layers=force to override)');
             mediaLayer = null;
             return;
           }
 
-          xrSession.updateRenderState({
-            layers: [mediaLayer].concat(existingLayers)
-          });
+          // On legacy baseLayer with force mode: replace baseLayer entirely with our
+          // media layer. A-Frame's HUD will not render (the projection layer it was
+          // drawing into is gone), but the media layer presents independently via
+          // the compositor. User sees only the video — sufficient to test whether
+          // the Layers path eliminates the V flash artifact.
+          const newLayers = onLegacyBaseLayer
+            ? [mediaLayer]
+            : [mediaLayer].concat(existingLayers);
+
+          xrSession.updateRenderState({ layers: newLayers });
 
           if (geometryHidden) geometryHidden.setAttribute('visible', 'false');
 
-          spikeStatus('active', (geom || 'cinema') + '/' + layout);
+          spikeStatus('active', (geom || 'cinema') + '/' + layout + (onLegacyBaseLayer ? '/force' : ''));
         } catch (err) {
           const msg = (err && err.message ? err.message : String(err)).substring(0, 60);
           // Run teardown first (it resets the tint), then set the failed
