@@ -1845,26 +1845,31 @@ a.chip:hover { background: #3a3a3a; }
     function tickBrowseScroll() {
       const bp = document.getElementById('vrBrowsePanel');
       const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
-      if (!bpVis) {
-        m4cConsumeThumbY = false;
-        m4cLastScrollTickMs = 0;
-        _setDbg('', '');
-        return;
-      }
+
+      // Always update the diagnostic overlay, even when the browse panel
+      // is closed — that way the user can see laser/thumbstick state at
+      // any time (e.g. to verify their thumbstick is being read at all).
+      const tsR = _readThumbstickAxes(document.getElementById('vrLaserRight')) || { x: 0, y: 0 };
+      const tsL = _readThumbstickAxes(document.getElementById('vrLaserLeft'))  || { x: 0, y: 0 };
       // Pick whichever laser is currently on a browse-panel surface.
       const lasers = ['vrLaserRight', 'vrLaserLeft'].map(id => document.getElementById(id));
       let activeLaser = null;
       for (let i = 0; i < lasers.length; i++) {
         if (_laserIsOnBrowsePanel(lasers[i])) { activeLaser = lasers[i]; break; }
       }
-      // Always read the right-hand thumbstick (for the diag display) so we
-      // can see raw axes even when the laser isn't on the panel yet.
-      const tsR = _readThumbstickAxes(document.getElementById('vrLaserRight')) || { x: 0, y: 0 };
-      const dbgLine1 = 'R: ' + _laserHits('vrLaserRight');
-      const dbgLine2 = 'sy=' + tsR.y.toFixed(2) + ' scroll=' + scrollY.toFixed(2) +
+      const dbgLine1 = 'R hits: ' + _laserHits('vrLaserRight');
+      const dbgLine2 = 'sy R=' + tsR.y.toFixed(2) + ' L=' + tsL.y.toFixed(2) +
+                       ' scroll=' + scrollY.toFixed(2) +
                        '/' + m4cMaxScroll.toFixed(2) +
-                       ' onPanel=' + (activeLaser ? activeLaser.id.replace('vrLaser','') : 'no');
+                       ' onPanel=' + (activeLaser ? activeLaser.id.replace('vrLaser','') : 'no') +
+                       ' bp=' + (bpVis ? '1' : '0');
       _setDbg(dbgLine1, dbgLine2);
+
+      if (!bpVis) {
+        m4cConsumeThumbY = false;
+        m4cLastScrollTickMs = 0;
+        return;
+      }
       if (!activeLaser) {
         m4cConsumeThumbY = false;
         m4cLastScrollTickMs = 0;
