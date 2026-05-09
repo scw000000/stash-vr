@@ -942,27 +942,34 @@ a.chip:hover { background: #3a3a3a; }
     let m4cCols = parseInt(localStorage.getItem('m4c.cols') || '4', 10);
     if (m4cCols < 3 || m4cCols > 6) m4cCols = 4;
 
-    // Render a string as a row of single-character a-text entities laid
-    // along the parent cylinder's arc. Each char sits at its own angular
-    // surface point with a yaw rotation matching the arc tangent there,
-    // so the whole label visually follows the cylinder curve. Reads the
-    // text + style from data-label / data-label-color on parentCylEl, and
-    // the geometry (R, theta-start, theta-length) from the cylinder attrs.
-    function curveLabelInto(parentCylEl) {
-      const text  = parentCylEl.getAttribute('data-label') || '';
-      const color = parentCylEl.getAttribute('data-label-color') || '#fff';
-      const R           = parseFloat(parentCylEl.getAttribute('radius'));
-      const thetaStart  = parseFloat(parentCylEl.getAttribute('theta-start'));
-      const thetaLength = parseFloat(parentCylEl.getAttribute('theta-length'));
-      if (!text || !isFinite(R) || !isFinite(thetaStart) || !isFinite(thetaLength)) return;
+    // Place a string as a row of single-character a-text entities laid
+    // along an arc, so the whole label visually follows a cylinder curve.
+    // - parentEl: where the per-char a-text children are appended.
+    // - text: the full string.
+    // - opts: { R, thetaStartDeg, thetaLengthDeg, color, y, hubLocal }.
+    //   hubLocal=true (default) means the char xz are computed relative to
+    //   the parent's local origin sitting on the cylinder hub axis (works
+    //   for top-strip cylinder primitives where local 0,0,0 is the hub).
+    //   When parentEl's origin is OFFSET from the hub (e.g. tile titles
+    //   where the tile entity sits at the hub but the title baseline is
+    //   below the cover center), pass `y` as the y-coord for char meshes
+    //   and `hubLocal: true` still — z is `R*cos(θ)` from the hub axis.
+    // - tagClass: class assigned to each child (used for idempotent wipe).
+    function placeCurvedString(parentEl, text, opts, tagClass) {
+      if (!text) return;
+      const R           = opts.R;
+      const thetaStart  = opts.thetaStartDeg;
+      const thetaLength = opts.thetaLengthDeg;
+      const color       = opts.color || '#fff';
+      const y           = (typeof opts.y === 'number') ? opts.y : 0;
+      if (!isFinite(R) || !isFinite(thetaStart) || !isFinite(thetaLength)) return;
 
-      // Wipe any prior curved-label children so this is idempotent.
-      const old = parentCylEl.querySelectorAll(':scope > .curved-label-char');
+      // Wipe any prior curved-label children of this class so this is idempotent.
+      const old = parentEl.querySelectorAll(':scope > .' + tagClass);
       old.forEach(n => n.parentNode.removeChild(n));
 
-      // Per-char arc span: 0.95° looks right at R≈2.97 (≈0.05m). Shrink
-      // proportionally if the full string would exceed 95% of the button
-      // arc, so the label always fits within the button.
+      // Per-char arc span: 0.95° looks right at R≈3 (≈0.05m). Shrink
+      // proportionally if the full string would exceed 95% of the arc.
       let charDeg = 0.95;
       if (text.length * charDeg > thetaLength * 0.95) {
         charDeg = thetaLength * 0.95 / text.length;
@@ -970,44 +977,47 @@ a.chip:hover { background: #3a3a3a; }
       const totalArcDeg = text.length * charDeg;
       const centerDeg   = thetaStart + thetaLength / 2;
       const startDeg    = centerDeg - totalArcDeg / 2;
-
-      // a-text 'width' / 'wrap-count' choice: with wrap-count=10, the
-      // rendered single-char glyph width ≈ width/10. We want it to match
-      // the arc length the char is supposed to occupy, so set width to
-      // 10× the char arc-length.
-      const charArcLen = R * (charDeg * Math.PI / 180);
-      const aTextWidth = (charArcLen * 10).toFixed(3);
+      const charArcLen  = R * (charDeg * Math.PI / 180);
+      const aTextWidth  = (charArcLen * 10).toFixed(3);
 
       for (let i = 0; i < text.length; i++) {
-        // Lay char[0] at the LARGEST theta (left side of arc as seen by
-        // user, since +theta in A-Frame's convention moves the surface
-        // point in -X panel-local). Last char goes at the smallest theta
-        // (right side). Without this reversal the string reads R-to-L from
-        // the user's perspective ("Filters" → "sretliF").
+        // char[0] at the LARGEST theta (left side from user view), char[N-1]
+        // at smallest theta (right side). +theta in A-Frame's convention
+        // moves the surface point in -X panel-local.
         const charDegHere = startDeg + (text.length - i - 0.5) * charDeg;
         const charRad     = charDegHere * Math.PI / 180;
-        // a-frame cylinder convention: theta=0 is +Z. Surface point in
-        // cylinder-local: (R·sin θ, *, R·cos θ). Pull the char ~5mm toward
-        // the hub (toward user) by scaling R down a hair, so the text
-        // doesn't z-fight with the cylinder shell at the surface.
+        // Pull text ~5mm toward hub (closer to user) so it doesn't z-fight
+        // with whatever cylinder shell shares this arc.
         const Rtxt = R - 0.005;
         const x = Rtxt * Math.sin(charRad);
         const z = Rtxt * Math.cos(charRad);
-        // Tangent yaw: text default normal is +Z. Surface inward normal at
-        // theta_aFrame is (-sin, 0, -cos), which corresponds to a yaw of
-        // theta_aFrame_deg - 180 around Y.
         const yawDeg = charDegHere - 180;
         const t = document.createElement('a-text');
-        t.classList.add('curved-label-char');
+        t.classList.add(tagClass);
         t.setAttribute('value', text[i]);
         t.setAttribute('align', 'center');
         t.setAttribute('color', color);
         t.setAttribute('width', aTextWidth);
         t.setAttribute('wrap-count', '10');
-        t.setAttribute('position', x.toFixed(3) + ' 0 ' + z.toFixed(3));
+        t.setAttribute('position', x.toFixed(3) + ' ' + y.toFixed(3) + ' ' + z.toFixed(3));
         t.setAttribute('rotation', '0 ' + yawDeg.toFixed(2) + ' 0');
-        parentCylEl.appendChild(t);
+        parentEl.appendChild(t);
       }
+    }
+
+    // Convenience wrapper: read R + theta-* + data-label from a top-strip
+    // cylinder and call placeCurvedString.
+    function curveLabelInto(parentCylEl) {
+      placeCurvedString(parentCylEl,
+        parentCylEl.getAttribute('data-label') || '',
+        {
+          R:               parseFloat(parentCylEl.getAttribute('radius')),
+          thetaStartDeg:   parseFloat(parentCylEl.getAttribute('theta-start')),
+          thetaLengthDeg:  parseFloat(parentCylEl.getAttribute('theta-length')),
+          color:           parentCylEl.getAttribute('data-label-color') || '#fff',
+          y: 0,
+        },
+        'curved-label-char');
     }
 
     function applyAllCurvedLabels() {
@@ -1499,19 +1509,23 @@ a.chip:hover { background: #3a3a3a; }
           detailBadge.appendChild(badgeText);
           el.appendChild(detailBadge);
 
-          // Title strip — text below the cover, at the surface point of the
-          // tile center, rotated to face the user from that point.
-          const titleEl = document.createElement('a-text');
-          titleEl.setAttribute('value', tile.title);
-          titleEl.setAttribute('align', 'center');
-          titleEl.setAttribute('color', '#fff');
-          titleEl.setAttribute('width', tileW);
-          titleEl.setAttribute('wrap-count', '20');
-          titleEl.setAttribute('height', TITLE_STRIP_H);
-          titleEl.setAttribute('position',
-            titleSurfaceX.toFixed(3) + ' ' + titleY.toFixed(3) + ' ' + titleZ.toFixed(3));
-          titleEl.setAttribute('rotation', '0 ' + titleYawDeg.toFixed(3) + ' 0');
-          el.appendChild(titleEl);
+          // Title strip — per-character curved layout. The chars sit on
+          // the same arc as the cover (radius ARC_R, theta-start /
+          // theta-length from pos) but at a y below the cover center, so
+          // the whole title follows the cylinder curve and never extends
+          // past the bg arc edges. Wrapped in an <a-entity> so we can
+          // toggle its visibility as a unit when the row scrolls out of
+          // the band.
+          const titleWrap = document.createElement('a-entity');
+          titleWrap.classList.add('vr-tile-title');
+          el.appendChild(titleWrap);
+          placeCurvedString(titleWrap, tile.title, {
+            R: ARC_R,
+            thetaStartDeg:  pos.thetaStartDeg,
+            thetaLengthDeg: pos.thetaLengthDeg,
+            color: '#fff',
+            y: titleY,
+          }, 'curved-title-char');
 
           // Cover texture is bound via the material src attribute above;
           // A-Frame's material component handles loading + lifecycle. We
@@ -1537,13 +1551,18 @@ a.chip:hover { background: #3a3a3a; }
               badgeLocalX.toFixed(3) + ' ' + badgeLocalY.toFixed(3) + ' ' + badgeLocalZ.toFixed(3));
             badge.setAttribute('rotation', '0 ' + badgeYawDeg.toFixed(3) + ' 0');
           }
-          const title = el.querySelector('a-text:not(.vr-tile-detail a-text)');
-          if (title) {
-            title.setAttribute('width', tileW);
-            title.setAttribute('height', TITLE_STRIP_H);
-            title.setAttribute('position',
-              titleSurfaceX.toFixed(3) + ' ' + titleY.toFixed(3) + ' ' + titleZ.toFixed(3));
-            title.setAttribute('rotation', '0 ' + titleYawDeg.toFixed(3) + ' 0');
+          // Rebuild the curved title chars with the new arc params (the
+          // cover's arc shifted because cols changed → tile width / theta
+          // span is different).
+          const titleWrap = el.querySelector(':scope > .vr-tile-title');
+          if (titleWrap) {
+            placeCurvedString(titleWrap, tile.title, {
+              R: ARC_R,
+              thetaStartDeg:  pos.thetaStartDeg,
+              thetaLengthDeg: pos.thetaLengthDeg,
+              color: '#fff',
+              y: titleY,
+            }, 'curved-title-char');
           }
         }
         // Tile entity sits at the cylinder hub for the row. The cover
@@ -1571,7 +1590,7 @@ a.chip:hover { background: #3a3a3a; }
         // planes still render the cover correctly behind them.
         const titleAbsY = pos.y + titleY;
         const badgeAbsY = pos.y + badgeLocalY;
-        const titleNode = el.querySelector(':scope > a-text');
+        const titleNode = el.querySelector(':scope > .vr-tile-title');
         if (titleNode && titleNode.object3D) {
           titleNode.object3D.visible = (titleAbsY > TILE_AREA_BOTTOM_Y && titleAbsY < TILE_AREA_TOP_Y);
         }
@@ -1800,13 +1819,18 @@ a.chip:hover { background: #3a3a3a; }
     };
 
     let m4cLastScrollTickMs = 0;
-    let m4cLastDbgState = '';
+    function _setDbg(line1, line2) {
+      const dbg = document.getElementById('vrM4cDebug');
+      if (!dbg) return;
+      dbg.setAttribute('value', (line1 || '') + (line2 ? '\n' + line2 : ''));
+    }
     function tickBrowseScroll() {
       const bp = document.getElementById('vrBrowsePanel');
       const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
       if (!bpVis) {
         m4cConsumeThumbY = false;
         m4cLastScrollTickMs = 0;
+        _setDbg('', '');
         return;
       }
       // Pick whichever laser is currently on a browse-panel surface.
@@ -1815,6 +1839,14 @@ a.chip:hover { background: #3a3a3a; }
       for (let i = 0; i < lasers.length; i++) {
         if (_laserIsOnBrowsePanel(lasers[i])) { activeLaser = lasers[i]; break; }
       }
+      // Always read the right-hand thumbstick (for the diag display) so we
+      // can see raw axes even when the laser isn't on the panel yet.
+      const tsR = _readThumbstickAxes(document.getElementById('vrLaserRight')) || { x: 0, y: 0 };
+      const dbgLine1 = 'R: ' + _laserHits('vrLaserRight');
+      const dbgLine2 = 'sy=' + tsR.y.toFixed(2) + ' scroll=' + scrollY.toFixed(2) +
+                       '/' + m4cMaxScroll.toFixed(2) +
+                       ' onPanel=' + (activeLaser ? activeLaser.id.replace('vrLaser','') : 'no');
+      _setDbg(dbgLine1, dbgLine2);
       if (!activeLaser) {
         m4cConsumeThumbY = false;
         m4cLastScrollTickMs = 0;
