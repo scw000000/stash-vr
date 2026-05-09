@@ -370,6 +370,14 @@ a.chip:hover { background: #3a3a3a; }
     <!-- "Loading more..." sentinel (Task 5 toggles). -->
     <a-text id="vrBrowseLoadMore" value="" align="center" color="#888" width="3"
             position="0 -1.05 0.01" visible="false"></a-text>
+
+    <!-- M4c debug overlay: shows what the right-hand laser's first
+         intersection is currently hitting. Updated every rAF from
+         tickBrowseScroll. Helps diagnose "invisible blocker" reports
+         without needing to open the console. Lives at the top of the
+         panel (above the top strip) so it doesn't overlap with grid. -->
+    <a-text id="vrM4cDebug" value="" align="center" color="#0ff" width="2.5"
+            position="0 1.18 3.05"></a-text>
   </a-entity>
 
   </a-entity><!-- /vrControlsRoot -->
@@ -1736,10 +1744,42 @@ a.chip:hover { background: #3a3a3a; }
       }
       return false;
     }
+    // M4c diagnostics — writes what each laser's first intersection is hitting
+    // into the in-VR debug overlay AND into window.m4d() return value.
+    function _summarizeIntersection(its) {
+      if (!its || !its.length) return '(none)';
+      return its.slice(0, 3).map(i => {
+        const el = i.el || (i.object && i.object.el);
+        if (!el) return '?';
+        const id  = el.id ? '#' + el.id : '';
+        const cls = el.className ? '.' + String(el.className).split(' ').filter(Boolean).join('.') : '';
+        const tag = el.tagName ? el.tagName.toLowerCase() : '?';
+        const dist = (typeof i.distance === 'number') ? i.distance.toFixed(2) : '?';
+        return tag + id + cls + '@' + dist;
+      }).join(' | ');
+    }
+    function _laserHits(laserId) {
+      const el = document.getElementById(laserId);
+      if (!el) return '(no laser)';
+      const rc = el.components && el.components.raycaster;
+      return _summarizeIntersection(rc && rc.intersections);
+    }
+    window.m4d = function () {
+      return { right: _laserHits('vrLaserRight'), left: _laserHits('vrLaserLeft') };
+    };
+
     let m4cLastScrollTickMs = 0;
     function tickBrowseScroll() {
       const bp = document.getElementById('vrBrowsePanel');
       const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
+      // Update in-VR debug overlay every frame the panel is visible. Shows
+      // R: <right laser hits>  L: <left laser hits> for the first 3 hits.
+      const dbg = document.getElementById('vrM4cDebug');
+      if (dbg && bpVis) {
+        dbg.setAttribute('value', 'R: ' + _laserHits('vrLaserRight') + '   L: ' + _laserHits('vrLaserLeft'));
+      } else if (dbg) {
+        dbg.setAttribute('value', '');
+      }
       if (!bpVis) {
         m4cConsumeThumbY = false;
         m4cLastScrollTickMs = 0;
