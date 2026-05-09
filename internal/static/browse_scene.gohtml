@@ -330,41 +330,37 @@ a.chip:hover { background: #3a3a3a; }
          A-Frame θ = 180 - our_θ. theta-start = aFrameCenter - span/2. -->
     <a-entity id="vrBrowseTopStrip" position="0 1.0 3.02">
       <!-- Search bar bg — also serves as a click target that focuses the
-           in-VR search input (data-action="search-focus"). -->
+           in-VR search input (data-action="search-focus"). Text label is
+           injected per-character on a curve at runtime by curveLabelInto(). -->
       <a-cylinder class="vr-search-bg vr-btn" data-action="search-focus"
+                  data-label="Search…" data-label-color="#888" data-label-align="left"
                   radius="2.97" height="0.16" open-ended="true"
                   theta-start="188.15" theta-length="23.10"
                   material="shader: flat; color: #222; opacity: 0.9; side: double">
-        <a-text value="Search…" align="left" color="#888" width="3"
-                position="-1.0 0 -2.97" rotation="0 19.70 0"></a-text>
       </a-cylinder>
       <a-cylinder class="vr-btn" data-action="filters"
+                  data-label="Filters ▾" data-label-color="#fff" data-label-align="center"
                   radius="2.97" height="0.16" open-ended="true"
                   theta-start="177.59" theta-length="8.68"
                   material="shader: flat; color: #2c5282; opacity: 0.95; side: double">
-        <a-text value="Filters ▾" align="center" color="#fff" width="2.5"
-                position="-0.10 0 -2.969" rotation="0 1.93 0"></a-text>
       </a-cylinder>
       <a-cylinder class="vr-btn" data-action="filters-clear"
+                  data-label="Clear all" data-label-color="#fff" data-label-align="center"
                   radius="2.97" height="0.16" open-ended="true"
                   theta-start="167.92" theta-length="8.68"
                   material="shader: flat; color: #2c5282; opacity: 0.95; side: double">
-        <a-text value="Clear all" align="center" color="#fff" width="2.5"
-                position="0.40 0 -2.943" rotation="0 -7.74 0"></a-text>
       </a-cylinder>
       <a-cylinder class="vr-btn" data-action="cols-cycle" id="vrColsBtn"
+                  data-label="Cols: 4" data-label-color="#fff" data-label-align="center"
                   radius="2.97" height="0.16" open-ended="true"
                   theta-start="157.49" theta-length="7.71"
                   material="shader: flat; color: #2c5282; opacity: 0.95; side: double">
-        <a-text id="vrColsLabel" value="Cols: 4" align="center" color="#fff" width="2.5"
-                position="0.95 0 -2.815" rotation="0 -18.65 0"></a-text>
       </a-cylinder>
       <a-cylinder class="vr-btn" data-action="browse-close"
+                  data-label="✕" data-label-color="#fff" data-label-align="center"
                   radius="2.97" height="0.16" open-ended="true"
                   theta-start="148.75" theta-length="3.86"
                   material="shader: flat; color: #a01010; opacity: 0.95; side: double">
-        <a-text value="✕" align="center" color="#fff" width="3.5"
-                position="1.45 0 -2.591" rotation="0 -29.32 0"></a-text>
       </a-cylinder>
     </a-entity>
 
@@ -912,9 +908,85 @@ a.chip:hover { background: #3a3a3a; }
     let m4cCols = parseInt(localStorage.getItem('m4c.cols') || '4', 10);
     if (m4cCols < 3 || m4cCols > 6) m4cCols = 4;
 
+    // Render a string as a row of single-character a-text entities laid
+    // along the parent cylinder's arc. Each char sits at its own angular
+    // surface point with a yaw rotation matching the arc tangent there,
+    // so the whole label visually follows the cylinder curve. Reads the
+    // text + style from data-label / data-label-color on parentCylEl, and
+    // the geometry (R, theta-start, theta-length) from the cylinder attrs.
+    function curveLabelInto(parentCylEl) {
+      const text  = parentCylEl.getAttribute('data-label') || '';
+      const color = parentCylEl.getAttribute('data-label-color') || '#fff';
+      const R           = parseFloat(parentCylEl.getAttribute('radius'));
+      const thetaStart  = parseFloat(parentCylEl.getAttribute('theta-start'));
+      const thetaLength = parseFloat(parentCylEl.getAttribute('theta-length'));
+      if (!text || !isFinite(R) || !isFinite(thetaStart) || !isFinite(thetaLength)) return;
+
+      // Wipe any prior curved-label children so this is idempotent.
+      const old = parentCylEl.querySelectorAll(':scope > .curved-label-char');
+      old.forEach(n => n.parentNode.removeChild(n));
+
+      // Per-char arc span: 0.95° looks right at R≈2.97 (≈0.05m). Shrink
+      // proportionally if the full string would exceed 95% of the button
+      // arc, so the label always fits within the button.
+      let charDeg = 0.95;
+      if (text.length * charDeg > thetaLength * 0.95) {
+        charDeg = thetaLength * 0.95 / text.length;
+      }
+      const totalArcDeg = text.length * charDeg;
+      const centerDeg   = thetaStart + thetaLength / 2;
+      const startDeg    = centerDeg - totalArcDeg / 2;
+
+      // a-text 'width' / 'wrap-count' choice: with wrap-count=10, the
+      // rendered single-char glyph width ≈ width/10. We want it to match
+      // the arc length the char is supposed to occupy, so set width to
+      // 10× the char arc-length.
+      const charArcLen = R * (charDeg * Math.PI / 180);
+      const aTextWidth = (charArcLen * 10).toFixed(3);
+
+      for (let i = 0; i < text.length; i++) {
+        const charDegHere = startDeg + (i + 0.5) * charDeg;
+        const charRad     = charDegHere * Math.PI / 180;
+        // a-frame cylinder convention: theta=0 is +Z. Surface point in
+        // cylinder-local: (R·sin θ, *, R·cos θ). Pull the char ~5mm toward
+        // the hub (toward user) by scaling R down a hair, so the text
+        // doesn't z-fight with the cylinder shell at the surface.
+        const Rtxt = R - 0.005;
+        const x = Rtxt * Math.sin(charRad);
+        const z = Rtxt * Math.cos(charRad);
+        // Tangent yaw: text default normal is +Z. Surface inward normal at
+        // theta_aFrame is (-sin, 0, -cos), which corresponds to a yaw of
+        // theta_aFrame_deg - 180 around Y.
+        const yawDeg = charDegHere - 180;
+        const t = document.createElement('a-text');
+        t.classList.add('curved-label-char');
+        t.setAttribute('value', text[i]);
+        t.setAttribute('align', 'center');
+        t.setAttribute('color', color);
+        t.setAttribute('width', aTextWidth);
+        t.setAttribute('wrap-count', '10');
+        t.setAttribute('position', x.toFixed(3) + ' 0 ' + z.toFixed(3));
+        t.setAttribute('rotation', '0 ' + yawDeg.toFixed(2) + ' 0');
+        parentCylEl.appendChild(t);
+      }
+    }
+
+    function applyAllCurvedLabels() {
+      document.querySelectorAll('#vrBrowseTopStrip > a-cylinder').forEach(curveLabelInto);
+    }
+    // Apply once after scene is ready (so a-cylinder primitives have parsed
+    // their attributes and we can read radius / theta-* from them).
+    if (scene.hasLoaded) {
+      applyAllCurvedLabels();
+    } else {
+      scene.addEventListener('loaded', applyAllCurvedLabels);
+    }
+
     function updateColsLabel() {
-      const el = document.getElementById('vrColsLabel');
-      if (el) el.setAttribute('value', 'Cols: ' + m4cCols);
+      const el = document.getElementById('vrColsBtn');
+      if (!el) return;
+      el.setAttribute('data-label', 'Cols: ' + m4cCols);
+      curveLabelInto(el);
     }
     updateColsLabel();
 
@@ -1652,11 +1724,17 @@ a.chip:hover { background: #3a3a3a; }
       if (!rc) return false;
       const its = rc.intersections || [];
       if (!its.length) return false;
-      const target = its[0].el || (its[0].object && its[0].object.el);
-      if (!target || !target.classList) return false;
-      return target.classList.contains('vr-tile-cover') ||
-             target.classList.contains('vr-grid-bg') ||
-             target.classList.contains('vr-tile-detail');
+      let target = its[0].el || (its[0].object && its[0].object.el);
+      if (!target) return false;
+      // Walk up the DOM tree; if we hit #vrBrowsePanel, the laser is on
+      // some descendant (tile cover, badge, top-strip button, bg). Any of
+      // those should let the thumbstick scroll the grid — otherwise users
+      // had to keep the laser on a tile cover, which is fiddly.
+      while (target) {
+        if (target.id === 'vrBrowsePanel') return true;
+        target = target.parentElement;
+      }
+      return false;
     }
     let m4cLastScrollTickMs = 0;
     function tickBrowseScroll() {
