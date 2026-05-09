@@ -70,7 +70,7 @@ a.chip:hover { background: #3a3a3a; }
 {{if .DirectStreamURL}}
 <button id="enterVR" class="btn-vr" type="button">{{if .Projection.Geometry}}▥ Enter VR{{else}}▥ Watch on virtual screen{{end}}</button>
 
-<a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
+<a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" webxr="optionalFeatures: layers" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
   <a-entity camera position="0 1.6 0"></a-entity>
   <!--
     All four render entities are always emitted. JS toggles visibility
@@ -101,7 +101,7 @@ a.chip:hover { background: #3a3a3a; }
 
   <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
   <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
-    <a-plane width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
+    <a-plane class="vr-panel-bg" width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
 
     <!-- Row 1 (top): title left, time right, tiny DBG button at far
          right (toggles the M4c diagnostic overlay; default off). -->
@@ -205,7 +205,7 @@ a.chip:hover { background: #3a3a3a; }
     the JS tap handler reads to update state.
   -->
   <a-entity id="vrFormatPicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-    <a-plane width="2.4" height="1.2" color="#000" material="opacity:0.7"></a-plane>
+    <a-plane class="vr-panel-bg" width="2.4" height="1.2" color="#000" material="opacity:0.7"></a-plane>
     <a-text value="Format" align="left" color="#fff" width="3.5" position="-1.1 0.5 0.01"></a-text>
 
     <!-- Row 1: Type -->
@@ -262,7 +262,7 @@ a.chip:hover { background: #3a3a3a; }
 
   <!-- M3c help cheatsheet. Hidden by default; toggled by the "?" button. -->
   <a-entity id="vrHelpPanel" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-    <a-plane width="2.4" height="1.5" color="#000" material="opacity:0.75"></a-plane>
+    <a-plane class="vr-panel-bg" width="2.4" height="1.5" color="#000" material="opacity:0.75"></a-plane>
     <a-text value="Controls" align="left" color="#fff" width="3.5" position="-1.1 0.65 0.01"></a-text>
 
     <a-text value="Trigger (no hit) · single"  align="left" color="#aaa" width="3" position="-1.1  0.42 0.01"></a-text>
@@ -292,7 +292,7 @@ a.chip:hover { background: #3a3a3a; }
        picker-render time populates the buttons row and resizes the
        background plane to fit. -->
   <a-entity id="vrSubtitlePicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-    <a-plane id="vrSubtitlePickerBg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
+    <a-plane id="vrSubtitlePickerBg" class="vr-panel-bg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
     <a-text id="vrSubtitlePickerTitle" value="Subtitles" align="left" color="#fff" width="3" position="-0.85 0.13 0.01"></a-text>
     <a-entity id="vrSubtitlePickerButtons" position="0 0 0.01"></a-entity>
   </a-entity>
@@ -403,8 +403,8 @@ a.chip:hover { background: #3a3a3a; }
        neutralize raycast hits via enabled: false; the controller model
        remains visible, matching SKYBOX. setPanelVisible toggles these
        two raycaster props (not the entity's visible). -->
-  <a-entity id="vrLaserRight" laser-controls="hand: right" raycaster="objects: .vr-btn; far: 5; enabled: false; showLine: false"></a-entity>
-  <a-entity id="vrLaserLeft"  laser-controls="hand: left"  raycaster="objects: .vr-btn; far: 5; enabled: false; showLine: false"></a-entity>
+  <a-entity id="vrLaserRight" laser-controls="hand: right" raycaster="objects: .vr-btn, .vr-panel-bg; far: 5; enabled: false; showLine: false"></a-entity>
+  <a-entity id="vrLaserLeft"  laser-controls="hand: left"  raycaster="objects: .vr-btn, .vr-panel-bg; far: 5; enabled: false; showLine: false"></a-entity>
 
   <!-- M3c controller-mapping component. Hosts the trigger state machine,
        gamepad polling, and B/Y long-press timer. Emits semantic events
@@ -505,51 +505,6 @@ a.chip:hover { background: #3a3a3a; }
     video.addEventListener('play', updatePlayPauseIcon);
     video.addEventListener('pause', updatePlayPauseIcon);
 
-    // Recover from WebGL context loss. Quest 3 drops the context after
-    // ~30s sleep; without preventDefault the browser won't restore it,
-    // and the video texture stays frozen even after re-entering VR
-    // (audio keeps playing because that pipeline is independent).
-    function refreshVideoTexture() {
-      if (!video || video.readyState < 2) return;
-      const wasPaused = video.paused;
-      const t = isFinite(video.currentTime) ? video.currentTime : 0;
-      try {
-        video.pause();
-        // Re-assigning currentTime forces the decoder to re-emit a
-        // frame, which the next render tick uploads to the GL texture.
-        video.currentTime = t;
-        if (!wasPaused) {
-          const p = video.play();
-          if (p && p.catch) p.catch(err => console.warn('stash-vr: video resume failed', err));
-        }
-      } catch (e) {
-        console.warn('stash-vr: video texture refresh failed', e);
-      }
-    }
-
-    scene.addEventListener('loaded', function() {
-      const canvas = scene.canvas;
-      if (!canvas) return;
-      canvas.addEventListener('webglcontextlost', function(e) {
-        console.warn('stash-vr: WebGL context lost — requesting restore');
-        e.preventDefault(); // critical: without this the browser doesn't restore
-      }, false);
-      canvas.addEventListener('webglcontextrestored', function() {
-        console.warn('stash-vr: WebGL context restored — refreshing video texture');
-        refreshVideoTexture();
-      }, false);
-    });
-
-    // Page-visibility backstop. Some sleep scenarios don't fully drop the
-    // GL context but still stall the decoder pipeline; refreshing on
-    // visibility return covers those cases cheaply.
-    document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) refreshVideoTexture();
-    });
-
-    // Entering VR fresh after a stall benefits from the same refresh.
-    scene.addEventListener('enter-vr', refreshVideoTexture);
-
     // Bind material + texture programmatically. aframe-stereo-component@1.4.0
     // doesn't work on A-Frame 1.7 (reads material as raw string at init), so
     // stereo is handled here directly.
@@ -588,6 +543,171 @@ a.chip:hover { background: #3a3a3a; }
       }
       return sharedTex;
     }
+    function disposeMeshMaterial(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const mesh = el.getObject3D('mesh');
+      if (!mesh) return;
+      mesh.userData.boundVR = false;
+      if (mesh.material) {
+        if (mesh.material.dispose) {
+          try { mesh.material.dispose(); } catch (e) {}
+        }
+        // The mesh keeps a default material; the next applySphere/applyFlat/
+        // applyFisheye will replace it with a fresh MeshBasicMaterial /
+        // ShaderMaterial wired to a live VideoTexture.
+      }
+    }
+    function teardownVideoTexture() {
+      // Dispose the shared VideoTexture so the next bind creates a fresh
+      // one wired to the currently-active GL context. Without this, a
+      // post-context-loss texture has dead GPU handles and renders black
+      // even though the <video> element is still decoding frames.
+      if (sharedTex) {
+        if (sharedTex.dispose) {
+          try { sharedTex.dispose(); } catch (e) {}
+        }
+        sharedTex = null;
+      }
+      ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'].forEach(disposeMeshMaterial);
+    }
+    function rebindActiveGeometry() {
+      const active = activeGeometry();
+      if (!active) return;
+      if (active.id === 'vrFlat') applyFlat();
+      else if (active.id === 'vrFisheye') applyFisheye();
+      else if (active.id === 'vrSphere180' || active.id === 'vrSphere360') applySphere();
+    }
+
+    // Recover from WebGL context loss + suspended XR sessions. Quest 3 drops
+    // the GL context after ~30s sleep; the VideoTexture and the materials
+    // that reference it become invalid (they hold GPU handles tied to the
+    // old context). Three.js doesn't auto-rebuild on context-restore — we
+    // dispose and rebind.
+    // Soft path: pause / seek-to-current / play. Restores frame flow when
+    // the GL context was the only thing lost.
+    function softVideoRefresh(t, wasPaused) {
+      try {
+        video.pause();
+        video.currentTime = t;
+        if (!wasPaused) {
+          const p = video.play();
+          if (p && p.catch) {
+            p.catch(err => {
+              console.warn('stash-vr: soft refresh play failed; falling back to load()', err);
+              hardVideoRefresh(t, wasPaused);
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('stash-vr: soft refresh threw; falling back to load()', e);
+        hardVideoRefresh(t, wasPaused);
+      }
+    }
+
+    // Hard path: video.load() to fully reset the decoder pipeline. Used
+    // after deep sleeps where the soft path can't restart frame flow.
+    function hardVideoRefresh(t, wasPaused) {
+      try {
+        const onMeta = function() {
+          video.removeEventListener('loadedmetadata', onMeta);
+          try {
+            video.currentTime = t;
+            if (!wasPaused) {
+              const p = video.play();
+              if (p && p.catch) p.catch(err => console.warn('stash-vr: hard refresh play failed', err));
+            }
+          } catch (e) {
+            console.warn('stash-vr: hard refresh post-meta failed', e);
+          }
+        };
+        video.addEventListener('loadedmetadata', onMeta);
+        video.load();
+      } catch (e) {
+        console.warn('stash-vr: hard refresh threw', e);
+      }
+    }
+
+    function refreshVideoTexture() {
+      teardownVideoTexture();
+      rebindActiveGeometry();
+      if (!video) return;
+      const wasPaused = video.paused;
+      const t = isFinite(video.currentTime) ? video.currentTime : 0;
+      // Watchdog: if currentTime hasn't advanced after 1.2s of soft-refresh
+      // attempt (and we expected playback), escalate to hard refresh.
+      const startTime = t;
+      softVideoRefresh(t, wasPaused);
+      if (!wasPaused) {
+        setTimeout(function() {
+          if (!video) return;
+          const advanced = video.currentTime > startTime + 0.05;
+          if (!advanced) {
+            console.warn('stash-vr: watchdog detected no playback advance — escalating to load()');
+            hardVideoRefresh(t, wasPaused);
+          }
+        }, 1200);
+      }
+    }
+
+    // First enter-vr: the initial bind path already handled it. Skip the
+    // teardown — only rebuild on second-and-later entries (post-suspend).
+    let enterVrCount = 0;
+    function onEnterVr() {
+      enterVrCount++;
+      if (enterVrCount === 1) {
+        // First entry: just kick the decoder, don't tear down a fresh bind.
+        if (video && video.readyState >= 2) {
+          try {
+            const t = isFinite(video.currentTime) ? video.currentTime : 0;
+            video.currentTime = t;
+          } catch (e) {}
+        }
+        return;
+      }
+      refreshVideoTexture();
+    }
+    scene.addEventListener('enter-vr', onEnterVr);
+
+    // WebGL context loss handlers (only available once the scene has
+    // initialized its renderer canvas).
+    scene.addEventListener('loaded', function() {
+      const canvas = scene.canvas;
+      if (!canvas) return;
+      canvas.addEventListener('webglcontextlost', function(e) {
+        console.warn('stash-vr: WebGL context lost — requesting restore');
+        e.preventDefault(); // critical: without this the browser doesn't restore
+      }, false);
+      canvas.addEventListener('webglcontextrestored', function() {
+        console.warn('stash-vr: WebGL context restored — rebuilding video texture');
+        refreshVideoTexture();
+      }, false);
+    });
+
+    // Page-visibility backstop. Refresh the decoder on visibility return so
+    // a stalled pipeline doesn't survive a quick tab-switch.
+    let lastHiddenAt = 0;
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        lastHiddenAt = performance.now();
+        return;
+      }
+      // Visibility returned. Decide soft vs hard recovery based on how
+      // long we were hidden. Quest deep sleeps invalidate the decoder
+      // pipeline; quick tab-switches just need a frame kick.
+      const wasHiddenForMs = lastHiddenAt > 0 ? performance.now() - lastHiddenAt : 0;
+      lastHiddenAt = 0;
+      if (wasHiddenForMs > 30000) {
+        // Long sleep — full refresh including texture rebind.
+        refreshVideoTexture();
+      } else if (video && video.readyState >= 2) {
+        try {
+          const t = isFinite(video.currentTime) ? video.currentTime : 0;
+          video.currentTime = t;
+        } catch (e) {}
+      }
+    });
+
     function bindSphereMesh(id) {
       const el = document.getElementById(id);
       if (!el || !window.AFRAME || !AFRAME.THREE) return;
@@ -944,11 +1064,56 @@ a.chip:hover { background: #3a3a3a; }
       el.setAttribute('text', 'value', (Number.isInteger(v) ? v.toFixed(1) : v.toString()) + 'x');
     }
 
+    // <a-entity visible="false"> sets object3D.visible only on that entity,
+    // not on descendants — and Three.js' Raycaster checks each object's own
+    // visibility, so child buttons inside a hidden picker still raycast-hit
+    // and intercept laser clicks meant for whichever picker is actually
+    // visible. Walk the subtree to keep visibility consistent.
+    function setSubpanelVisible(panelId, visible) {
+      const panel = document.getElementById(panelId);
+      if (!panel) return;
+      panel.setAttribute('visible', visible);
+      // Three.js Raycaster ignores visibility entirely, so the laser still
+      // hits hidden sub-panel descendants and intercepts clicks. Rebuild
+      // the laser raycaster's objects selector so it includes only the
+      // currently-visible sub-panels' targets.
+      if (panel.object3D) {
+        panel.object3D.traverse(function(obj) { obj.visible = visible; });
+      }
+      updateRaycasterTargets();
+    }
+
+    // Keep the laser raycaster's `objects` selector in sync with current
+    // sub-panel visibility. Three.js Raycaster doesn't honor object.visible
+    // (own or ancestor), so without this, hidden sub-panel buttons still
+    // intercept clicks at their world position. Always include the main
+    // panel's targets + all panel backgrounds (so trigger lands on the
+    // dark area between buttons count as a panel hit and don't fire
+    // m3c:panel-toggle). Only include a sub-panel's targets while it is
+    // actually visible.
+    function updateRaycasterTargets() {
+      const parts = ['#vrControls .vr-btn', '#vrControls .vr-panel-bg'];
+      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const v = el.getAttribute('visible');
+        const isVisible = (v === true || v === 'true');
+        if (isVisible) {
+          parts.push('#' + id + ' .vr-btn');
+          parts.push('#' + id + ' .vr-panel-bg');
+        }
+      });
+      const selector = parts.join(', ');
+      ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
+        const laser = document.getElementById(id);
+        if (laser) laser.setAttribute('raycaster', 'objects', selector);
+      });
+    }
+
     function closeAllSubpanels(except) {
       ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker', 'vrBrowsePanel'].forEach(id => {
         if (id === except) return;
-        const el = document.getElementById(id);
-        if (el) el.setAttribute('visible', false);
+        setSubpanelVisible(id, false);
       });
     }
 
@@ -1691,7 +1856,7 @@ a.chip:hover { background: #3a3a3a; }
           const visible = picker.getAttribute('visible');
           const willShow = !(visible === true || visible === 'true');
           if (willShow) closeAllSubpanels('vrFormatPicker');
-          picker.setAttribute('visible', willShow);
+          setSubpanelVisible('vrFormatPicker', willShow);
         }
       } else if (action === 'help') {
         const help = document.getElementById('vrHelpPanel');
@@ -1699,24 +1864,23 @@ a.chip:hover { background: #3a3a3a; }
           const visible = help.getAttribute('visible');
           const willShow = !(visible === true || visible === 'true');
           if (willShow) closeAllSubpanels('vrHelpPanel');
-          help.setAttribute('visible', willShow);
+          setSubpanelVisible('vrHelpPanel', willShow);
         }
       } else if (action === 'help-close') {
-        const help = document.getElementById('vrHelpPanel');
-        if (help) help.setAttribute('visible', false);
+        setSubpanelVisible('vrHelpPanel', false);
       } else if (action === 'browse') {
         const bp = document.getElementById('vrBrowsePanel');
         if (bp) {
           const visible = bp.getAttribute('visible');
           const willShow = !(visible === true || visible === 'true');
           if (willShow) closeAllSubpanels('vrBrowsePanel');
-          bp.setAttribute('visible', willShow);
+          setSubpanelVisible('vrBrowsePanel', willShow);
           if (willShow) onBrowsePanelOpen();
         }
       } else if (action === 'browse-close') {
-        const bp = document.getElementById('vrBrowsePanel');
-        if (bp) bp.setAttribute('visible', false);
+        setSubpanelVisible('vrBrowsePanel', false);
       } else if (action === 'toggle-debug-overlay') {
+        // Not a sub-panel — no raycast targets, so direct setAttribute is fine.
         const dbg = document.getElementById('vrDebugOverlay');
         if (dbg) {
           const v = dbg.getAttribute('visible');
@@ -1732,10 +1896,10 @@ a.chip:hover { background: #3a3a3a; }
         if (sub) {
           const visible = sub.getAttribute('visible');
           if (visible === true || visible === 'true') {
-            sub.setAttribute('visible', false);
+            setSubpanelVisible('vrSubtitlePicker', false);
           } else {
             closeAllSubpanels('vrSubtitlePicker');
-            sub.setAttribute('visible', true);
+            setSubpanelVisible('vrSubtitlePicker', true);
           }
         }
       } else if (action === 'scrub' || action === 'scrub-bg') {
@@ -1982,8 +2146,8 @@ a.chip:hover { background: #3a3a3a; }
       el.addEventListener('mouseup', function() { volActive = false; });
     });
 
-    // Drag sampling itself happens in tickSliders() inside rafLoop.
-    // The cleared listener stays as a backstop: if the laser leaves all
+    // Drag sampling itself happens in tickSliders() inside the m4b-tickers
+    // component. The cleared listener stays as a backstop: if the laser leaves all
     // targets mid-drag, the matching mouseup fires on whatever the laser
     // landed on (often nothing), so we end the drag here instead.
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
@@ -2118,6 +2282,14 @@ a.chip:hover { background: #3a3a3a; }
       });
     }
     scene.addEventListener('loaded', renderSubtitlePicker);
+    // Refresh raycaster targets after the scene loads. A-Frame fires
+    // 'loaded' listeners in registration order, so by the time this runs
+    // renderSubtitlePicker has already created the dynamic subtitle
+    // language buttons. Without this, the initial selector is whatever
+    // the static markup specifies and any sub-panel that flips visible
+    // before a subsequent setSubpanelVisible call would have stale
+    // targets.
+    scene.addEventListener('loaded', updateRaycasterTargets);
 
     // Parses VTT and SRT. Both share the cue-timing line shape
     //   HH:MM:SS.mmm --> HH:MM:SS.mmm   (VTT uses '.', SRT uses ',')
@@ -2148,8 +2320,7 @@ a.chip:hover { background: #3a3a3a; }
     let currentLang = '';
 
     function handleCCPick(lang, type) {
-      const picker = document.getElementById('vrSubtitlePicker');
-      if (picker) picker.setAttribute('visible', false);
+      setSubpanelVisible('vrSubtitlePicker', false);
       if (!lang) {
         currentCues = [];
         currentLang = '';
@@ -2214,18 +2385,15 @@ a.chip:hover { background: #3a3a3a; }
       }
     }
 
-    // Single rAF loop drives all per-frame work (Tasks 4 + 5 hook in here).
-    // Each tick wrapped in try/catch so one ticker's error doesn't kill the
-    // loop and freeze every per-frame UI update.
-    function rafLoop() {
-      const now = performance.now();
-      try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
-      try { tickSliders(); }       catch (e) { console.warn('stash-vr: tickSliders', e); }
-      try { tickScrubBar(); }      catch (e) { console.warn('stash-vr: tickScrubBar', e); }
-      try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
-      requestAnimationFrame(rafLoop);
-    }
-    requestAnimationFrame(rafLoop);
+    // Per-frame work runs from an A-Frame component's tick callback rather
+    // than window.requestAnimationFrame because the WebXR spec freezes
+    // window.rAF callbacks while an XRSession is presenting. A-Frame's
+    // tick system bridges window.rAF (out of XR) and XRSession.rAF (in XR)
+    // so it fires reliably in both modes — which is exactly when the user
+    // is actually looking at the HUD. Each tick is wrapped in try/catch
+    // so one ticker's error doesn't kill the loop and freeze every
+    // per-frame UI update. The component is registered + attached at the
+    // bottom of the IIFE after all four tick* functions are declared.
 
     // tickBrowseScroll reads laser raycaster intersections — those are
     // updated by A-Frame's raycaster component during the scene tick,
@@ -2375,8 +2543,8 @@ a.chip:hover { background: #3a3a3a; }
     }
     scene.addEventListener('loaded', buildSceneMarkerDots);
 
-    // Drag sampling happens in tickSliders() inside rafLoop. Keep the
-    // cleared listener so a laser that leaves all targets mid-drag ends
+    // Drag sampling happens in tickScrubBar() inside the m4b-tickers
+    // component. Keep the cleared listener so a laser that leaves all targets mid-drag ends
     // the scrub cleanly (mouseup may fire on nothing).
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
       const laser = document.getElementById(id);
@@ -2625,6 +2793,173 @@ a.chip:hover { background: #3a3a3a; }
       });
     });
     scene.addEventListener('exit-vr', show2D);
+
+    // Register the per-frame ticker component now that all four tick*
+    // function declarations above are in scope (they're hoisted, but
+    // attaching the component after the rest of setup runs keeps the
+    // boot order obvious). Attaching to <a-scene> means tick() fires on
+    // every render frame — including XR frames, unlike window.rAF which
+    // is paused while an XRSession is presenting.
+    if (typeof AFRAME !== 'undefined') {
+      AFRAME.registerComponent('m4b-tickers', {
+        tick: function() {
+          const now = performance.now();
+          try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
+          try { tickSliders(); }       catch (e) { console.warn('stash-vr: tickSliders', e); }
+          try { tickScrubBar(); }      catch (e) { console.warn('stash-vr: tickScrubBar', e); }
+          try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
+        }
+      });
+      scene.setAttribute('m4b-tickers', '');
+    }
+
+    // ============================================================
+    // SPIKE: WebXR Media Layers — see followups.md "V flash" entry.
+    // Activated via ?spike-layers=1. Replaces the VideoTexture render
+    // path for the current projection with an XRMediaBinding layer
+    // (the compositor handles video frames directly, bypassing the
+    // texImage2D upload that VideoTexture uses today). Goal: discover
+    // whether 8K video plays smoothly via this path.
+    // Falls back silently to the current path on any failure.
+    // ============================================================
+    (function spikeWebXRLayers() {
+      const spikeFlag = new URLSearchParams(location.search).get('spike-layers');
+      if (!spikeFlag) return;
+      const forceMode = (spikeFlag === 'force');
+
+      function tintMuteButton(color) {
+        // The mute button is the only entity with data-action="mute" in
+        // vrControls. Find it and overwrite its material color so the
+        // user can see spike state when they summon the panel.
+        const btn = document.querySelector('[data-action="mute"]');
+        if (btn) btn.setAttribute('material', 'color: ' + color + '; opacity: 0.95');
+      }
+      function spikeStatus(state, reason) {
+        // state in {'active', 'failed', 'idle'}; reason is a short string.
+        scene.dataset.spikeLayers = state + (reason ? ':' + reason : '');
+        if (state === 'active') {
+          tintMuteButton('#00cc00');
+          console.log('stash-vr spike: ACTIVE — ' + (reason || ''));
+        } else if (state === 'failed') {
+          tintMuteButton('#cc0000');
+          console.warn('stash-vr spike: FAILED — ' + (reason || ''));
+        }
+      }
+
+      let mediaLayer = null;
+      let geometryHidden = null; // entity we hid so we can restore on exit-vr
+
+      function teardownSpike() {
+        if (geometryHidden) {
+          geometryHidden.setAttribute('visible', 'true');
+          geometryHidden = null;
+        }
+        if (mediaLayer) {
+          // Layers are auto-cleaned when the session ends, but null our ref
+          // so a subsequent enter-vr can rebuild fresh.
+          mediaLayer = null;
+        }
+        // Reset the mute button tint so re-entering VR starts in the
+        // unset state.
+        tintMuteButton('#2c5282');
+        delete scene.dataset.spikeLayers;
+      }
+      scene.addEventListener('exit-vr', teardownSpike);
+
+      scene.addEventListener('enter-vr', function() {
+        try {
+          if (typeof XRMediaBinding === 'undefined') {
+            spikeStatus('failed', 'no-XRMediaBinding');
+            return;
+          }
+          const xr = scene.renderer && scene.renderer.xr;
+          if (!xr) { spikeStatus('failed', 'no-xr-renderer'); return; }
+          const xrSession = xr.getSession();
+          if (!xrSession) { spikeStatus('failed', 'no-session'); return; }
+          const refSpace = xr.getReferenceSpace();
+          if (!refSpace) { spikeStatus('failed', 'no-refspace'); return; }
+
+          const stereo = scene.dataset.stereo || '';
+          const geom = scene.dataset.geometry || '';
+          const fovDeg = parseFloat(scene.dataset.fov || '0') || 0;
+
+          // Map stash-vr stereo flag -> WebXR layout string.
+          const layout = stereo === 'sbs' ? 'stereo-left-right' :
+                         stereo === 'tb'  ? 'stereo-top-bottom' :
+                         'mono';
+
+          const mediaBinding = new XRMediaBinding(xrSession);
+
+          if (geom === 'fisheye') {
+            spikeStatus('failed', 'fisheye');
+            return;
+          }
+
+          if (geom === 'equirectangular') {
+            // VR180 -> π central, VR360 -> 2π central. theta clamped to ±π/2.
+            const isFull360 = (fovDeg >= 360);
+            mediaLayer = mediaBinding.createEquirectLayer(video, {
+              space: refSpace,
+              layout: layout,
+              centralHorizontalAngle: isFull360 ? 2 * Math.PI : Math.PI,
+              upperVerticalAngle: Math.PI / 2,
+              lowerVerticalAngle: -Math.PI / 2,
+              radius: 0
+            });
+            // Hide whichever sphere is currently the active geometry so the
+            // video isn't double-rendered.
+            geometryHidden = isFull360 ? document.getElementById('vrSphere360')
+                                       : document.getElementById('vrSphere180');
+          } else {
+            // No geometry tag => cinema/flat. Use a quad layer roughly where
+            // vrFlat sits today (4x2.25m at 0,1.6,-3).
+            mediaLayer = mediaBinding.createQuadLayer(video, {
+              space: refSpace,
+              layout: layout,
+              width: 4.0,    // full width in meters, matches vrFlat's plane
+              height: 2.25,  // full height in meters
+              transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
+            });
+            geometryHidden = document.getElementById('vrFlat');
+          }
+
+          // Insert the media layer BEHIND the existing layer set (so the HUD
+          // projection layer stays in front). renderState.layers is the
+          // current list; if A-Frame is still on the legacy baseLayer (no
+          // 'layers' feature granted), updateRenderState({layers}) would
+          // strand it — bail in that case.
+          const existingLayers = (xrSession.renderState && xrSession.renderState.layers) || null;
+          const onLegacyBaseLayer = !existingLayers || !existingLayers.length;
+
+          if (onLegacyBaseLayer && !forceMode) {
+            spikeStatus('failed', 'legacy-baselayer (try ?spike-layers=force to override)');
+            mediaLayer = null;
+            return;
+          }
+
+          // On legacy baseLayer with force mode: replace baseLayer entirely with our
+          // media layer. A-Frame's HUD will not render (the projection layer it was
+          // drawing into is gone), but the media layer presents independently via
+          // the compositor. User sees only the video — sufficient to test whether
+          // the Layers path eliminates the V flash artifact.
+          const newLayers = onLegacyBaseLayer
+            ? [mediaLayer]
+            : [mediaLayer].concat(existingLayers);
+
+          xrSession.updateRenderState({ layers: newLayers });
+
+          if (geometryHidden) geometryHidden.setAttribute('visible', 'false');
+
+          spikeStatus('active', (geom || 'cinema') + '/' + layout + (onLegacyBaseLayer ? '/force' : ''));
+        } catch (err) {
+          const msg = (err && err.message ? err.message : String(err)).substring(0, 60);
+          // Run teardown first (it resets the tint), then set the failed
+          // status so the red indicator survives until exit-vr.
+          teardownSpike();
+          spikeStatus('failed', 'thrown:' + msg);
+        }
+      });
+    })();
   })();
 </script>
 {{end}}
