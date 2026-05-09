@@ -2180,12 +2180,25 @@ a.chip:hover { background: #3a3a3a; }
       const now = performance.now();
       try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
       try { tickSliders(); }       catch (e) { console.warn('stash-vr: tickSliders', e); }
-      try { tickBrowseScroll(); }  catch (e) { console.warn('stash-vr: tickBrowseScroll', e); }
       try { tickScrubBar(); }      catch (e) { console.warn('stash-vr: tickScrubBar', e); }
       try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
       requestAnimationFrame(rafLoop);
     }
     requestAnimationFrame(rafLoop);
+
+    // tickBrowseScroll reads laser raycaster intersections — those are
+    // updated by A-Frame's raycaster component during the scene tick,
+    // which runs AFTER our window.requestAnimationFrame callback. So we
+    // can't read them from rafLoop or we'll see stale/empty data. Run
+    // the browse-scroll tick from an A-Frame component instead, whose
+    // tick() fires inside the scene tick — i.e. after the raycaster has
+    // updated its intersections array for this frame.
+    AFRAME.registerComponent('m4c-browse-tick', {
+      tick: function () {
+        try { tickBrowseScroll(); } catch (e) { console.warn('stash-vr: tickBrowseScroll', e); }
+      },
+    });
+    scene.setAttribute('m4c-browse-tick', '');
 
     // ============================================================
     // Scrub bar: per-frame fill/thumb advance, drag-to-seek, scene
