@@ -373,18 +373,16 @@ a.chip:hover { background: #3a3a3a; }
 
   </a-entity>
 
-  <!-- M4c debug overlay — at scene root so it's always visible, not
-       hidden when the browse panel is closed. World position 1.5m in
-       front of user at slightly-below eye level so it doesn't block
-       the main view but is easy to glance at. Updated every rAF from
-       tickBrowseScroll. Cyan + low opacity black panel for legibility. -->
+  </a-entity><!-- /vrControlsRoot -->
+
+  <!-- M4c debug overlay — OUTSIDE vrControlsRoot so it stays visible
+       even when the in-VR controls are hidden. Eye-level world position
+       1.5m in front of the user. Black backdrop + cyan text for contrast. -->
   <a-entity id="vrM4cDebug" position="0 1.0 -1.5">
-    <a-plane width="1.6" height="0.18" color="#000" material="opacity:0.4"></a-plane>
-    <a-text id="vrM4cDebugText" value="" align="center" color="#0ff" width="2.2"
+    <a-plane width="1.6" height="0.18" color="#000" material="opacity:0.55"></a-plane>
+    <a-text id="vrM4cDebugText" value="(no panel open)" align="center" color="#0ff" width="2.2"
             position="0 0 0.005" wrap-count="40"></a-text>
   </a-entity>
-
-  </a-entity><!-- /vrControlsRoot -->
 
   <!-- Laser controllers for raycast-clicking the panel buttons. -->
   <!-- Initial visible attribute would be overridden by tracked-controls'
@@ -972,11 +970,14 @@ a.chip:hover { background: #3a3a3a; }
       const old = parentEl.querySelectorAll(':scope > .' + tagClass);
       old.forEach(n => n.parentNode.removeChild(n));
 
-      // Per-char arc span: 0.95° looks right at R≈3 (≈0.05m). Shrink
-      // proportionally if the full string would exceed 95% of the arc.
-      let charDeg = 0.95;
-      if (text.length * charDeg > thetaLength * 0.95) {
-        charDeg = thetaLength * 0.95 / text.length;
+      // Fixed per-char arc span (0.95° at R≈3 ≈ 0.05m). Truncate with an
+      // ellipsis if the full string wouldn't fit in the arc, so all
+      // labels render at the SAME readable glyph size — instead of
+      // shrinking long titles into illegible micro-text.
+      const charDeg = 0.95;
+      const maxChars = Math.max(1, Math.floor((thetaLength * 0.95) / charDeg));
+      if (text.length > maxChars) {
+        text = (maxChars > 1) ? (text.slice(0, maxChars - 1) + '…') : text.slice(0, 1);
       }
       const totalArcDeg = text.length * charDeg;
       const centerDeg   = thetaStart + thetaLength / 2;
