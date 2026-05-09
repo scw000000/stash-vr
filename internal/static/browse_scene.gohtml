@@ -269,6 +269,15 @@ a.chip:hover { background: #3a3a3a; }
     </a-entity>
   </a-entity>
 
+  <!-- Subtitle language picker. Hidden by default; CC button toggles. JS at
+       picker-render time populates the buttons row and resizes the
+       background plane to fit. -->
+  <a-entity id="vrSubtitlePicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
+    <a-plane id="vrSubtitlePickerBg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
+    <a-text id="vrSubtitlePickerTitle" value="Subtitles" align="left" color="#fff" width="3" position="-0.85 0.13 0.01"></a-text>
+    <a-entity id="vrSubtitlePickerButtons" position="0 0 0.01"></a-entity>
+  </a-entity>
+
   </a-entity><!-- /vrControlsRoot -->
 
   <!-- Laser controllers for raycast-clicking the panel buttons. -->
@@ -285,6 +294,14 @@ a.chip:hover { background: #3a3a3a; }
        gamepad polling, and B/Y long-press timer. Emits semantic events
        on <a-scene>; the inline IIFE applies them. -->
   <a-entity m3c-controls></a-entity>
+
+  <!-- Subtitle render plane. Starts as a child of <a-scene>; JS reparents
+       it to vrFlat (cinema) or scene.camera (immersive) when a cue is
+       active. Hidden until a cue activates. -->
+  <a-entity id="vrSubtitlePlane" visible="false">
+    <a-plane width="1.6" height="0.18" color="#000" material="opacity:0.5"></a-plane>
+    <a-text id="vrSubtitleText" value="" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
+  </a-entity>
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
@@ -676,6 +693,14 @@ a.chip:hover { background: #3a3a3a; }
       el.setAttribute('value', (Number.isInteger(v) ? v.toFixed(1) : v.toString()) + 'x');
     }
 
+    function closeAllSubpanels(except) {
+      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker'].forEach(id => {
+        if (id === except) return;
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('visible', false);
+      });
+    }
+
     function vrAction(action) {
       if (action === 'playpause') {
         if (video.paused) {
@@ -700,21 +725,36 @@ a.chip:hover { background: #3a3a3a; }
       } else if (action === 'format') {
         if (picker) {
           const visible = picker.getAttribute('visible');
-          picker.setAttribute('visible', !visible);
+          const willShow = !(visible === true || visible === 'true');
+          if (willShow) closeAllSubpanels('vrFormatPicker');
+          picker.setAttribute('visible', willShow);
         }
       } else if (action === 'help') {
         const help = document.getElementById('vrHelpPanel');
         if (help) {
           const visible = help.getAttribute('visible');
-          help.setAttribute('visible', !visible);
+          const willShow = !(visible === true || visible === 'true');
+          if (willShow) closeAllSubpanels('vrHelpPanel');
+          help.setAttribute('visible', willShow);
         }
       } else if (action === 'help-close') {
         const help = document.getElementById('vrHelpPanel');
         if (help) help.setAttribute('visible', false);
+      } else if (action === 'cc') {
+        const sub = document.getElementById('vrSubtitlePicker');
+        if (sub) {
+          const visible = sub.getAttribute('visible');
+          if (visible === true || visible === 'true') {
+            sub.setAttribute('visible', false);
+          } else {
+            closeAllSubpanels('vrSubtitlePicker');
+            sub.setAttribute('visible', true);
+          }
+        }
       } else if (action === 'scrub' || action === 'scrub-bg') {
         // No-op here; the scrub-bar drag handles seeking via mousedown.
       }
-      // 'cc' is wired in Task 5; 'vol-track' is a no-op (the slider drag uses mousedown).
+      // 'vol-track' is a no-op (the slider drag uses mousedown).
     }
     document.querySelectorAll('.vr-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -819,11 +859,161 @@ a.chip:hover { background: #3a3a3a; }
       el.setAttribute('value', formatTime(video.currentTime || 0) + ' / ' + formatTime(video.duration || 0));
     }
 
+    const captionsData = JSON.parse({{ marshal .Captions }}) || [];
+
+    // Picker layout — buttons in a wrapping flex of up to 4 per row.
+    function renderSubtitlePicker() {
+      const buttonsRoot = document.getElementById('vrSubtitlePickerButtons');
+      const bg = document.getElementById('vrSubtitlePickerBg');
+      const title = document.getElementById('vrSubtitlePickerTitle');
+      if (!buttonsRoot) return;
+      while (buttonsRoot.firstChild) buttonsRoot.removeChild(buttonsRoot.firstChild);
+
+      const items = [{ lang: '', type: '', label: 'Off' }].concat(
+        captionsData.map(c => ({ lang: c.languageCode, type: c.captionType, label: c.languageCode }))
+      );
+      const PER_ROW = 4;
+      const BTN_W = 0.40;
+      const BTN_H = 0.16;
+      const GAP_X = 0.06;
+      const ROW_H = 0.20;
+      const rowCount = Math.max(1, Math.ceil(items.length / PER_ROW));
+
+      const bgHeight = 0.18 + rowCount * ROW_H;
+      if (bg) bg.setAttribute('height', bgHeight.toFixed(2));
+      if (title) title.setAttribute('position', '-0.85 ' + ((bgHeight / 2) - 0.07).toFixed(2) + ' 0.01');
+
+      items.forEach((it, i) => {
+        const row = Math.floor(i / PER_ROW);
+        const col = i % PER_ROW;
+        const xCenter = -((PER_ROW - 1) / 2) * (BTN_W + GAP_X) + col * (BTN_W + GAP_X);
+        const yCenter = ((rowCount - 1) / 2) * ROW_H - row * ROW_H - 0.02;
+
+        const btn = document.createElement('a-entity');
+        btn.classList.add('vr-btn', 'vr-cc-pick');
+        btn.dataset.ccLang = it.lang;
+        btn.dataset.ccType = it.type;
+        btn.setAttribute('geometry', 'primitive:plane;width:' + BTN_W + ';height:' + BTN_H);
+        btn.setAttribute('material', 'color:#2c5282;opacity:0.95');
+        btn.setAttribute('position', xCenter.toFixed(3) + ' ' + yCenter.toFixed(3) + ' 0.005');
+
+        const text = document.createElement('a-text');
+        text.setAttribute('value', it.label);
+        text.setAttribute('align', 'center');
+        text.setAttribute('color', '#fff');
+        text.setAttribute('width', '2.5');
+        text.setAttribute('position', '0 0 0.005');
+        btn.appendChild(text);
+        buttonsRoot.appendChild(btn);
+        // Direct click handler — the global .vr-btn click router only fires
+        // vrAction(data-action) or handlePickerTap(data-pick-row); these
+        // language buttons have neither, so no double-fire.
+        btn.addEventListener('click', () => handleCCPick(it.lang, it.type));
+      });
+    }
+    scene.addEventListener('loaded', renderSubtitlePicker);
+
+    // Parses VTT and SRT. Both share the cue-timing line shape
+    //   HH:MM:SS.mmm --> HH:MM:SS.mmm   (VTT uses '.', SRT uses ',')
+    // The regex matches [\.,] so a single regex covers both. SRT's bare
+    // cue-number lines don't match and are skipped naturally. ASS / SSA
+    // / other formats produce zero matches and the picker silently
+    // stays at "no cues."
+    function parseSubtitles(text) {
+      const cues = [];
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(/(\d{2}):(\d{2}):(\d{2})[\.,](\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2})[\.,](\d{3})/);
+        if (!m) continue;
+        const start = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
+        const end   = (+m[5]) * 3600 + (+m[6]) * 60 + (+m[7]) + (+m[8]) / 1000;
+        const payload = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== '') {
+          payload.push(lines[i].replace(/<[^>]+>/g, ''));
+          i++;
+        }
+        cues.push({ start: start, end: end, text: payload.join('\n') });
+      }
+      return cues;
+    }
+
+    let currentCues = [];
+    let currentLang = '';
+
+    function handleCCPick(lang, type) {
+      const picker = document.getElementById('vrSubtitlePicker');
+      if (picker) picker.setAttribute('visible', false);
+      if (!lang) {
+        currentCues = [];
+        currentLang = '';
+        return;
+      }
+      fetch('/browse/scene/' + encodeURIComponent(sceneId) + '/caption?lang=' + encodeURIComponent(lang) + '&type=' + encodeURIComponent(type))
+        .then(r => r.text())
+        .then(text => {
+          currentCues = parseSubtitles(text);
+          currentLang = lang;
+        })
+        .catch(err => console.warn('stash-vr: caption fetch failed', err));
+    }
+
+    // Reparent the subtitle plane based on the active geometry. Cinema mode
+    // (vrFlat is the active entity) → child of vrFlat at its bottom edge.
+    // Immersive (sphere/fisheye) → child of the camera, in front-low. Use
+    // the Three.js object3D parent/add path so we don't fight A-Frame's
+    // scene-graph component lifecycle.
+    function reparentSubtitlePlane() {
+      const subEl = document.getElementById('vrSubtitlePlane');
+      if (!subEl || !subEl.object3D) return;
+      const active = activeGeometry();
+      let targetObj = null;
+      if (active && active.id === 'vrFlat' && active.object3D) {
+        targetObj = active.object3D;
+        subEl.object3D.position.set(0, -1.0, 0.01);
+      } else {
+        const cam = scene.camera;
+        if (!cam) return;
+        targetObj = cam;
+        subEl.object3D.position.set(0, -0.5, -1.5);
+      }
+      if (subEl.object3D.parent !== targetObj) {
+        if (subEl.object3D.parent) subEl.object3D.parent.remove(subEl.object3D);
+        targetObj.add(subEl.object3D);
+      }
+    }
+
+    function tickSubtitles() {
+      const plane = document.getElementById('vrSubtitlePlane');
+      if (!plane) return;
+      if (!currentCues.length) {
+        plane.setAttribute('visible', 'false');
+        return;
+      }
+      reparentSubtitlePlane();
+      const t = video.currentTime || 0;
+      let active = null;
+      for (let i = 0; i < currentCues.length; i++) {
+        if (t >= currentCues[i].start && t <= currentCues[i].end) {
+          active = currentCues[i];
+          break;
+        }
+      }
+      if (active) {
+        const txt = document.getElementById('vrSubtitleText');
+        if (txt) txt.setAttribute('value', active.text);
+        plane.setAttribute('visible', 'true');
+      } else {
+        plane.setAttribute('visible', 'false');
+      }
+    }
+
     // Single rAF loop drives all per-frame work (Tasks 4 + 5 hook in here).
     function rafLoop() {
       const now = performance.now();
       tickTimeDisplay(now);
       tickScrubBar();
+      tickSubtitles();
       requestAnimationFrame(rafLoop);
     }
     requestAnimationFrame(rafLoop);
