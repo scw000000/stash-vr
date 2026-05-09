@@ -906,7 +906,7 @@ a.chip:hover { background: #3a3a3a; }
 
 <div class="section">
 <h2>Rating</h2>
-<form method="post" action="/browse/scene/{{.ID}}/rating" class="stars">
+<form method="post" action="/browse/scene/{{.ID}}/rating" class="js-mut stars">
 <span class="stars-fill">
 {{range $i, $_ := .StarSlice}}
 {{- $star := sub 5 $i -}}
@@ -919,18 +919,21 @@ a.chip:hover { background: #3a3a3a; }
 
 <div class="section">
 <h2>Favorite</h2>
-<form method="post" action="/browse/scene/{{.ID}}/favorite" class="fav" style="display:inline-flex">
+<form method="post" action="/browse/scene/{{.ID}}/favorite" class="js-mut fav" style="display:inline-flex">
 <button class="{{if .IsFavorite}}on{{end}}">♥ {{if .IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
 </form>
 </div>
 
 <div class="section">
 <h2>Tags</h2>
+<template id="tag-chip-tpl">
+<span class="chip"><a></a><form method="post" class="js-mut" style="display:inline"><button name="tag">✕</button></form></span>
+</template>
 <div class="tags">
 {{range .Tags}}
-<span class="chip"><a href="/browse/tag/{{.ID}}">{{.Name}}</a><form method="post" action="/browse/scene/{{$.ID}}/tags/remove" style="display:inline"><button name="tag" value="{{.Name}}">✕</button></form></span>
+<span class="chip"><a href="/browse/tag/{{.ID}}">{{.Name}}</a><form method="post" action="/browse/scene/{{$.ID}}/tags/remove" class="js-mut" style="display:inline"><button name="tag" value="{{.Name}}">✕</button></form></span>
 {{end}}
-<form method="post" action="/browse/scene/{{.ID}}/tags/add" class="addtag">
+<form method="post" action="/browse/scene/{{.ID}}/tags/add" class="js-mut addtag">
 <input list="all-tags" name="tag" placeholder="Add tag…" autocomplete="off">
 <datalist id="all-tags">
 {{range .AllTagNames}}<option value="{{.}}">{{end}}
@@ -942,22 +945,159 @@ a.chip:hover { background: #3a3a3a; }
 
 <div class="section">
 <h2>O-Counter</h2>
-<form method="post" action="/browse/scene/{{.ID}}/o/decrement" style="display:inline-flex" class="ocount">
+<form method="post" action="/browse/scene/{{.ID}}/o/decrement" style="display:inline-flex" class="js-mut ocount">
 <button>−</button>
 </form>
-<span style="display:inline-flex;align-items:center;padding:0 12px">{{.OCounter}}</span>
-<form method="post" action="/browse/scene/{{.ID}}/o/increment" style="display:inline-flex" class="ocount">
+<span id="ocount-value" style="display:inline-flex;align-items:center;padding:0 12px">{{.OCounter}}</span>
+<form method="post" action="/browse/scene/{{.ID}}/o/increment" style="display:inline-flex" class="js-mut ocount">
 <button>+</button>
 </form>
 </div>
 
 <div class="section">
 <h2>Organized</h2>
-<form method="post" action="/browse/scene/{{.ID}}/organized" class="org" style="display:inline-flex">
+<form method="post" action="/browse/scene/{{.ID}}/organized" class="js-mut org" style="display:inline-flex">
 <button class="{{if .Organized}}on{{end}}">{{if .Organized}}✓ Organized{{else}}Mark organized{{end}}</button>
 </form>
 </div>
 
 </div>
+<script>
+(function() {
+  const sceneId = (function() {
+    const m = location.pathname.match(/\/browse\/scene\/([^\/]+)/);
+    return m ? m[1] : '';
+  })();
+  if (!sceneId) return;
+
+  const errBanner = document.getElementById('errbanner');
+  let errTimer = null;
+  function showErr(msg) {
+    if (!errBanner) return;
+    errBanner.textContent = msg;
+    errBanner.hidden = false;
+    if (errTimer) clearTimeout(errTimer);
+    errTimer = setTimeout(() => { errBanner.hidden = true; errBanner.textContent = ''; }, 5000);
+  }
+  function clearErr() {
+    if (!errBanner) return;
+    errBanner.hidden = true;
+    errBanner.textContent = '';
+    if (errTimer) { clearTimeout(errTimer); errTimer = null; }
+  }
+
+  // Rebuild the chip list from state.tags. Preserves the add-tag form,
+  // which sits as a sibling to the chip spans inside .tags.
+  function renderTags(state) {
+    const tagsRoot = document.querySelector('.tags');
+    if (!tagsRoot) return;
+    const tpl = document.getElementById('tag-chip-tpl');
+    // Remove existing chip spans only (keep the addtag <form>).
+    tagsRoot.querySelectorAll('span.chip').forEach(el => el.remove());
+    const addForm = tagsRoot.querySelector('form.addtag');
+    (state.tags || []).forEach(t => {
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      const a = node.querySelector('a');
+      a.href = '/browse/tag/' + encodeURIComponent(t.id);
+      a.textContent = t.name;
+      const form = node.querySelector('form');
+      form.action = '/browse/scene/' + encodeURIComponent(sceneId) + '/tags/remove';
+      const btn = form.querySelector('button[name="tag"]');
+      btn.value = t.name;
+      bindForm(form);
+      tagsRoot.insertBefore(node, addForm);
+    });
+  }
+
+  // Rating: clear all .on, set .on on the button matching state.rating1to5;
+  // show/hide the ✕ clear button.
+  function renderRating(state) {
+    const form = document.querySelector('form.stars');
+    if (!form) return;
+    form.querySelectorAll('.stars-fill button').forEach(b => {
+      b.classList.toggle('on', parseInt(b.value, 10) === state.rating1to5);
+    });
+    let clearBtn = form.querySelector('button.clear');
+    if (state.rating1to5 > 0) {
+      if (!clearBtn) {
+        clearBtn = document.createElement('button');
+        clearBtn.name = 'value';
+        clearBtn.value = '0';
+        clearBtn.className = 'clear';
+        clearBtn.title = 'Clear rating';
+        clearBtn.textContent = '✕';
+        form.appendChild(clearBtn);
+      }
+    } else if (clearBtn) {
+      clearBtn.remove();
+    }
+  }
+
+  function renderFavorite(state) {
+    const form = document.querySelector('form.fav');
+    if (!form) return;
+    const btn = form.querySelector('button');
+    if (!btn) return;
+    btn.classList.toggle('on', !!state.isFavorite);
+    btn.textContent = state.isFavorite ? '♥ Favorited' : '♥ Favorite';
+  }
+
+  function renderOCounter(state) {
+    const span = document.getElementById('ocount-value');
+    if (span) span.textContent = state.oCounter;
+  }
+
+  function renderOrganized(state) {
+    const form = document.querySelector('form.org');
+    if (!form) return;
+    const btn = form.querySelector('button');
+    if (!btn) return;
+    btn.classList.toggle('on', !!state.organized);
+    btn.textContent = state.organized ? '✓ Organized' : 'Mark organized';
+  }
+
+  function applyState(state) {
+    clearErr();
+    if (state.err) { showErr(state.err); return; }
+    renderRating(state);
+    renderFavorite(state);
+    renderTags(state);
+    renderOCounter(state);
+    renderOrganized(state);
+  }
+
+  function bindForm(form) {
+    if (form._mutBound) return;
+    form._mutBound = true;
+    form.addEventListener('submit', function(ev) {
+      ev.preventDefault();
+      const submitBtn = ev.submitter;
+      const fd = new FormData(form);
+      // <button name="value" value="N"> in the rating form is not picked up
+      // by FormData unless it's the submitter — guard for that:
+      if (submitBtn && submitBtn.name && !fd.has(submitBtn.name)) {
+        fd.set(submitBtn.name, submitBtn.value);
+      }
+      fetch(form.action, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        body: fd
+      }).then(r => r.json().then(j => ({ ok: r.ok, body: j })))
+        .then(({ ok, body }) => {
+          if (!ok) { showErr(body.err || 'request failed'); return; }
+          applyState(body);
+          // Clear the add-tag input on success.
+          if (form.classList.contains('addtag')) {
+            const input = form.querySelector('input[name="tag"]');
+            if (input) input.value = '';
+          }
+        })
+        .catch(err => showErr('network error: ' + err.message));
+    });
+  }
+
+  document.querySelectorAll('form.js-mut').forEach(bindForm);
+})();
+</script>
 </body>
 </html>
