@@ -948,70 +948,95 @@ git commit -m "m4c: search field via DOM-overlay input with live debounced filte
 
 **Goal:** Click "Filters ▾" → sub-panel with 6 picker rows opens. Each picker click opens its own option list. "Clear all" resets all six filters + search query.
 
-- [ ] **Step 1: Add the Filters sub-panel**
+- [ ] **Step 1: Add the standalone Filters panel and Options panel**
 
-Inside `vrBrowsePanel`, add:
+The filters panel and options panel are **siblings** of `vrBrowsePanel` (not children). Both live directly under `vrControlsRoot` so M3c's panel-toggle hides them as a unit. Position them to the right of the browse panel.
+
+Inside `vrControlsRoot`, **after** the closing `</a-entity>` of `vrBrowsePanel`, add:
 
 ```html
-<a-entity id="vrFiltersPanel" position="0 0 0.05" visible="false">
-  <a-plane width="2.6" height="1.3" color="#000" material="opacity:0.95"></a-plane>
-  <a-text value="Filters" align="left" color="#fff" width="3" position="-1.2 0.55 0.01"></a-text>
-  <a-entity class="vr-btn" data-action="filters-close" position="1.15 0.55 0.01"
+<!-- Standalone Filters panel — sits to the right of the browse panel. -->
+<a-entity id="vrFiltersPanel" position="2.6 1.4 -2.5" rotation="0 -15 0" visible="false">
+  <a-plane width="1.8" height="1.6" color="#000" material="opacity:0.95"></a-plane>
+  <a-text value="Filters" align="left" color="#fff" width="3" position="-0.80 0.68 0.01"></a-text>
+  <a-entity class="vr-btn" data-action="filters-close" position="0.78 0.68 0.01"
             geometry="primitive:plane;width:0.18;height:0.16"
             material="color:#a01010;opacity:0.95">
     <a-text value="✕" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
   </a-entity>
 
-  <!-- 6 picker rows, each with a label and a pick button. -->
-  <a-entity class="vr-btn vr-filter-row" data-pick="performer" position="0 0.35 0.01"
-            geometry="primitive:plane;width:2.4;height:0.14"
+  <!-- 6 picker rows, vertically stacked. Width 1.6m, gap 0.04m. -->
+  <a-entity class="vr-btn vr-filter-row" data-pick="performer" position="0 0.40 0.01"
+            geometry="primitive:plane;width:1.6;height:0.16"
             material="color:#222;opacity:0.95">
-    <a-text id="vrFilterPerformer" value="Performer:  None" align="left" color="#fff" width="2.8" position="-1.10 0 0.005"></a-text>
-    <a-text value="▸" align="right" color="#fff" width="3" position="1.10 0 0.005"></a-text>
+    <a-text id="vrFilterPerformer" value="Performer:  None" align="left" color="#fff" width="2.0" position="-0.72 0 0.005"></a-text>
+    <a-text value="▸" align="right" color="#fff" width="3" position="0.72 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn vr-filter-row" data-pick="studio" position="0 0.18 0.01"
-            geometry="primitive:plane;width:2.4;height:0.14"
+  <a-entity class="vr-btn vr-filter-row" data-pick="studio" position="0 0.20 0.01"
+            geometry="primitive:plane;width:1.6;height:0.16"
             material="color:#222;opacity:0.95">
-    <a-text id="vrFilterStudio" value="Studio:  None" align="left" color="#fff" width="2.8" position="-1.10 0 0.005"></a-text>
-    <a-text value="▸" align="right" color="#fff" width="3" position="1.10 0 0.005"></a-text>
+    <a-text id="vrFilterStudio" value="Studio:  None" align="left" color="#fff" width="2.0" position="-0.72 0 0.005"></a-text>
+    <a-text value="▸" align="right" color="#fff" width="3" position="0.72 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn vr-filter-row" data-pick="tag" position="0 0.01 0.01"
-            geometry="primitive:plane;width:2.4;height:0.14"
+  <a-entity class="vr-btn vr-filter-row" data-pick="tag" position="0 0.00 0.01"
+            geometry="primitive:plane;width:1.6;height:0.16"
             material="color:#222;opacity:0.95">
-    <a-text id="vrFilterTag" value="Tag:  None" align="left" color="#fff" width="2.8" position="-1.10 0 0.005"></a-text>
-    <a-text value="▸" align="right" color="#fff" width="3" position="1.10 0 0.005"></a-text>
+    <a-text id="vrFilterTag" value="Tag:  None" align="left" color="#fff" width="2.0" position="-0.72 0 0.005"></a-text>
+    <a-text value="▸" align="right" color="#fff" width="3" position="0.72 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn vr-filter-row" data-pick="favorite" position="0 -0.16 0.01"
-            geometry="primitive:plane;width:2.4;height:0.14"
+  <a-entity class="vr-btn vr-filter-row" data-pick="favorite" position="0 -0.20 0.01"
+            geometry="primitive:plane;width:1.6;height:0.16"
             material="color:#222;opacity:0.95">
-    <a-text id="vrFilterFavorite" value="Favorites:  Any" align="left" color="#fff" width="2.8" position="-1.10 0 0.005"></a-text>
-    <a-text value="▸" align="right" color="#fff" width="3" position="1.10 0 0.005"></a-text>
+    <a-text id="vrFilterFavorite" value="Favorites:  Any" align="left" color="#fff" width="2.0" position="-0.72 0 0.005"></a-text>
+    <a-text value="▸" align="right" color="#fff" width="3" position="0.72 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn vr-filter-row" data-pick="stars" position="0 -0.33 0.01"
-            geometry="primitive:plane;width:2.4;height:0.14"
+  <a-entity class="vr-btn vr-filter-row" data-pick="stars" position="0 -0.40 0.01"
+            geometry="primitive:plane;width:1.6;height:0.16"
             material="color:#222;opacity:0.95">
-    <a-text id="vrFilterStars" value="Stars:  Any" align="left" color="#fff" width="2.8" position="-1.10 0 0.005"></a-text>
-    <a-text value="▸" align="right" color="#fff" width="3" position="1.10 0 0.005"></a-text>
+    <a-text id="vrFilterStars" value="Stars:  Any" align="left" color="#fff" width="2.0" position="-0.72 0 0.005"></a-text>
+    <a-text value="▸" align="right" color="#fff" width="3" position="0.72 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn vr-filter-row" data-pick="ocount" position="0 -0.50 0.01"
-            geometry="primitive:plane;width:2.4;height:0.14"
+  <a-entity class="vr-btn vr-filter-row" data-pick="ocount" position="0 -0.60 0.01"
+            geometry="primitive:plane;width:1.6;height:0.16"
             material="color:#222;opacity:0.95">
-    <a-text id="vrFilterOCount" value="O-Counter:  Any" align="left" color="#fff" width="2.8" position="-1.10 0 0.005"></a-text>
-    <a-text value="▸" align="right" color="#fff" width="3" position="1.10 0 0.005"></a-text>
+    <a-text id="vrFilterOCount" value="O-Counter:  Any" align="left" color="#fff" width="2.0" position="-0.72 0 0.005"></a-text>
+    <a-text value="▸" align="right" color="#fff" width="3" position="0.72 0 0.005"></a-text>
   </a-entity>
 </a-entity>
 
-<!-- Sub-sub-panel: option list for the currently-being-picked filter. -->
-<a-entity id="vrFilterOptions" position="0 0 0.10" visible="false">
-  <a-plane width="2.4" height="1.6" color="#000" material="opacity:0.95"></a-plane>
-  <a-text id="vrFilterOptionsTitle" value="" align="left" color="#fff" width="3" position="-1.10 0.70 0.01"></a-text>
-  <a-entity class="vr-btn" data-action="filter-options-close" position="1.05 0.70 0.01"
+<!-- Standalone Options panel — sits to the right of the Filters panel. Holds the
+     picker list for whichever filter was tapped. -->
+<a-entity id="vrFilterOptions" position="4.4 1.4 -2.5" rotation="0 -25 0" visible="false">
+  <a-plane width="1.8" height="1.8" color="#000" material="opacity:0.95"></a-plane>
+  <a-text id="vrFilterOptionsTitle" value="" align="left" color="#fff" width="3" position="-0.80 0.78 0.01"></a-text>
+  <a-entity class="vr-btn" data-action="filter-options-close" position="0.78 0.78 0.01"
             geometry="primitive:plane;width:0.18;height:0.16"
             material="color:#a01010;opacity:0.95">
     <a-text value="✕" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity id="vrFilterOptionsList" position="0 0.55 0.01"></a-entity>
+  <a-entity id="vrFilterOptionsList" position="0 0.60 0.01"></a-entity>
 </a-entity>
+```
+
+Update the existing browse-close handler so closing the browse panel also closes filters and options (they share the same lifecycle as a unit). Find the existing `'browse-close'` branch in `vrAction`:
+
+```javascript
+} else if (action === 'browse-close') {
+  const bp = document.getElementById('vrBrowsePanel');
+  if (bp) bp.setAttribute('visible', false);
+  hideSearchOverlay();
+}
+```
+
+Replace with:
+
+```javascript
+} else if (action === 'browse-close') {
+  document.getElementById('vrBrowsePanel').setAttribute('visible', false);
+  document.getElementById('vrFiltersPanel').setAttribute('visible', false);
+  document.getElementById('vrFilterOptions').setAttribute('visible', false);
+  hideSearchOverlay();
+}
 ```
 
 - [ ] **Step 2: Wire filter actions and option list rendering**
@@ -1078,22 +1103,25 @@ function kindLabel(k) {
 }
 
 function buildOptionButtons(parent, kind, opts) {
-  const perRow = 1; // vertical list, one button per row
+  // Vertical list, one button per row. Options panel is 1.8m wide; button
+  // 1.6m. Long performer/studio/tag lists exceed visible height — v1 just
+  // overflows below the panel; M4c-followup adds scrolling within the
+  // options panel if needed.
   opts.forEach((opt, i) => {
     const btn = document.createElement('a-entity');
     btn.classList.add('vr-btn', 'vr-filter-opt');
     btn.dataset.kind = kind;
     btn.dataset.optId = String(opt.id);
     btn.dataset.optName = opt.name;
-    btn.setAttribute('geometry', 'primitive:plane;width:2.2;height:0.10');
+    btn.setAttribute('geometry', 'primitive:plane;width:1.6;height:0.12');
     btn.setAttribute('material', 'color:#2c5282;opacity:0.95');
-    btn.setAttribute('position', '0 ' + (-i * 0.12).toFixed(3) + ' 0.005');
+    btn.setAttribute('position', '0 ' + (-i * 0.14).toFixed(3) + ' 0.005');
     const text = document.createElement('a-text');
     text.setAttribute('value', opt.name);
     text.setAttribute('align', 'left');
     text.setAttribute('color', '#fff');
-    text.setAttribute('width', '2.8');
-    text.setAttribute('position', '-1.0 0 0.005');
+    text.setAttribute('width', '2.0');
+    text.setAttribute('position', '-0.72 0 0.005');
     btn.appendChild(text);
     parent.appendChild(btn);
     btn.addEventListener('click', function() {
@@ -1150,15 +1178,18 @@ Run: `go vet ./...` then `go build ./...` — expect clean.
 
 Build, run, open a scene with multiple performers + tags. Enter VR, summon panel, click Browse. Verify:
 
-- Click Filters ▾ → sub-panel opens with 6 rows, each showing "X: None/Any".
-- Click Performer ▸ → option list opens. Pick one → filters panel updates ("Performer: Alice"); option list closes; grid filters.
+- Click Filters ▾ → standalone Filters panel appears to the **right** of the browse grid (slightly angled toward the user). Grid stays visible.
+- 6 filter rows visible, each showing "X: None/Any".
+- Click Performer ▸ → standalone Options panel appears further to the right of the Filters panel. Three panels are visible at once: grid (left), filters (middle-right), options (far right).
+- Pick a performer → options panel closes; filters panel updates ("Performer: Alice"); filters panel stays open; grid filters.
 - Repeat for Studio and Tag.
 - Click Favorites → 3 options (Any, Favorites only, Not favorites). Pick one.
 - Click Stars → 6 options. Pick "≥ 3 ★".
 - Click O-Counter → 4 options.
-- Tap ✕ on filter options → options close, filters panel stays.
-- Tap ✕ on filters panel → filters close.
-- Click Clear all → all filters reset. Grid restores to default ordering.
+- Tap ✕ on options panel → options close, filters panel stays.
+- Tap ✕ on filters panel → filters close, browse grid stays.
+- Click "Clear all" on the browse panel's top strip → all filters reset; grid restores to default ordering.
+- Click ✕ on browse panel → all three panels (browse, filters, options) close together.
 
 - [ ] **Step 4: Commit**
 
