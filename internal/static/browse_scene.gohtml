@@ -125,7 +125,8 @@ a.chip:hover { background: #3a3a3a; }
     <a-entity class="vr-btn" data-action="mute" position="-1.40 -0.20 0.01"
               geometry="primitive:plane;width:0.18;height:0.20"
               material="color:#2c5282;opacity:0.95">
-      <a-text id="vrMuteIcon" value="🔊" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+      <a-image id="vrMuteIconOn"  width="0.14" height="0.14" position="0 0 0.005"></a-image>
+      <a-image id="vrMuteIconOff" width="0.14" height="0.14" position="0 0 0.005" visible="false"></a-image>
     </a-entity>
     <!-- Volume slider track + fill + thumb -->
     <a-entity id="vrVolumeSlider" position="-0.96 -0.20 0.01">
@@ -148,7 +149,8 @@ a.chip:hover { background: #3a3a3a; }
     <a-entity class="vr-btn" data-action="playpause" position="-0.08 -0.20 0.01"
               geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
-      <a-text value="Play/Pause" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
+      <a-image id="vrPlayIcon"  width="0.14" height="0.14" position="0 0 0.005"></a-image>
+      <a-image id="vrPauseIcon" width="0.14" height="0.14" position="0 0 0.005" visible="false"></a-image>
     </a-entity>
     <a-entity class="vr-btn" data-action="speed" position="0.24 -0.20 0.01"
               geometry="primitive:plane;width:0.28;height:0.20"
@@ -158,12 +160,12 @@ a.chip:hover { background: #3a3a3a; }
     <a-entity class="vr-btn" data-action="loop" id="vrLoopBtn" position="0.56 -0.20 0.01"
               geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
-      <a-text value="🔁" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+      <a-image id="vrLoopIcon" width="0.14" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
     <a-entity class="vr-btn" data-action="format" position="0.88 -0.20 0.01"
               geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
-      <a-text value="Format" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
+      <a-image id="vrFormatIcon" width="0.16" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
     <a-entity class="vr-btn" data-action="help" position="1.20 -0.20 0.01"
               geometry="primitive:plane;width:0.28;height:0.20"
@@ -173,7 +175,7 @@ a.chip:hover { background: #3a3a3a; }
     <a-entity class="vr-btn" data-action="exit" position="1.52 -0.20 0.01"
               geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#a01010;opacity:0.95">
-      <a-text value="Exit VR" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
+      <a-image id="vrExitIcon" width="0.14" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
 
   </a-entity>
@@ -314,6 +316,54 @@ a.chip:hover { background: #3a3a3a; }
     const video        = document.getElementById('sceneVideo');
     const picker       = document.getElementById('vrFormatPicker');
     if (!btn || !scene || !wrap || !video) return;
+
+    // In-VR control-panel icons. A-Frame's <a-text> uses an MSDF font that
+    // doesn't include emoji codepoints, so 🔊/🔇/🔁 render blank in-headset.
+    // Inline SVG-as-data-URI textures on <a-image> planes work because
+    // Three.js's TextureLoader uses Image() which loads SVG natively in
+    // modern browsers (incl. Meta Browser). Toggle pairs (mute, play/pause)
+    // overlap two planes and flip their `visible` attr.
+    const ICONS = (function() {
+      const svg = (body) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' + body + '</svg>'
+      );
+      return {
+        speakerOn:  svg('<path fill="white" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>'),
+        speakerOff: svg('<path fill="white" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zM3 9v6h4l5 5V4L7 9H3zM21 19.5L4.5 3 3 4.5 19.5 21z"/>'),
+        play:       svg('<polygon fill="white" points="6,4 20,12 6,20"/>'),
+        pause:      svg('<rect fill="white" x="6" y="4" width="4" height="16"/><rect fill="white" x="14" y="4" width="4" height="16"/>'),
+        loop:       svg('<path fill="white" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>'),
+        format:     svg('<rect fill="none" stroke="white" stroke-width="2" x="3" y="5" width="18" height="14" rx="2"/><line stroke="white" stroke-width="2" x1="12" y1="5" x2="12" y2="19"/>'),
+        exit:       svg('<line stroke="white" stroke-width="3" stroke-linecap="round" x1="5" y1="5" x2="19" y2="19"/><line stroke="white" stroke-width="3" stroke-linecap="round" x1="19" y1="5" x2="5" y2="19"/>'),
+      };
+    })();
+
+    function applyIcon(id, src) {
+      const el = document.getElementById(id);
+      if (el) el.setAttribute('src', src);
+    }
+    function applyAllIcons() {
+      applyIcon('vrMuteIconOn', ICONS.speakerOn);
+      applyIcon('vrMuteIconOff', ICONS.speakerOff);
+      applyIcon('vrPlayIcon', ICONS.play);
+      applyIcon('vrPauseIcon', ICONS.pause);
+      applyIcon('vrLoopIcon', ICONS.loop);
+      applyIcon('vrFormatIcon', ICONS.format);
+      applyIcon('vrExitIcon', ICONS.exit);
+    }
+    function updatePlayPauseIcon() {
+      const play = document.getElementById('vrPlayIcon');
+      const pause = document.getElementById('vrPauseIcon');
+      if (play) play.setAttribute('visible', video.paused);
+      if (pause) pause.setAttribute('visible', !video.paused);
+    }
+    // Apply after a-scene is ready so the entities exist; also try
+    // immediately in case `loaded` already fired during script eval.
+    scene.addEventListener('loaded', applyAllIcons);
+    scene.addEventListener('loaded', updatePlayPauseIcon);
+    applyAllIcons();
+    video.addEventListener('play', updatePlayPauseIcon);
+    video.addEventListener('pause', updatePlayPauseIcon);
 
     // Bind material + texture programmatically. aframe-stereo-component@1.4.0
     // doesn't work on A-Frame 1.7 (reads material as raw string at init), so
@@ -677,8 +727,10 @@ a.chip:hover { background: #3a3a3a; }
     let speedIdx = 1; // start at 1.0x
 
     function updateMuteIcon() {
-      const el = document.getElementById('vrMuteIcon');
-      if (el) el.setAttribute('value', video.muted ? '🔇' : '🔊');
+      const on = document.getElementById('vrMuteIconOn');
+      const off = document.getElementById('vrMuteIconOff');
+      if (on) on.setAttribute('visible', !video.muted);
+      if (off) off.setAttribute('visible', video.muted);
     }
     function updateLoopBtn() {
       const el = document.getElementById('vrLoopBtn');
