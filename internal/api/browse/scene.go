@@ -4,14 +4,11 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"stash-vr/internal/api/heatmap"
 	apiinternal "stash-vr/internal/api/internal"
-	"stash-vr/internal/config"
-	"stash-vr/internal/prefix"
 	"stash-vr/internal/static"
 )
 
@@ -75,26 +72,15 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 		data.Rating1to5 = *vd.SceneParts.Rating100 / 20
 	}
 
-	favTag := config.Application().FavoriteTag
+	data.Tags, data.IsFavorite = projectTags(vd.SceneParts)
+	// Projection detection needs every tag (including ancestor-injected),
+	// so build that input list separately from the chip list above.
 	tagInputs := make([]apiinternal.TagInput, 0, len(vd.SceneParts.Tags))
 	for _, t := range vd.SceneParts.Tags {
 		if t == nil {
 			continue
 		}
-		name := t.TagParts.Name
-		// Collect every tag (including ancestor-injected) for projection
-		// detection — an ancestor DOME tag is just as authoritative as a
-		// direct one.
-		tagInputs = append(tagInputs, apiinternal.TagInput{Name: name, Aliases: t.Aliases})
-		// Skip ancestor-injected tags from the chip list.
-		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
-			continue
-		}
-		if favTag != "" && name == favTag {
-			data.IsFavorite = true
-			continue
-		}
-		data.Tags = append(data.Tags, EntityRef{ID: t.TagParts.Id, Name: name})
+		tagInputs = append(tagInputs, apiinternal.TagInput{Name: t.TagParts.Name, Aliases: t.Aliases})
 	}
 	basename := ""
 	if len(vd.SceneParts.Files) > 0 && vd.SceneParts.Files[0] != nil {

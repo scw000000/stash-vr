@@ -11,6 +11,7 @@ import (
 	"stash-vr/internal/config"
 	"stash-vr/internal/library"
 	"stash-vr/internal/prefix"
+	"stash-vr/internal/stash/gql"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -38,6 +39,30 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 	_ = json.NewEncoder(w).Encode(SceneState{Err: msg})
 }
 
+// projectTags partitions a scene's tags into user-facing chip refs.
+// Ancestor-injected tags (sort_name prefixed by SvrAncestor) are
+// excluded; the configured FAVORITE_TAG is consumed into isFavorite.
+// Callers needing every tag (e.g. for projection detection) should
+// iterate parts.Tags directly.
+func projectTags(parts *gql.SceneParts) (chips []EntityRef, isFavorite bool) {
+	favTag := config.Application().FavoriteTag
+	for _, t := range parts.Tags {
+		if t == nil {
+			continue
+		}
+		name := t.TagParts.Name
+		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
+			continue
+		}
+		if favTag != "" && name == favTag {
+			isFavorite = true
+			continue
+		}
+		chips = append(chips, EntityRef{ID: t.TagParts.Id, Name: name})
+	}
+	return
+}
+
 // buildSceneState reads a fresh scene from the cache and projects it to
 // SceneState — applying the same FAVORITE_TAG and ancestor-tag filters
 // that scene.go's GET path applies. Centralized here so the GET render
@@ -58,21 +83,7 @@ func buildSceneState(ctx context.Context, svc *library.Service, id string) (Scen
 		state.OCounter = *vd.SceneParts.O_counter
 	}
 	state.Organized = vd.SceneParts.Organized
-	favTag := config.Application().FavoriteTag
-	for _, t := range vd.SceneParts.Tags {
-		if t == nil {
-			continue
-		}
-		name := t.TagParts.Name
-		if strings.HasPrefix(t.TagParts.Sort_name, prefix.SvrAncestor) {
-			continue
-		}
-		if favTag != "" && name == favTag {
-			state.IsFavorite = true
-			continue
-		}
-		state.Tags = append(state.Tags, EntityRef{ID: t.TagParts.Id, Name: name})
-	}
+	state.Tags, state.IsFavorite = projectTags(vd.SceneParts)
 	return state, nil
 }
 
