@@ -11,8 +11,6 @@
   AFRAME.registerComponent('m3c-controls', {
     init: function() {
       this.sceneEl = this.el.sceneEl || this.el;
-      this.tmpVec = new AFRAME.THREE.Vector3();
-      this.startPos = new AFRAME.THREE.Vector3();
       this.curPos = new AFRAME.THREE.Vector3();
       this.deltaPos = new AFRAME.THREE.Vector3();
 

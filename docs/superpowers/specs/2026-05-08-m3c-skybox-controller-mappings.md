@@ -23,7 +23,7 @@ M3c adds those controller shortcuts, hides the playback panel by default, ties l
 1. Enter VR → playback panel and both laser controllers are hidden. Only the headset's own controller models are visible.
 2. Single-click trigger (or A or X) in empty space → panel + lasers appear. Single-click again in empty space → both hide.
 3. Single-click trigger on a `.vr-btn` raycast hit → button fires (existing M3b behavior preserved).
-4. Double-click trigger (within 300 ms, in empty space) → video plays/pauses.
+4. Double-click trigger (within 400 ms, in empty space) → video plays/pauses.
 5. Trigger held + controller moved (>5 cm pose delta OR >250 ms hold) → drag of the active geometry (cinema plane / sphere / fisheye-quad) by controller pose delta. Translation only.
 6. Thumbstick X-axis past 0.7 → ±10 s seek fires once. Re-arms when stick falls below 0.3.
 7. Thumbstick Y-axis magnitude > 0.3 (held) → continuous scale of the active geometry, clamped 0.3×–5×.
@@ -49,10 +49,10 @@ M3c adds those controller shortcuts, hides the playback panel by default, ties l
 |---|---|---|
 | Trigger — single-click (raycast hit on `.vr-btn`) | Button click (M3b behavior) | Button click (M3b behavior) |
 | Trigger — single-click (no raycast hit) | Toggle panel + lasers | Toggle panel + lasers |
-| Trigger — double-click (≤300 ms apart, no raycast hit) | Play/pause | Play/pause |
+| Trigger — double-click (≤400 ms apart, no raycast hit) | Play/pause | Play/pause |
 | Trigger — hold + move controller | Drag cinema plane, translation only, plane keeps facing user | Drag sphere or fisheye-quad, translation only *(SKYBOX-extension where SKYBOX is undocumented)* |
 | A or X — single-click | Toggle panel + lasers | Toggle panel + lasers |
-| A or X — double-click (≤300 ms apart) | Play/pause | Play/pause |
+| A or X — double-click (≤400 ms apart) | Play/pause | Play/pause |
 | Thumbstick X-axis past ±0.7 (threshold-cross) | −10 s / +10 s | −10 s / +10 s |
 | Thumbstick Y-axis magnitude > 0.3 (continuous, while held) | Scale screen, clamp 0.3×–5× | Scale sphere/fisheye-quad, clamp 0.3×–5× *(SKYBOX-extension)* |
 | B / Y — short-press (<500 ms) | Reset screen pose+scale | Recenter yaw |
@@ -76,7 +76,7 @@ While candidate is active, per `tick`:
 
 On `triggerup` before either threshold:
 - If the original `triggerdown` had a raycaster intersection: a-Frame's existing click pipeline already fires the button; do nothing extra.
-- Else: defer for **300 ms** as a candidate-click. If a second `triggerdown` arrives within 300 ms → it's a **double-click**: emit `m3c:play-pause`, cancel the candidate-click. Otherwise → emit `m3c:panel-toggle`.
+- Else: defer for **400 ms** as a candidate-click. If a second `triggerdown` arrives within 400 ms → it's a **double-click**: emit `m3c:play-pause`, cancel the candidate-click. Otherwise → emit `m3c:panel-toggle`. (Initially 300 ms; widened to 400 ms for Quest 3 controller jitter — see commit `f4344b1`.)
 
 ### 4.2 B/Y short vs long press
 
@@ -273,7 +273,7 @@ Manual on Quest 3 / Meta Browser, per [CLAUDE.md](../../../CLAUDE.md). The proje
 - **Laser-hidden mode disorientation.** Without a laser line, user can't see what they're aiming at when the panel is hidden — fine for drag (uses controller pose, not raycast) and for click-to-summon (direction doesn't matter), but might feel odd on first try. Mitigation: A-Frame's default `oculus-touch-controls` model stays visible, so the user still sees the controller in their hand. Only the *laser line* is hidden. If users complain, surface an option to keep lasers visible.
 - **Component-vs-IIFE boundary creep.** New component and existing inline IIFE both want to mutate panel/laser/geometry state. Mitigation enforced by spec: component emits semantic events ONLY; IIFE owns DOM mutation. Code review checks this.
 - **Panel-hidden-by-default UX surprise.** M3b shipped with the panel always visible. M3c flips it. First-time use after upgrade may confuse the user — they enter VR, see no panel, don't know to click. Mitigation: this user designed the change, so will know. If it surprises in practice, M3c-followup adds the first-entry tutorial overlay we deferred.
-- **Single-click latency from 300 ms double-click window.** Panel toggle has a perceptible delay (300 ms) before firing because we wait to see if a second click arrives. Mitigation: 300 ms is the SKYBOX-typical window — users have habituated. If it feels sluggish, shorten to 250 ms during validation and re-test.
+- **Single-click latency from 400 ms double-click window.** Panel toggle has a perceptible delay (400 ms) before firing because we wait to see if a second click arrives. Mitigation: 400 ms is within the typical browser dblclick range and gives Quest 3 gloved-hand users headroom. If it feels sluggish on-headset, narrow during validation and re-test.
 
 ## 9. What stays untouched
 
