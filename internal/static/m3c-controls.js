@@ -175,14 +175,13 @@
     },
     _onByUp: function(which) {
       const st = this._byState[which];
-      if (st.fired) {
-        // Long-press already fired in tick(); skip the short-press emit.
-        st.fired = false;
-        return;
-      }
+      const wasFired = st.fired;
       const elapsed = performance.now() - st.downTime;
-      const mode = this._currentMode();
+      st.downTime = 0;
+      st.fired = false;
+      if (wasFired) return; // long-press already fired
       if (elapsed < this.LONG_PRESS_MS) {
+        const mode = this._currentMode();
         this.sceneEl.emit('m3c:reset-short', { mode: mode });
       }
     },
@@ -195,7 +194,7 @@
     },
 
     tick: function(time, delta) {
-      // Promote candidate → drag if either threshold crosses.
+      // Trigger candidate → drag promotion (existing).
       ['right', 'left'].forEach(hand => {
         const st = this.triggerState[hand];
         if (st.phase === 'candidate') {
@@ -217,10 +216,17 @@
             dy: this.deltaPos.y,
             dz: this.deltaPos.z
           });
-          // Reset startPos to curPos so next tick's delta is incremental,
-          // not cumulative. This makes the geometry follow the controller
-          // 1:1 instead of accelerating.
           st.startPos.copy(this.curPos);
+        }
+      });
+      // B/Y long-press promotion.
+      ['b', 'y'].forEach(which => {
+        const st = this._byState[which];
+        if (st.downTime === 0 || st.fired) return;
+        if (performance.now() - st.downTime >= this.LONG_PRESS_MS) {
+          st.fired = true;
+          const mode = this._currentMode();
+          this.sceneEl.emit('m3c:reset-long', { mode: mode });
         }
       });
     },

@@ -471,6 +471,12 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       }
     });
 
+    scene.addEventListener('m3c:reset-long', function() {
+      // Full recenter: yaw recenter + geometry reset, both modes.
+      recenterYaw();
+      resetGeometry();
+    });
+
     // Panel + lasers visibility is shared. M3c hides them by default and
     // toggles via m3c:panel-toggle (or programmatically on Enter VR /
     // Format-button taps). When hidden: lasers' raycaster also disabled
