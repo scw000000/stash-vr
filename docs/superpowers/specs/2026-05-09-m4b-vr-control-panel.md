@@ -34,12 +34,10 @@ The ±10s buttons are dropped because M3c's thumbstick X already provides ±10s 
 **Non-goals (deferred):**
 
 - **Advanced Settings** (3D offset, brightness, tilt, monoscopic). M4b-followup if any of these become real pain points.
-- **Volume slider.** Mute toggle only. Headset has its own volume.
 - **Multi-track audio selector.** v1 plays whatever stream's audio track is default.
 - **Previous/Next scene buttons.** Comes naturally with M4c (the in-VR search). No playlist context in v1.
 - **Auto-next on video end.** Possible follow-up.
 - **Heatmap as scrub-bar background.** Easy to add as a textured plane behind the bar; deferred to keep this milestone focused. Become a quick follow-up after M4b lands.
-- **SRT subtitle support.** v1 parses VTT only. SRT is a follow-up.
 - **Funscript timeline display.** No haptic device support is in scope.
 - **±10s explicit buttons.** Removed; M3c thumbstick X covers the role.
 
@@ -53,13 +51,15 @@ The panel grows from M3c's single 0.4 m row to a three-row stack ~1.0 m tall, ~3
 ├────────────────────────────────────────────────────────┤
 │  ●━━━━━━━━━●━━━━━●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   │  Row 2: scrub bar         0.20m
 ├────────────────────────────────────────────────────────┤
-│  🔊 │ CC │ ▶/⏸ │ 1.0x │ 🔁 │ Format │ ⚙? │ Exit       │  Row 3: 8 buttons        0.30m
+│ 🔊━━●━━━ │ CC │ ▶/⏸ │ 1.0x │ 🔁 │ Format │ ? │ Exit  │  Row 3: vol slider + 7 buttons  0.30m
 └────────────────────────────────────────────────────────┘
 ```
 
-Width 3.0 m, height ~0.7 m visible content. The whole panel sits at the M3c position (`0 0.4 -1.5` rotated `-30 0 0`) and stays inside `vrControlsRoot` so M3c's panel-toggle still works as a unit.
+Width 3.2 m, height ~0.7 m visible content. The whole panel sits at the M3c position (`0 0.4 -1.5` rotated `-30 0 0`) and stays inside `vrControlsRoot` so M3c's panel-toggle still works as a unit.
 
-Row 3 button widths: 0.32 m each (slight bump from M3c's 0.28 m to fit text labels like "1.0x"). Spacing 0.04 m. Total: 8 × 0.32 + 7 × 0.04 = 2.84 m. Leaves margin.
+Row 3 layout:
+- **Volume widget** (left): icon + horizontal slider, 0.62 m wide total. Tap icon to mute/unmute; drag the slider thumb to set volume 0..1.
+- **7 buttons** to the right of the volume widget, each 0.32 m wide with 0.04 m spacing: CC, Play/Pause, Speed (1.0x), Loop, Format, Help (?), Exit.
 
 ## 4. Behavior details
 
@@ -129,9 +129,26 @@ Format helper: `formatTime(s) → "M:SS"` for durations < 1 h, else `"H:MM:SS"`.
 <a-entity class="vr-btn" data-action="mute" position="-1.20 -0.20 0.01" ...>
   <a-text id="vrMuteIcon" value="🔊" .../>
 </a-entity>
+
+<!-- Volume slider track + thumb to the right of the icon. -->
+<a-entity id="vrVolumeSlider" position="-0.96 -0.20 0.01">
+  <a-plane class="vr-vol-track vr-btn" width="0.40" height="0.04"
+           color="#444" material="opacity:0.95"></a-plane>
+  <a-plane id="vrVolumeFill" width="0.40" height="0.04" color="#3776c2"
+           material="opacity:0.95" position="0 0 0.001"></a-plane>
+  <a-entity id="vrVolumeThumb" class="vr-btn vr-vol-thumb"
+            geometry="primitive:plane;width:0.04;height:0.10"
+            material="color:#fff" position="0.20 0 0.005"></a-entity>
+</a-entity>
 ```
 
-Click handler: `video.muted = !video.muted`. Update icon to 🔊 / 🔇. Update button color to highlight when muted (e.g., `material="color:#a01010"` when muted).
+**Mute icon click:** `video.muted = !video.muted`. Update icon to 🔊 / 🔇.
+
+**Volume slider:** behaves like the M4b scrub bar (§4.1) but operates on `video.volume` (0..1) instead of `currentTime`. Trigger-down on the thumb or the track starts a drag session that sets `video.volume = ratio` per tick, where `ratio = clamp((cursorLocalX + 0.20) / 0.40, 0, 1)`. Throttle is unnecessary (volume writes are cheap). Tap (no drag) at a position seeks to that volume immediately.
+
+Volume thumb's X position updates per tick from `video.volume`. Mute is reflected by the icon only — the slider stays at its underlying-volume position so unmute restores level.
+
+Volume initializes to 1.0 (max) on page load. Persists for the session in JS; not across page loads.
 
 ### 4.6 Captions
 
@@ -149,25 +166,20 @@ Click → toggle `vrSubtitlePicker` sub-panel:
 
 ```html
 <a-entity id="vrSubtitlePicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-  <a-plane width="2.0" height="0.6" color="#000" material="opacity:0.7"></a-plane>
-  <a-text value="Subtitles" align="left" color="#fff" width="3" position="-0.9 0.22 0.01"></a-text>
-  <a-entity class="vr-btn vr-cc-pick" data-cc-lang="" position="-0.7 0.05 0.01" ...>
-    <a-text value="Off" .../>
-  </a-entity>
-  {{range .Captions}}
-  <a-entity class="vr-btn vr-cc-pick" data-cc-lang="{{.LanguageCode}}" data-cc-type="{{.CaptionType}}" position="..." ...>
-    <a-text value="{{.LanguageCode}}" .../>
-  </a-entity>
-  {{end}}
+  <a-plane id="vrSubtitlePickerBg" width="2.0" height="..." color="#000" material="opacity:0.7"></a-plane>
+  <a-text value="Subtitles" align="left" color="#fff" width="3" position="-0.9 ... 0.01"></a-text>
+  <!-- "Off" + one button per language; JS computes positions with row wrap. -->
 </a-entity>
 ```
 
 Picker is hidden by default; toggled by the CC button (mutually exclusive with `vrFormatPicker` and `vrHelpPanel` so they don't overlap — share a `closeAllSubpanels()` helper).
 
+**Layout:** buttons render in a wrapping flex of up to 4 per row. Background plane height grows with the number of rows. With 1 caption: 1 row ("Off" + lang). With 5 captions: 2 rows. With 12: 4 rows. No scrolling needed because real scenes rarely exceed ~10 languages.
+
 On a language pick:
 
-1. Fetch the caption file: `GET /browse/scene/{id}/caption?lang=...&type=...` (new proxy route that wraps the Stash caption URL with the API key, like `/cover/{id}` does for thumbnails). Returns text/vtt body.
-2. Parse the VTT into an array of cues `[{start, end, text}]` — minimal parser, ~50 LoC.
+1. Fetch the caption file: `GET /browse/scene/{id}/caption?lang=...&type=...` (new proxy route that wraps the Stash caption URL with the API key, like `/cover/{id}` does for thumbnails). Returns the file body in whatever format Stash served — VTT or SRT typically.
+2. Parse the cue list with `parseSubtitles(text)` — handles **both VTT and SRT**. The two formats share the timing line shape (`HH:MM:SS.mmm --> HH:MM:SS.mmm`) up to the millisecond separator (VTT uses `.`, SRT uses `,`); the parser regex matches `[\.,]` so both work without branching. SRT cue-number lines (e.g., `1`, `2` on their own line before each timing) don't match the regex and are skipped naturally. Other formats (e.g., ASS) are unsupported in v1 — the parser returns an empty cue list, the subtitle plane stays hidden.
 3. Set `currentCues = parsed`, `currentLang = lang`. Hide the picker.
 
 On Off:
@@ -311,7 +323,7 @@ On Quest 3 / Meta Browser:
 - [ ] Time text top-right shows `0:00 / M:SS` then advances.
 - [ ] Scrub bar with playhead at far left.
 - [ ] ≥3 dots on the scrub bar at expected positions.
-- [ ] 8 buttons in row 3.
+- [ ] Row 3 shows: volume widget (icon + slider) on the left, then 7 buttons (CC, Play/Pause, Speed, Loop, Format, Help, Exit).
 
 ### B. Scrub bar
 - [ ] Laser-grab the playhead, drag right → video advances in real time.
@@ -323,14 +335,19 @@ On Quest 3 / Meta Browser:
 - [ ] Hover a marker dot → tooltip shows marker title.
 - [ ] Click a dot → video jumps to its `seconds`.
 
-### D. Mute
-- [ ] Click 🔊 → audio mutes; icon changes to 🔇; button highlights.
+### D. Volume
+- [ ] Click 🔊 icon → audio mutes; icon changes to 🔇.
 - [ ] Click again → unmutes.
+- [ ] Drag volume slider thumb left → video volume drops continuously.
+- [ ] Drag right → volume rises.
+- [ ] Tap a position on the slider track (no drag) → volume jumps there.
+- [ ] After mute then unmute → volume returns to previous slider position (not max).
 
 ### E. Captions
-- [ ] Click CC → picker opens listing each language plus "Off".
+- [ ] Click CC → picker opens listing each language plus "Off". With ≥5 languages, buttons wrap to multiple rows; panel grows to fit.
 - [ ] Pick a language → subtitles render below cinema plane (cinema scene) or below center-of-gaze (immersive).
 - [ ] Switch to a different language → subtitles re-parse and update.
+- [ ] On a scene whose caption track is SRT (not VTT) — pick the language → subtitles still render correctly (parser handles both formats).
 - [ ] Pick "Off" → subtitles disappear.
 - [ ] Open a scene with no captions → CC button is absent.
 

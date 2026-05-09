@@ -187,14 +187,14 @@ git commit -m "browse: caption proxy + Captions/SceneMarkers/DurationSec on Scen
 
 ---
 
-## Task 2: Panel layout expansion + simple buttons (mute, speed, loop)
+## Task 2: Panel layout expansion + volume widget + speed + loop
 
 **Files:**
 - Modify: `internal/static/browse_scene.gohtml`
 
-**Goal:** Grow the playback panel from one row to three. Wire the three "simple" buttons (mute, speed, loop) that don't depend on additional data plumbing. Title, time, scrub bar, and captions come in later tasks.
+**Goal:** Grow the playback panel from one row to three. Wire the volume widget (mute icon + slider), speed cycle, and loop toggle. Title, time, scrub bar, and captions come in later tasks.
 
-- [ ] **Step 1: Resize the panel background plane and reposition existing buttons**
+- [ ] **Step 1: Resize the panel background plane and replace inner content**
 
 Find the `vrControls` entity in [internal/static/browse_scene.gohtml](../../../internal/static/browse_scene.gohtml) (around line 92):
 
@@ -205,51 +205,70 @@ Find the `vrControls` entity in [internal/static/browse_scene.gohtml](../../../i
 </a-entity>
 ```
 
-Replace the inner content. The new panel is 3 rows tall (~0.7 m), 3.0 m wide. Existing buttons (Play/Pause, Format, Help, Exit) move to specific positions in row 3; new buttons (Mute, CC, Speed, Loop) get inserted; -10s/+10s are removed.
+Replace the inner content. New panel is 3 rows tall (~0.7 m), 3.2 m wide. Row 3 holds: volume widget (icon + slider) on the left, then 7 buttons. -10s/+10s deleted (M3c thumbstick covers).
 
 ```html
 <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
-  <a-plane width="3.0" height="0.7" color="#000" material="opacity:0.65"></a-plane>
+  <a-plane width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
 
-  <!-- Row 3 (bottom): 8 control buttons. Width 0.32m, gap 0.04m, total 8*0.32+7*0.04 = 2.84m. -->
-  <a-entity class="vr-btn" data-action="mute" position="-1.20 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <!-- Row 3 (bottom): volume widget on the left, then 7 buttons.
+       Volume widget: icon at -1.40 (0.18m wide) + slider centered at -0.96 (0.40m wide).
+       Total volume span: -1.49 to -0.76 (0.62m + ~0.04m gap).
+       Then 7 buttons at -0.40, -0.08, 0.24, 0.56, 0.88, 1.20, 1.52
+       (each 0.28m wide, 0.04m gap; total 7*0.28 + 6*0.04 = 2.20m).
+       Wait — to fit width 3.2: volume span 0.62 + 7 buttons 2.20 + gaps = 2.86. Plenty. -->
+
+  <!-- Volume icon (mute toggle) -->
+  <a-entity class="vr-btn" data-action="mute" position="-1.40 -0.20 0.01"
+            geometry="primitive:plane;width:0.18;height:0.20"
             material="color:#2c5282;opacity:0.95">
-    <a-text id="vrMuteIcon" value="🔊" align="center" color="#fff" width="2" position="0 0 0.005"></a-text>
+    <a-text id="vrMuteIcon" value="🔊" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn" data-action="cc" id="vrCCBtn" position="-0.88 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <!-- Volume slider track + fill + thumb -->
+  <a-entity id="vrVolumeSlider" position="-0.96 -0.20 0.01">
+    <a-plane class="vr-vol-track vr-btn" data-action="vol-track" width="0.40" height="0.04"
+             color="#444" material="opacity:0.95"></a-plane>
+    <a-plane id="vrVolumeFill" width="0.40" height="0.04" color="#3776c2"
+             material="opacity:0.95" position="0 0 0.001"></a-plane>
+    <a-entity id="vrVolumeThumb" class="vr-btn vr-vol-thumb" data-action="vol-track"
+              geometry="primitive:plane;width:0.04;height:0.10"
+              material="color:#fff" position="0.20 0 0.005"></a-entity>
+  </a-entity>
+
+  <!-- 7 buttons to the right of the volume widget. -->
+  <a-entity class="vr-btn" data-action="cc" id="vrCCBtn" position="-0.40 -0.20 0.01"
+            geometry="primitive:plane;width:0.28;height:0.20"
             material="color:#2c5282;opacity:0.95"
             visible="{{if .Captions}}true{{else}}false{{end}}">
     <a-text value="CC" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn" data-action="playpause" position="-0.56 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <a-entity class="vr-btn" data-action="playpause" position="-0.08 -0.20 0.01"
+            geometry="primitive:plane;width:0.28;height:0.20"
             material="color:#2c5282;opacity:0.95">
     <a-text value="Play/Pause" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn" data-action="speed" position="-0.24 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <a-entity class="vr-btn" data-action="speed" position="0.24 -0.20 0.01"
+            geometry="primitive:plane;width:0.28;height:0.20"
             material="color:#2c5282;opacity:0.95">
     <a-text id="vrSpeedLabel" value="1.0x" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn" data-action="loop" id="vrLoopBtn" position="0.08 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <a-entity class="vr-btn" data-action="loop" id="vrLoopBtn" position="0.56 -0.20 0.01"
+            geometry="primitive:plane;width:0.28;height:0.20"
             material="color:#2c5282;opacity:0.95">
     <a-text value="🔁" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn" data-action="format" position="0.40 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <a-entity class="vr-btn" data-action="format" position="0.88 -0.20 0.01"
+            geometry="primitive:plane;width:0.28;height:0.20"
             material="color:#2c5282;opacity:0.95">
     <a-text value="Format" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn" data-action="help" position="0.72 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <a-entity class="vr-btn" data-action="help" position="1.20 -0.20 0.01"
+            geometry="primitive:plane;width:0.28;height:0.20"
             material="color:#2c5282;opacity:0.95">
     <a-text value="?" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
   </a-entity>
-  <a-entity class="vr-btn" data-action="exit" position="1.04 -0.20 0.01"
-            geometry="primitive:plane;width:0.32;height:0.20"
+  <a-entity class="vr-btn" data-action="exit" position="1.52 -0.20 0.01"
+            geometry="primitive:plane;width:0.28;height:0.20"
             material="color:#a01010;opacity:0.95">
     <a-text value="Exit VR" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
   </a-entity>
@@ -260,7 +279,7 @@ Replace the inner content. The new panel is 3 rows tall (~0.7 m), 3.0 m wide. Ex
 
 The `-10s` and `+10s` buttons are deleted (M3c thumbstick covers ±10s).
 
-- [ ] **Step 2: Wire up mute, speed, loop in the existing vrAction switch**
+- [ ] **Step 2: Wire up volume (mute + slider drag), speed, loop in the existing vrAction switch**
 
 Find the `vrAction` function (around line 604):
 
@@ -340,8 +359,63 @@ function vrAction(action) {
     if (help) help.setAttribute('visible', false);
   } else if (action === 'cc') {
     // Wired in Task 5.
+  } else if (action === 'vol-track') {
+    // Track / thumb tap or drag: handled below by the slider drag protocol.
+    // Fall through — actual volume write happens in the slider intersection
+    // listener.
   }
 }
+
+// Volume slider drag — same pattern as the scrub bar drag in Task 4 but
+// writes video.volume in [0, 1].
+const VOL_BAR_W = 0.40;
+const VOL_BAR_LEFT = -0.20; // local-x of left edge inside vrVolumeSlider
+let volActive = false;
+
+function cursorToVol(intersection) {
+  const slider = document.getElementById('vrVolumeSlider');
+  if (!slider || !slider.object3D) return null;
+  const local = slider.object3D.worldToLocal(intersection.point.clone());
+  const ratio = Math.max(0, Math.min(1, (local.x - VOL_BAR_LEFT) / VOL_BAR_W));
+  return ratio;
+}
+
+function setVideoVolume(v) {
+  video.volume = Math.max(0, Math.min(1, v));
+  const fill = document.getElementById('vrVolumeFill');
+  const thumb = document.getElementById('vrVolumeThumb');
+  const w = video.volume * VOL_BAR_W;
+  if (fill) {
+    fill.setAttribute('width', w);
+    fill.setAttribute('position', { x: VOL_BAR_LEFT + w / 2, y: 0, z: 0.001 });
+  }
+  if (thumb) {
+    thumb.setAttribute('position', { x: VOL_BAR_LEFT + w, y: 0, z: 0.005 });
+  }
+}
+
+document.querySelectorAll('.vr-vol-track, .vr-vol-thumb').forEach(el => {
+  el.addEventListener('triggerdown', function(evt) {
+    volActive = true;
+    const intersection = evt.detail && evt.detail.intersection;
+    if (intersection) {
+      const v = cursorToVol(intersection);
+      if (v !== null) setVideoVolume(v);
+    }
+  });
+  el.addEventListener('triggerup', function() { volActive = false; });
+});
+
+scene.addEventListener('raycaster-intersection', function(evt) {
+  if (!volActive) return;
+  const intersections = evt.detail.intersections || [];
+  if (!intersections.length) return;
+  const v = cursorToVol(intersections[0]);
+  if (v !== null) setVideoVolume(v);
+});
+
+// Initialize volume to 1.0.
+setVideoVolume(1.0);
 ```
 
 - [ ] **Step 3: Vet, build, manually verify**
@@ -351,13 +425,16 @@ Run: `go vet ./...` then `go build ./...` — expect clean.
 Build the binary, run, open `/browse/scene/{id}` for a scene, click "Enter VR." Single-click trigger to summon panel. Verify:
 
 - Panel is wider, three rows tall.
-- 8 buttons visible in row 3 (or 7 if the scene has no captions — CC is hidden via `visible="false"`).
-- Click 🔊 → audio mutes; icon flips to 🔇.
+- Volume widget on the left of row 3: icon 🔊 + horizontal slider with thumb at the right edge.
+- 7 buttons to the right of the volume widget (or 6 if the scene has no captions).
+- Click 🔊 icon → audio mutes; icon flips to 🔇. Click again → unmutes; volume returns to slider position.
+- Drag the volume thumb left → video volume drops continuously.
+- Tap a position on the track (no drag) → volume jumps to that position.
 - Click 1.0x → label cycles `1.25x → 1.5x → 2.0x → 0.5x → 1.0x`. Audio plays at chosen rate.
 - Click 🔁 → button highlights blue; video loops on end.
 - Click again → loop off.
 - Existing Play/Pause, Format, Help, Exit still work.
-- M3c regressions: panel hide/show, geometry-drag on empty space, thumbstick L/R seek (now the only -10/+10 path) all work.
+- M3c regressions: panel hide/show, geometry-drag on empty space (NOT triggered when starting on volume widget), thumbstick L/R seek work.
 
 - [ ] **Step 4: Commit**
 
@@ -574,9 +651,9 @@ function rafLoop() {
 }
 ```
 
-- [ ] **Step 4: Suppress M3c's geometry-drag for scrub trigger-down**
+- [ ] **Step 4: Suppress M3c's geometry-drag for scrub-bar and volume-slider trigger-down**
 
-In [internal/static/m3c-controls.js](../../../internal/static/m3c-controls.js), find the trigger-down handler that captures the raycaster intersection. Add a check: if the intersected entity has class `.vr-scrub` or `.vr-scrub-marker` or `.vr-scrub-bg`, don't start a drag candidate — instead, mark this trigger as a scrub-only event and bypass the drag/click classification.
+In [internal/static/m3c-controls.js](../../../internal/static/m3c-controls.js), find the trigger-down handler. Add a check: if the intersected entity carries any of the slider-class names (scrub bar, scene markers, volume track or thumb), don't start a geometry-drag candidate — those elements own the trigger-down for their own drag mechanism.
 
 Locate the function (search for `_onTriggerDown`):
 
@@ -596,9 +673,10 @@ Add a class-list probe at the top:
 ```javascript
 _onTriggerDown: function(evt) {
   const hit = this._raycastHit(evt);
-  if (hit && (hit.classList.contains('vr-scrub') || hit.classList.contains('vr-scrub-bg') || hit.classList.contains('vr-scrub-marker'))) {
-    // Scrub session — bypass M3c's drag/click classification entirely.
-    // The scrub-bar JS in browse_scene.gohtml handles the drag itself.
+  const sliderClasses = ['vr-scrub', 'vr-scrub-bg', 'vr-scrub-marker', 'vr-vol-track', 'vr-vol-thumb'];
+  if (hit && sliderClasses.some(c => hit.classList.contains(c))) {
+    // Slider session — bypass M3c's drag/click classification entirely.
+    // The slider's own JS in browse_scene.gohtml handles the drag.
     this._scrubActive = true;
     return;
   }
@@ -750,56 +828,19 @@ git commit -m "m4b: scrub bar with drag, scene-marker dots, marker tooltip"
 
 **Goal:** CC button opens a language picker. Selecting a language fetches the VTT, parses cues, and renders the active cue text on a plane parented to the cinema-plane in cinema mode or to the camera in immersive.
 
-- [ ] **Step 1: Add the subtitle picker sub-panel**
+- [ ] **Step 1: Add the subtitle picker sub-panel (JS-rendered with row wrap)**
 
-Inside `vrControlsRoot` (alongside `vrFormatPicker` and `vrHelpPanel`), add:
+Inside `vrControlsRoot` (alongside `vrFormatPicker` and `vrHelpPanel`), add the empty container — JS will populate the language buttons dynamically and resize the background plane to fit N rows:
 
 ```html
 <a-entity id="vrSubtitlePicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
-  <a-plane width="2.0" height="0.6" color="#000" material="opacity:0.7"></a-plane>
-  <a-text value="Subtitles" align="left" color="#fff" width="3" position="-0.85 0.22 0.01"></a-text>
-
-  <a-entity class="vr-btn vr-cc-pick" data-cc-lang="" position="-0.7 0.05 0.01"
-            geometry="primitive:plane;width:0.4;height:0.16"
-            material="color:#2c5282;opacity:0.95">
-    <a-text value="Off" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-  </a-entity>
-
-  {{range $i, $c := .Captions}}
-  <a-entity class="vr-btn vr-cc-pick" data-cc-lang="{{$c.LanguageCode}}" data-cc-type="{{$c.CaptionType}}"
-            position="{{add (mul $i 1) -3 | mul 0.42 | sub 0.3}} -0.15 0.01"
-            geometry="primitive:plane;width:0.4;height:0.16"
-            material="color:#2c5282;opacity:0.95">
-    <a-text value="{{$c.LanguageCode}}" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-  </a-entity>
-  {{end}}
+  <a-plane id="vrSubtitlePickerBg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
+  <a-text id="vrSubtitlePickerTitle" value="Subtitles" align="left" color="#fff" width="3" position="-0.85 0.13 0.01"></a-text>
+  <a-entity id="vrSubtitlePickerButtons" position="0 0 0.01"></a-entity>
 </a-entity>
 ```
 
-The position math is awkward; replace with a simpler approach — emit each language button at a fixed-spacing layout:
-
-```html
-{{range $i, $c := .Captions}}
-<a-entity class="vr-btn vr-cc-pick" data-cc-lang="{{$c.LanguageCode}}" data-cc-type="{{$c.CaptionType}}"
-          position="{{ccPickerX $i}} -0.15 0.01"
-          geometry="primitive:plane;width:0.4;height:0.16"
-          material="color:#2c5282;opacity:0.95">
-  <a-text value="{{$c.LanguageCode}}" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
-</a-entity>
-{{end}}
-```
-
-Add the `ccPickerX` template func to FuncMap in [scene.go](../../../internal/api/browse/scene.go):
-
-```go
-"ccPickerX": func(i int) string {
-    // 4 buttons per row, spacing 0.42, leftmost at x=-0.7. Wrap to next row at i>=4.
-    col := i % 4
-    return fmt.Sprintf("%.2f", -0.7 + float64(col) * 0.42)
-},
-```
-
-(The simpler choice: cap at 4 visible languages on one row. v1 doesn't paginate; if you have 5+ caption languages, the 5th overlaps. Mitigate as M4b-followup.)
+The button layout is computed by JS at language-list time: 4 buttons per row, button width 0.40 m, gap 0.06 m, row height 0.20 m. Background plane height = `0.18 + ceil(n/4) * 0.20` where n includes the "Off" button. With 1 caption (Off + 1 lang = 2 buttons): 1 row, height 0.38 m. With 7 captions (8 buttons): 2 rows, height 0.58 m. With 12 (13 buttons): 4 rows, height 0.98 m.
 
 - [ ] **Step 2: Add the subtitle plane**
 
@@ -826,58 +867,78 @@ In the JS IIFE, replace the `'cc'` placeholder branch in `vrAction`:
 }
 ```
 
-Add the picker's tap handler — the existing `.vr-btn` click loop already routes via `data-action`, but `.vr-cc-pick` uses `data-cc-lang` instead. Add a parallel branch in the click handler:
+No change to the existing `.vr-btn` click loop is needed — `renderSubtitlePicker()` (Step 4) binds `click` listeners directly on each language button when it creates them, so caption picks don't flow through the generic click router.
 
-Find the existing block:
+- [ ] **Step 4: Implement caption picker rendering, `handleCCPick`, the parser (VTT + SRT), and the cue tick**
 
-```javascript
-document.querySelectorAll('.vr-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const action = btn.dataset.action || btn.getAttribute('data-action');
-    if (action) {
-      vrAction(action);
-      return;
-    }
-    const row = btn.dataset.pickRow;
-    const value = btn.dataset.pickValue;
-    if (row) handlePickerTap(row, value);
-  });
-});
-```
-
-Replace with:
+First, render the picker buttons from the server-marshalled `.Captions`. Add JS at IIFE startup:
 
 ```javascript
-document.querySelectorAll('.vr-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const action = btn.dataset.action || btn.getAttribute('data-action');
-    if (action) {
-      vrAction(action);
-      return;
-    }
-    const row = btn.dataset.pickRow;
-    const value = btn.dataset.pickValue;
-    if (row) { handlePickerTap(row, value); return; }
-    const ccLang = btn.dataset.ccLang;
-    if (typeof ccLang !== 'undefined') {
-      const ccType = btn.dataset.ccType || 'vtt';
-      handleCCPick(ccLang, ccType);
-      return;
-    }
+const captionsData = JSON.parse({{ marshal .Captions }});
+
+function renderSubtitlePicker() {
+  const buttonsRoot = document.getElementById('vrSubtitlePickerButtons');
+  const bg = document.getElementById('vrSubtitlePickerBg');
+  const title = document.getElementById('vrSubtitlePickerTitle');
+  if (!buttonsRoot) return;
+  while (buttonsRoot.firstChild) buttonsRoot.removeChild(buttonsRoot.firstChild);
+
+  const items = [{ lang: '', type: '', label: 'Off' }].concat(
+    (captionsData || []).map(c => ({ lang: c.languageCode, type: c.captionType, label: c.languageCode }))
+  );
+  const PER_ROW = 4;
+  const BTN_W = 0.40;
+  const BTN_H = 0.16;
+  const GAP_X = 0.06;
+  const ROW_H = 0.20;
+  const rowCount = Math.ceil(items.length / PER_ROW);
+
+  // Resize background and reposition title above the buttons.
+  const bgHeight = 0.18 + rowCount * ROW_H;
+  if (bg) bg.setAttribute('height', bgHeight.toFixed(2));
+  if (title) title.setAttribute('position', '-0.85 ' + ((bgHeight / 2) - 0.07).toFixed(2) + ' 0.01');
+
+  items.forEach((it, i) => {
+    const row = Math.floor(i / PER_ROW);
+    const col = i % PER_ROW;
+    const xCenter = -((PER_ROW - 1) / 2) * (BTN_W + GAP_X) + col * (BTN_W + GAP_X);
+    const yCenter = ((rowCount - 1) / 2) * ROW_H - row * ROW_H - 0.02;
+
+    const btn = document.createElement('a-entity');
+    btn.classList.add('vr-btn', 'vr-cc-pick');
+    btn.dataset.ccLang = it.lang;
+    btn.dataset.ccType = it.type;
+    btn.setAttribute('geometry', 'primitive:plane;width:' + BTN_W + ';height:' + BTN_H);
+    btn.setAttribute('material', 'color:#2c5282;opacity:0.95');
+    btn.setAttribute('position', xCenter.toFixed(3) + ' ' + yCenter.toFixed(3) + ' 0.005');
+    const text = document.createElement('a-text');
+    text.setAttribute('value', it.label);
+    text.setAttribute('align', 'center');
+    text.setAttribute('color', '#fff');
+    text.setAttribute('width', '2.5');
+    text.setAttribute('position', '0 0 0.005');
+    btn.appendChild(text);
+    buttonsRoot.appendChild(btn);
+    btn.addEventListener('click', () => handleCCPick(it.lang, it.type));
   });
-});
+}
+
+scene.addEventListener('loaded', renderSubtitlePicker);
 ```
 
-- [ ] **Step 4: Implement `handleCCPick`, the VTT parser, and the cue tick**
-
-Add the subtitle implementation in the IIFE:
+Then the parser + handlers:
 
 ```javascript
 let currentCues = []; // [{start, end, text}]
 let currentLang = '';
 
-function parseVTT(text) {
-  // Minimal VTT parser. Reads "HH:MM:SS.mmm --> HH:MM:SS.mmm" + payload until blank line.
+// parseSubtitles handles VTT and SRT. The two formats share the timing
+// line shape "HH:MM:SS.mmm --> HH:MM:SS.mmm" up to the millisecond
+// separator (VTT uses '.', SRT uses ','). The regex matches [\.,] so
+// both work without branching. SRT cue-number lines (a bare integer
+// line before each timing) don't match the regex and are skipped.
+// Other formats (e.g., ASS) return empty cue list.
+function parseSubtitles(text) {
   const cues = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -908,7 +969,7 @@ function handleCCPick(lang, type) {
   fetch('/browse/scene/' + encodeURIComponent(sceneId) + '/caption?lang=' + encodeURIComponent(lang) + '&type=' + encodeURIComponent(type))
     .then(r => r.text())
     .then(text => {
-      currentCues = parseVTT(text);
+      currentCues = parseSubtitles(text);
       currentLang = lang;
     })
     .catch(err => console.warn('stash-vr: caption fetch failed', err));
@@ -978,10 +1039,11 @@ Run: `go vet ./...` then `go build ./...` — expect clean.
 Build, run, open a scene with captions in Stash. Click Enter VR, summon panel. Verify:
 
 - CC button visible (not hidden via `{{if .Captions}}`).
-- Tap CC → picker opens with "Off" + each available language.
+- Tap CC → picker opens with "Off" + each available language. With ≥5 languages, buttons wrap to multiple rows; the panel background grows to fit (verify visually that the title text doesn't overlap row 1).
 - Tap a language → picker closes; after a brief fetch, subtitles appear at the bottom of the cinema plane (cinema mode) or below center-of-gaze (immersive).
 - Subtitles update as video plays through cues.
 - Switch language → re-fetches and updates.
+- Open a scene whose caption is SRT (Stash returns `caption_type=srt`) → picking a language still parses correctly; cues display.
 - Tap Off → subtitles disappear.
 - Open a scene with no captions → CC button is absent (hidden via template `visible="false"`).
 - M3c, M3a, M3b, Task 2-4 regressions intact.
@@ -997,8 +1059,8 @@ git commit -m "m4b: subtitles — picker, VTT parser, mode-aware subtitle plane"
 
 ## Self-review checklist
 
-- **Spec coverage:** Title (Task 3) + time (Task 3) + scrub bar (Task 4) + scene markers (Task 4) + mute (Task 2) + CC (Task 5) + speed (Task 2) + loop (Task 2) all mapped. Caption proxy + data path (Task 1) is the prerequisite. M3c integration (Task 4 step 4) handles the `.vr-scrub` opt-out.
+- **Spec coverage:** Title (Task 3) + time (Task 3) + scrub bar (Task 4) + scene markers (Task 4) + volume widget with slider (Task 2) + CC + SRT + multi-row caption picker (Task 5) + speed (Task 2) + loop (Task 2) all mapped. Caption proxy + data path (Task 1) is the prerequisite. M3c integration (Task 4 step 4) handles the slider opt-outs (`.vr-scrub*`, `.vr-vol-track`, `.vr-vol-thumb`).
 - **No placeholders:** Each task has concrete code, exact paths, exact commands. The Task 4 m3c-controls.js patch is described conceptually because the caller must read the existing handler names — flagged in the step.
 - **Type consistency:** `CaptionRef`, `SceneMarker` defined in Task 1, used in Tasks 4 and 5 via template + JSON.
 - **Frequent commits:** One per task. Five commits total.
-- **YAGNI:** No advanced settings, no volume slider, no SRT support, no chapter generation. All explicit non-goals from the spec.
+- **YAGNI:** No advanced settings, no chapter generation. v1 supports VTT and SRT (regex-shared), no ASS/SSA. Other non-goals per spec.
