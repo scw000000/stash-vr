@@ -417,6 +417,32 @@ a.chip:hover { background: #3a3a3a; }
     const picker       = document.getElementById('vrFormatPicker');
     if (!btn || !scene || !wrap || !video) return;
 
+    // Three.js's Raycaster does NOT skip invisible objects by default —
+    // it only checks layers. So a panel with visible=false (e.g. the
+    // format picker) still has its descendant .vr-btn meshes intercept
+    // the laser ray, blocking it from reaching the visible browse panel
+    // behind. Patch intersectObjects to filter out any hit whose object
+    // (or any ancestor) has visible=false. This affects A-Frame's laser
+    // line truncation and the `intersections` array all consumers read.
+    (function patchRaycasterVisibility() {
+      const TR = AFRAME.THREE.Raycaster.prototype;
+      if (TR._svPatched) return;
+      const orig = TR.intersectObjects;
+      function isFullyVisible(obj) {
+        for (let n = obj; n; n = n.parent) if (!n.visible) return false;
+        return true;
+      }
+      TR.intersectObjects = function (objects, recursive, target) {
+        const hits = orig.call(this, objects, recursive, target);
+        // Sorted by distance already; filter in place to preserve order.
+        for (let i = hits.length - 1; i >= 0; i--) {
+          if (!isFullyVisible(hits[i].object)) hits.splice(i, 1);
+        }
+        return hits;
+      };
+      TR._svPatched = true;
+    })();
+
     // In-VR control-panel icons. A-Frame's <a-text> uses an MSDF font that
     // doesn't include emoji codepoints, so 🔊/🔇/🔁 render blank in-headset.
     // Inline SVG-as-data-URI textures on <a-image> planes work because
@@ -953,7 +979,12 @@ a.chip:hover { background: #3a3a3a; }
       const aTextWidth = (charArcLen * 10).toFixed(3);
 
       for (let i = 0; i < text.length; i++) {
-        const charDegHere = startDeg + (i + 0.5) * charDeg;
+        // Lay char[0] at the LARGEST theta (left side of arc as seen by
+        // user, since +theta in A-Frame's convention moves the surface
+        // point in -X panel-local). Last char goes at the smallest theta
+        // (right side). Without this reversal the string reads R-to-L from
+        // the user's perspective ("Filters" → "sretliF").
+        const charDegHere = startDeg + (text.length - i - 0.5) * charDeg;
         const charRad     = charDegHere * Math.PI / 180;
         // a-frame cylinder convention: theta=0 is +Z. Surface point in
         // cylinder-local: (R·sin θ, *, R·cos θ). Pull the char ~5mm toward
@@ -1769,17 +1800,10 @@ a.chip:hover { background: #3a3a3a; }
     };
 
     let m4cLastScrollTickMs = 0;
+    let m4cLastDbgState = '';
     function tickBrowseScroll() {
       const bp = document.getElementById('vrBrowsePanel');
       const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
-      // Update in-VR debug overlay every frame the panel is visible. Shows
-      // R: <right laser hits>  L: <left laser hits> for the first 3 hits.
-      const dbg = document.getElementById('vrM4cDebug');
-      if (dbg && bpVis) {
-        dbg.setAttribute('value', 'R: ' + _laserHits('vrLaserRight') + '   L: ' + _laserHits('vrLaserLeft'));
-      } else if (dbg) {
-        dbg.setAttribute('value', '');
-      }
       if (!bpVis) {
         m4cConsumeThumbY = false;
         m4cLastScrollTickMs = 0;
