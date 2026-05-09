@@ -484,9 +484,9 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
         video.currentTime = Math.max(0, video.currentTime + delta);
       } else if (!isNaN(video.duration) && video.duration > 0) {
         video.currentTime = Math.min(video.duration - 0.1, video.currentTime + delta);
-      } else {
-        video.currentTime = video.currentTime + delta;
       }
+      // If duration is unknown (live stream / early load), silently
+      // skip forward seek — matches vrAction('seek-fwd') precedent.
     });
 
     // Panel + lasers visibility is shared. M3c hides them by default and
