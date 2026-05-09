@@ -68,6 +68,10 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
 {{else if and (eq .Projection.Geometry "equirectangular") (eq .Projection.FOV 360)}}
   <a-entity id="vrSphere"
             geometry="primitive:sphere;radius:100;segmentsWidth:64;segmentsHeight:64"></a-entity>
+{{else if eq .Projection.Geometry "fisheye"}}
+  <a-entity id="vrFisheye"
+            data-fov="{{.Projection.FOV}}"
+            geometry="primitive:sphere;radius:100;segmentsWidth:64;segmentsHeight:64"></a-entity>
 {{else}}
   <a-entity id="vrFlat"
             geometry="primitive:plane;width:4;height:2.25"
@@ -124,16 +128,21 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     // sceneVideo will already be playing (or about to play, started by the
     // Enter VR click which is a user gesture).
     //
-    // Strategy for SBS: ONE half-sphere with the full SBS-encoded texture.
-    // WebXR renders the scene twice per frame (once per eye), and Three.js
-    // calls mesh.onBeforeRender per render call with the active camera. We
-    // swap tex.offset/repeat per eye so the left eye samples the left half
-    // and the right eye samples the right half of the SBS texture.
+    // Three rendering paths, picked by the server based on tags + filename:
+    //   1. Equirectangular sphere (DOME 180°, SPHERE 360°). Standard
+    //      MeshBasicMaterial. Per-eye UV swap on tex.offset/repeat handles
+    //      SBS/TB/mono via the scene's data-stereo attribute.
+    //   2. Fisheye sphere (FISHEYE 180°, MKX200 200°, RF52). Custom
+    //      ShaderMaterial: fragment shader maps direction → fisheye (u,v),
+    //      eye offsets applied via uniforms set per-eye in onBeforeRender.
+    //   3. Flat plane (no VR detected). Plain MeshBasicMaterial, no
+    //      stereo, sits in front of the user as a virtual cinema screen.
     //
-    // The half-sphere uses phiStart:180, phiLength:180 so it natively faces
-    // -Z (camera forward) with U increasing left-to-right and V increasing
-    // top-to-bottom — texture orientation matches the user's view, no
-    // rotation needed.
+    // For paths 1 and 2 the half-sphere / full-sphere geometry uses
+    // phiStart/phiLength values that face -Z (camera forward). WebXR
+    // renders the scene twice per frame (once per eye); Three.js calls
+    // mesh.onBeforeRender per render call with the active camera, which
+    // is how we know which eye to configure UV/offset uniforms for.
     function applySphere() {
       const el = document.getElementById('vrSphere');
       if (!el || !window.AFRAME || !AFRAME.THREE) return;
@@ -183,12 +192,91 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
       mesh.userData.boundVR = true;
     }
+    // applyFisheye binds a custom ShaderMaterial that converts each
+    // fragment's direction (from sphere center) to a fisheye (u, v)
+    // sample, then applies SBS/TB/mono eye offsets via uniforms set per
+    // eye in onBeforeRender. uFOV in degrees comes from the entity's
+    // data-fov attribute (180 / 190 / 200). Beyond the fisheye coverage,
+    // fragments are discarded so the back of the sphere shows the
+    // <a-scene> background color.
+    function applyFisheye() {
+      const el = document.getElementById('vrFisheye');
+      if (!el || !window.AFRAME || !AFRAME.THREE) return;
+      const mesh = el.getObject3D('mesh');
+      if (!mesh || mesh.userData.boundVR) return;
+      const tex = new AFRAME.THREE.VideoTexture(video);
+      if (AFRAME.THREE.SRGBColorSpace) tex.colorSpace = AFRAME.THREE.SRGBColorSpace;
+      const fov = parseFloat(el.dataset.fov || '180');
+      const material = new AFRAME.THREE.ShaderMaterial({
+        side: AFRAME.THREE.BackSide,
+        uniforms: {
+          uMap:       { value: tex },
+          uFOV:       { value: fov },
+          uEyeOffset: { value: new AFRAME.THREE.Vector2(0, 0) },
+          uEyeRepeat: { value: new AFRAME.THREE.Vector2(1, 1) }
+        },
+        vertexShader: [
+          'varying vec3 vDir;',
+          'void main() {',
+          '  vDir = normalize(position);',
+          '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+          '}'
+        ].join('\n'),
+        fragmentShader: [
+          'precision highp float;',
+          'varying vec3 vDir;',
+          'uniform sampler2D uMap;',
+          'uniform float uFOV;',
+          'uniform vec2 uEyeOffset;',
+          'uniform vec2 uEyeRepeat;',
+          'void main() {',
+          '  vec3 d = normalize(vDir);',
+          '  float theta = acos(-d.z);',
+          '  float maxTheta = radians(uFOV * 0.5);',
+          '  if (theta > maxTheta) discard;',
+          '  float r = (theta / maxTheta) * 0.5;',
+          '  float phi = atan(d.y, d.x);',
+          '  vec2 uv = vec2(0.5 + r * cos(phi), 0.5 + r * sin(phi));',
+          '  uv = uv * uEyeRepeat + uEyeOffset;',
+          '  gl_FragColor = texture2D(uMap, uv);',
+          '}'
+        ].join('\n')
+      });
+      mesh.material = material;
+      mesh.onBeforeRender = function(renderer, sceneObj, cam) {
+        const xr = renderer.xr;
+        const stereo = scene.dataset.stereo || '';
+        const u = material.uniforms;
+        if (!xr || !xr.isPresenting || !stereo) {
+          u.uEyeOffset.value.set(0, 0);
+          u.uEyeRepeat.value.set(1, 1);
+          return;
+        }
+        const xrCam = xr.getCamera();
+        if (!xrCam || !xrCam.cameras || xrCam.cameras.length < 2) return;
+        const isLeft = cam === xrCam.cameras[0];
+        const isRight = cam === xrCam.cameras[1];
+        if (!isLeft && !isRight) return;
+        if (stereo === 'sbs') {
+          u.uEyeRepeat.value.set(0.5, 1);
+          u.uEyeOffset.value.set(isLeft ? 0 : 0.5, 0);
+        } else if (stereo === 'tb') {
+          u.uEyeRepeat.value.set(1, 0.5);
+          u.uEyeOffset.value.set(0, isLeft ? 0 : 0.5);
+        } else {
+          u.uEyeOffset.value.set(0, 0);
+          u.uEyeRepeat.value.set(1, 1);
+        }
+      };
+      mesh.userData.boundVR = true;
+    }
     function applyAll() {
       applySphere();
       applyFlat();
+      applyFisheye();
     }
     scene.addEventListener('loaded', applyAll);
-    ['vrSphere', 'vrFlat'].forEach(id => {
+    ['vrSphere', 'vrFlat', 'vrFisheye'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('object3dset', applyAll);
     });
