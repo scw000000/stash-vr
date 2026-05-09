@@ -449,23 +449,69 @@ a.chip:hover { background: #3a3a3a; }
     // that reference it become invalid (they hold GPU handles tied to the
     // old context). Three.js doesn't auto-rebuild on context-restore — we
     // dispose and rebind.
-    function refreshVideoTexture() {
-      teardownVideoTexture();
-      rebindActiveGeometry();
-      if (!video || video.readyState < 2) return;
-      const wasPaused = video.paused;
-      const t = isFinite(video.currentTime) ? video.currentTime : 0;
+    // Soft path: pause / seek-to-current / play. Restores frame flow when
+    // the GL context was the only thing lost.
+    function softVideoRefresh(t, wasPaused) {
       try {
         video.pause();
-        // Re-assigning currentTime forces the decoder to re-emit a frame,
-        // which the next render tick uploads to the freshly-bound GL texture.
         video.currentTime = t;
         if (!wasPaused) {
           const p = video.play();
-          if (p && p.catch) p.catch(err => console.warn('stash-vr: video resume failed', err));
+          if (p && p.catch) {
+            p.catch(err => {
+              console.warn('stash-vr: soft refresh play failed; falling back to load()', err);
+              hardVideoRefresh(t, wasPaused);
+            });
+          }
         }
       } catch (e) {
-        console.warn('stash-vr: video texture refresh failed', e);
+        console.warn('stash-vr: soft refresh threw; falling back to load()', e);
+        hardVideoRefresh(t, wasPaused);
+      }
+    }
+
+    // Hard path: video.load() to fully reset the decoder pipeline. Used
+    // after deep sleeps where the soft path can't restart frame flow.
+    function hardVideoRefresh(t, wasPaused) {
+      try {
+        const onMeta = function() {
+          video.removeEventListener('loadedmetadata', onMeta);
+          try {
+            video.currentTime = t;
+            if (!wasPaused) {
+              const p = video.play();
+              if (p && p.catch) p.catch(err => console.warn('stash-vr: hard refresh play failed', err));
+            }
+          } catch (e) {
+            console.warn('stash-vr: hard refresh post-meta failed', e);
+          }
+        };
+        video.addEventListener('loadedmetadata', onMeta);
+        video.load();
+      } catch (e) {
+        console.warn('stash-vr: hard refresh threw', e);
+      }
+    }
+
+    function refreshVideoTexture() {
+      teardownVideoTexture();
+      rebindActiveGeometry();
+      if (!video) return;
+      const wasPaused = video.paused;
+      const t = isFinite(video.currentTime) ? video.currentTime : 0;
+      // Watchdog: if currentTime hasn't advanced after 1.2s of soft-refresh
+      // attempt (and we expected playback), escalate to hard refresh.
+      const startTime = t;
+      softVideoRefresh(t, wasPaused);
+      if (!wasPaused) {
+        setTimeout(function() {
+          if (!video) return;
+          const advanced = video.currentTime > startTime + 0.05;
+          if (!advanced) {
+            console.warn('stash-vr: watchdog detected no playback advance — escalating to load()');
+            hardVideoRefresh(t, wasPaused);
+          }
+        }, 1200);
       }
     }
 
@@ -505,8 +551,21 @@ a.chip:hover { background: #3a3a3a; }
 
     // Page-visibility backstop. Refresh the decoder on visibility return so
     // a stalled pipeline doesn't survive a quick tab-switch.
+    let lastHiddenAt = 0;
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden && video && video.readyState >= 2) {
+      if (document.hidden) {
+        lastHiddenAt = performance.now();
+        return;
+      }
+      // Visibility returned. Decide soft vs hard recovery based on how
+      // long we were hidden. Quest deep sleeps invalidate the decoder
+      // pipeline; quick tab-switches just need a frame kick.
+      const wasHiddenForMs = lastHiddenAt > 0 ? performance.now() - lastHiddenAt : 0;
+      lastHiddenAt = 0;
+      if (wasHiddenForMs > 30000) {
+        // Long sleep — full refresh including texture rebind.
+        refreshVideoTexture();
+      } else if (video && video.readyState >= 2) {
         try {
           const t = isFinite(video.currentTime) ? video.currentTime : 0;
           video.currentTime = t;
