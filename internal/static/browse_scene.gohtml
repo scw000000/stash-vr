@@ -872,9 +872,185 @@ a.chip:hover { background: #3a3a3a; }
     }
     updateColsLabel();
 
-    // Stub for Task 4 — invoked when the browse panel becomes visible.
+    // M4c Task 4: in-VR browse grid state + tile rendering on a cylinder curve.
+    const m4cState = {
+      q: '',
+      filters: { performer: '', studio: '', tag: '', favorite: '', stars: 0, ocount: 0 },
+      cursor: '1',
+      tiles: [],   // accumulated GridTile[]
+      hasMore: true,
+      loading: false
+    };
+
+    function buildGridParams() {
+      const p = new URLSearchParams();
+      if (m4cState.q) p.set('q', m4cState.q);
+      if (m4cState.filters.performer) p.set('performer', m4cState.filters.performer);
+      if (m4cState.filters.studio)    p.set('studio',    m4cState.filters.studio);
+      if (m4cState.filters.tag)       p.set('tag',       m4cState.filters.tag);
+      if (m4cState.filters.favorite)  p.set('favorite',  m4cState.filters.favorite);
+      if (m4cState.filters.stars > 0) p.set('stars',     String(m4cState.filters.stars));
+      if (m4cState.filters.ocount > 0) p.set('ocount',   String(m4cState.filters.ocount));
+      if (m4cState.cursor !== '1')    p.set('cursor',    m4cState.cursor);
+      return p;
+    }
+
+    function fetchGrid(reset) {
+      if (m4cState.loading) return;
+      if (reset) {
+        m4cState.cursor = '1';
+        m4cState.tiles = [];
+        m4cState.hasMore = true;
+      }
+      if (!m4cState.hasMore) return;
+      m4cState.loading = true;
+      const sentinel = document.getElementById('vrBrowseLoadMore');
+      if (sentinel) {
+        sentinel.setAttribute('value', 'Loading…');
+        sentinel.setAttribute('visible', 'true');
+      }
+      fetch('/browse/grid?' + buildGridParams().toString(), {
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(r => r.json())
+        .then(json => {
+          m4cState.tiles = m4cState.tiles.concat(json.tiles || []);
+          m4cState.hasMore = !!json.hasMore;
+          m4cState.cursor = json.nextCursor || '1';
+          m4cState.loading = false;
+          relayoutTiles();
+          if (sentinel) {
+            sentinel.setAttribute('value', m4cState.hasMore ? '' : (m4cState.tiles.length ? 'No more scenes' : 'No scenes found'));
+            sentinel.setAttribute('visible', !!sentinel.getAttribute('value'));
+          }
+        })
+        .catch(err => {
+          m4cState.loading = false;
+          if (sentinel) {
+            sentinel.setAttribute('value', 'fetch failed');
+            sentinel.setAttribute('visible', 'true');
+          }
+          console.warn('stash-vr: grid fetch failed', err);
+        });
+    }
+
+    // Tile geometry + cylinder layout constants.
+    const TILE_W = 0.6;
+    const TILE_H = 0.34;
+    const TILE_GAP = 0.06;
+    const ARC_RADIUS = 3.0;
+    const ARC_HALF = Math.PI / 3; // ±60°
+    let scrollY = 0; // updated by Task 5
+
+    function tileCellPositions() {
+      // Returns [{x, y, z, rotY}] for each tile slot, given cols and current scroll.
+      const cols = m4cCols;
+      const arcStep = (2 * ARC_HALF) / Math.max(cols, 1);
+      const positions = [];
+      const rows = Math.ceil(m4cState.tiles.length / cols);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const arcOffset = (col - (cols - 1) / 2) * arcStep;
+          const x = ARC_RADIUS * Math.sin(arcOffset);
+          const z = -ARC_RADIUS * Math.cos(arcOffset) + 1.0; // shift toward user
+          const y = 0.6 - row * (TILE_H + TILE_GAP) - scrollY;
+          positions.push({ x, y, z, rotY: -arcOffset * 180 / Math.PI });
+        }
+      }
+      return positions;
+    }
+
+    const tileTextures = {}; // cache: thumbnailURL → THREE.Texture
+
+    function getTileTexture(url) {
+      if (!url) return null;
+      if (tileTextures[url]) return tileTextures[url];
+      const loader = new AFRAME.THREE.TextureLoader();
+      const tex = loader.load(url);
+      tileTextures[url] = tex;
+      return tex;
+    }
+
+    function relayoutTiles() {
+      const root = document.getElementById('vrBrowseTiles');
+      if (!root) return;
+
+      // Remove tile entities for tiles no longer in state.tiles.
+      const expected = new Set(m4cState.tiles.map(t => t.id));
+      Array.from(root.children).forEach(child => {
+        if (!expected.has(child.dataset.sceneId)) {
+          root.removeChild(child);
+        }
+      });
+
+      // Add new tile entities for any missing.
+      const positions = tileCellPositions();
+      m4cState.tiles.forEach((tile, i) => {
+        const pos = positions[i];
+        let el = root.querySelector('a-entity[data-scene-id="' + CSS.escape(tile.id) + '"]');
+        if (!el) {
+          el = document.createElement('a-entity');
+          el.classList.add('vr-tile');
+          el.dataset.sceneId = tile.id;
+          el.dataset.projection = JSON.stringify(tile.projection);
+          el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
+
+          // Cover plane — tap → seamless scene swap (Play). The class
+          // .vr-tile-cover is the click target; .vr-btn allows raycaster.
+          const plane = document.createElement('a-plane');
+          plane.classList.add('vr-btn', 'vr-tile-cover');
+          plane.setAttribute('width', TILE_W);
+          plane.setAttribute('height', TILE_W * 9 / 16);
+          plane.setAttribute('material', 'color:#222;opacity:1;shader:flat');
+          el.appendChild(plane);
+
+          // ⓘ detail badge — small circle in the top-right corner of the
+          // tile. Tap → opens the detail panel (Task 9).
+          const detailBadge = document.createElement('a-entity');
+          detailBadge.classList.add('vr-btn', 'vr-tile-detail');
+          detailBadge.setAttribute('geometry', 'primitive:circle;radius:0.04');
+          detailBadge.setAttribute('material', 'color:#000;opacity:0.85;shader:flat');
+          const badgeX = (TILE_W / 2) - 0.05;
+          const badgeY = ((TILE_W * 9 / 16) / 2) - 0.05;
+          detailBadge.setAttribute('position', badgeX.toFixed(3) + ' ' + badgeY.toFixed(3) + ' 0.01');
+          const badgeText = document.createElement('a-text');
+          badgeText.setAttribute('value', 'ⓘ');
+          badgeText.setAttribute('align', 'center');
+          badgeText.setAttribute('color', '#fff');
+          badgeText.setAttribute('width', '1.5');
+          badgeText.setAttribute('position', '0 0 0.005');
+          detailBadge.appendChild(badgeText);
+          el.appendChild(detailBadge);
+
+          const titleEl = document.createElement('a-text');
+          titleEl.setAttribute('value', tile.title);
+          titleEl.setAttribute('align', 'center');
+          titleEl.setAttribute('color', '#fff');
+          titleEl.setAttribute('width', '2.5');
+          titleEl.setAttribute('wrap-count', '22');
+          titleEl.setAttribute('position', '0 -' + ((TILE_W * 9 / 16) / 2 + 0.06) + ' 0.005');
+          el.appendChild(titleEl);
+
+          // Texture loads async; bind once available.
+          const tex = getTileTexture(tile.thumbnailURL);
+          if (tex) {
+            plane.addEventListener('loaded', function() {
+              const mesh = plane.getObject3D('mesh');
+              if (mesh) {
+                mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
+              }
+            });
+          }
+
+          root.appendChild(el);
+        }
+        el.setAttribute('position', { x: pos.x, y: pos.y, z: pos.z });
+        el.setAttribute('rotation', { x: 0, y: pos.rotY, z: 0 });
+      });
+    }
+
     function onBrowsePanelOpen() {
-      // Tile fetch + render fills this in Task 4.
+      fetchGrid(true);
     }
 
     function vrAction(action) {
