@@ -1076,7 +1076,7 @@ a.chip:hover { background: #3a3a3a; }
           const tex = new AFRAME.THREE.VideoTexture(v);
           tex.minFilter = AFRAME.THREE.LinearFilter;
           tex.magFilter = AFRAME.THREE.LinearFilter;
-          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
+          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex, side: AFRAME.THREE.DoubleSide });
           mesh.material.needsUpdate = true;
         }).catch(function(err) {
           if (tileEl._hoverToken !== hoverToken) return;
@@ -1104,7 +1104,7 @@ a.chip:hover { background: #3a3a3a; }
         const coverTex = coverURL ? tileTextures[coverURL] : null;
         const mesh = plane.getObject3D('mesh');
         if (mesh && coverTex) {
-          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: coverTex });
+          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: coverTex, side: AFRAME.THREE.DoubleSide });
           mesh.material.needsUpdate = true;
         }
       });
@@ -1124,7 +1124,7 @@ a.chip:hover { background: #3a3a3a; }
         spriteTex.repeat.set(1 / SCOLS, 1 / SROWS);
         const mesh = plane.getObject3D('mesh');
         if (!mesh) return;
-        mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: spriteTex });
+        mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: spriteTex, side: AFRAME.THREE.DoubleSide });
         mesh.material.needsUpdate = true;
         let frame = 0;
         function showFrame() {
@@ -1216,8 +1216,12 @@ a.chip:hover { background: #3a3a3a; }
           plane.setAttribute('radius', ARC_R);
           plane.setAttribute('height', tileCoverH);
           plane.setAttribute('open-ended', 'true');     // no top/bottom caps
-          plane.setAttribute('side', 'double');         // safer than 'back' (which mirrors UVs)
-          plane.setAttribute('material', 'shader: flat; color: #222');
+          // Material: shader-flat + side:double (so partial-cylinder winding
+          // is irrelevant — both faces render). src:<url> binds the cover
+          // texture via A-Frame's material lifecycle, which handles UV
+          // mapping on partial-arc geometry correctly.
+          plane.setAttribute('material',
+            'shader: flat; side: double; color: #fff; src: url(' + tile.thumbnailURL + ')');
           plane.setAttribute('theta-start',  pos.thetaStartDeg);
           plane.setAttribute('theta-length', pos.thetaLengthDeg);
           // No position offset — cylinder local origin is on the hub axis,
@@ -1257,16 +1261,11 @@ a.chip:hover { background: #3a3a3a; }
           titleEl.setAttribute('rotation', '0 ' + titleYawDeg.toFixed(3) + ' 0');
           el.appendChild(titleEl);
 
-          // Bind cover texture once available.
-          const tex = getTileTexture(tile.thumbnailURL);
-          if (tex) {
-            plane.addEventListener('loaded', function() {
-              const mesh = plane.getObject3D('mesh');
-              if (mesh) {
-                mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
-              }
-            });
-          }
+          // Cover texture is bound via the material src attribute above;
+          // A-Frame's material component handles loading + lifecycle. We
+          // still pre-warm the tileTextures cache so mouseleave can restore
+          // the cover via THREE.Texture (used by hover/sprite-cycle paths).
+          getTileTexture(tile.thumbnailURL);
 
           attachPreviewHandlers(el);
           root.appendChild(el);
