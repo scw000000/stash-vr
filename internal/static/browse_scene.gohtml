@@ -179,9 +179,15 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
   <!-- Laser controllers for raycast-clicking the panel buttons. -->
   <a-entity laser-controls="hand: right" raycaster="objects: .vr-btn; far: 5"></a-entity>
   <a-entity laser-controls="hand: left"  raycaster="objects: .vr-btn; far: 5"></a-entity>
+
+  <!-- M3c controller-mapping component. Hosts the trigger state machine,
+       gamepad polling, and B/Y long-press timer. Emits semantic events
+       on <a-scene>; the inline IIFE applies them. -->
+  <a-entity m3c-controls></a-entity>
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
+<script src="/m3c-controls.js"></script>
 <script>
   (function() {
     const btn          = document.getElementById('enterVR');
