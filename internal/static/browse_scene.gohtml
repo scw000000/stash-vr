@@ -230,6 +230,15 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
        gamepad polling, and B/Y long-press timer. Emits semantic events
        on <a-scene>; the inline IIFE applies them. -->
   <a-entity m3c-controls></a-entity>
+
+  <!-- TEMPORARY in-VR debug overlay for M3c diagnostics.
+       Always visible; sits in upper-left of user's view, parented to scene.
+       Remove this entity once drag/scale issues are resolved. m3c-controls
+       updates the text every tick. -->
+  <a-entity id="vrDebug" position="-0.5 1.9 -1" rotation="0 25 0">
+    <a-plane width="0.7" height="0.5" color="#000" material="opacity:0.7"></a-plane>
+    <a-text id="vrDebugText" value="DEBUG init..." align="left" color="#0f0" width="2.5" position="-0.32 0 0.01"></a-text>
+  </a-entity>
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
@@ -294,10 +303,15 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
       mesh.onBeforeRender = function(renderer, sceneObj, cam) {
         const xr = renderer.xr;
         const stereo = scene.dataset.stereo || '';
-        // Out of XR or mono content: full texture, both eyes see the same thing.
+        // Sphere geometry has phiStart=π, phiLength=π so its UV u=0 is at
+        // world +X (user's right) and u=1 at -X (user's left). The standard
+        // VR180 convention is the opposite: video left edge = user's left.
+        // We compensate here with a horizontal U-flip via negative repeat.x
+        // and offset.x = (right-edge-of-eye-half).
+        // Out of XR or mono content: still apply the U-flip.
         if (!xr || !xr.isPresenting || !stereo) {
-          tex.offset.set(0, 0);
-          tex.repeat.set(1, 1);
+          tex.offset.set(1, 0);
+          tex.repeat.set(-1, 1);
           return;
         }
         const xrCam = xr.getCamera();
@@ -306,14 +320,17 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
         const isRight = cam === xrCam.cameras[1];
         if (!isLeft && !isRight) return;
         if (stereo === 'sbs') {
-          tex.repeat.set(0.5, 1);
-          tex.offset.set(isLeft ? 0 : 0.5, 0);
+          // Left eye sees tex u in [0, 0.5] flipped: geom u=0 → tex u=0.5; geom u=1 → tex u=0.
+          // Right eye sees tex u in [0.5, 1] flipped: geom u=0 → tex u=1; geom u=1 → tex u=0.5.
+          tex.repeat.set(-0.5, 1);
+          tex.offset.set(isLeft ? 0.5 : 1, 0);
         } else if (stereo === 'tb') {
-          tex.repeat.set(1, 0.5);
-          tex.offset.set(0, isLeft ? 0 : 0.5);
+          // U-flipped, vertical halves per eye.
+          tex.repeat.set(-1, 0.5);
+          tex.offset.set(1, isLeft ? 0 : 0.5);
         } else {
-          tex.offset.set(0, 0);
-          tex.repeat.set(1, 1);
+          tex.offset.set(1, 0);
+          tex.repeat.set(-1, 1);
         }
       };
       mesh.userData.boundVR = true;
@@ -435,13 +452,18 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
     }
 
     // M3c drag — translate the active geometry by per-tick controller
-    // delta. Cinema plane re-aims at user after each translate.
+    // delta. The cinema plane is at finite distance (~3m) so 1:1 hand
+    // motion looks right. Spheres are at radius 100 so a 30cm hand motion
+    // shifts the center by 0.3% of the sphere — invisible. Scale up for
+    // the spheres so motion is perceptible.
     scene.addEventListener('m3c:drag-move', function(e) {
       const el = activeGeometry();
       if (!el || !el.object3D) return;
-      el.object3D.position.x += e.detail.dx;
-      el.object3D.position.y += e.detail.dy;
-      el.object3D.position.z += e.detail.dz;
+      const isImmersive = el.id !== 'vrFlat';
+      const k = isImmersive ? 50 : 1;
+      el.object3D.position.x += e.detail.dx * k;
+      el.object3D.position.y += e.detail.dy * k;
+      el.object3D.position.z += e.detail.dz * k;
       if (el.id === 'vrFlat') {
         const cam = scene.camera;
         if (cam) el.object3D.lookAt(cam.position);

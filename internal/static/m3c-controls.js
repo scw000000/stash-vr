@@ -211,20 +211,18 @@
       // cached `axis` array (populated each tick by handleAxes) if needed.
       const axes = (ctrl && ctrl.gamepad && ctrl.gamepad.axes) || (tc && tc.axis) || null;
       if (!axes || axes.length < 2) return null;
-      // xr-standard mapping puts thumbstick on axes[2],[3]; legacy on [0],[1].
-      // Prefer the pair with larger magnitude (likely non-default).
-      let x = 0, y = 0;
-      if (axes.length >= 4) {
-        x = axes[2] || 0;
-        y = axes[3] || 0;
-        if (Math.abs(x) < 0.001 && Math.abs(y) < 0.001) {
-          x = axes[0] || 0;
-          y = axes[1] || 0;
-        }
-      } else {
-        x = axes[0] || 0;
-        y = axes[1] || 0;
-      }
+      // Quest controllers may report thumbstick at axes[2],[3] (xr-standard
+      // with deprecated touchpad slots), at axes[0],[1] (touchpad-less
+      // profile), or in a mixed layout where one axis is at one slot and
+      // the other axis at another. Check both candidate slots per-axis
+      // independently and pick whichever has non-zero magnitude.
+      const safe = (n) => (typeof n === 'number' && !isNaN(n)) ? n : 0;
+      const x2 = axes.length >= 3 ? safe(axes[2]) : 0;
+      const y2 = axes.length >= 4 ? safe(axes[3]) : 0;
+      const x0 = safe(axes[0]);
+      const y0 = safe(axes[1]);
+      const x = Math.abs(x2) > 0.001 ? x2 : x0;
+      const y = Math.abs(y2) > 0.001 ? y2 : y0;
       return { x: x, y: y };
     },
 
@@ -251,6 +249,10 @@
             dy: this.deltaPos.y,
             dz: this.deltaPos.z
           });
+          // Track for debug overlay.
+          this._lastDx = this.deltaPos.x;
+          this._lastDy = this.deltaPos.y;
+          this._lastDz = this.deltaPos.z;
           st.startPos.copy(this.curPos);
         }
       });
@@ -295,6 +297,32 @@
       if (compositeY !== 0 && dtSec > 0) {
         const factor = 1 + 0.6 * compositeY * dtSec;
         this.sceneEl.emit('m3c:scale', { factor: factor });
+        this._lastFactor = factor;
+        this._lastCompositeY = compositeY;
+      }
+
+      // Debug overlay update — feed live values to the in-VR <a-text>.
+      // Disable by removing the <a-entity id="vrDebug"> from the template.
+      const debugText = document.getElementById('vrDebugText');
+      if (debugText) {
+        const tsR = this._getThumbstick('right') || { x: NaN, y: NaN };
+        const tsL = this._getThumbstick('left')  || { x: NaN, y: NaN };
+        let agId = 'none';
+        const ids = ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'];
+        for (let i = 0; i < ids.length; i++) {
+          const el = document.getElementById(ids[i]);
+          if (el && el.object3D && el.object3D.visible) { agId = ids[i]; break; }
+        }
+        const fmt = (n) => (typeof n !== 'number' || isNaN(n)) ? 'NaN' : n.toFixed(2);
+        const lines = [
+          'RH ts: ' + fmt(tsR.x) + ', ' + fmt(tsR.y),
+          'LH ts: ' + fmt(tsL.x) + ', ' + fmt(tsL.y),
+          'phase R/L: ' + this.triggerState.right.phase + '/' + this.triggerState.left.phase,
+          'DM: ' + fmt(this._lastDx) + ' ' + fmt(this._lastDy) + ' ' + fmt(this._lastDz),
+          'compY: ' + fmt(this._lastCompositeY) + '  fac: ' + (this._lastFactor != null ? this._lastFactor.toFixed(4) : '-'),
+          'AG: ' + agId
+        ];
+        debugText.setAttribute('value', lines.join('\n'));
       }
     },
 
