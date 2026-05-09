@@ -281,16 +281,20 @@
 
       // Thumbstick Y — continuous scale of active geometry.
       // xr-standard: stick up reads as negative axis_y. Invert so positive = up = scale up.
+      // Coalesce both sticks' contributions into a single emission per tick;
+      // emitting per-hand would compound multiplicatively when both sticks are held.
       const dtSec = (delta || 0) / 1000;
+      let compositeY = 0;
       ['right', 'left'].forEach(hand => {
         const ts = this._getThumbstick(hand);
         if (!ts) return;
         const yNorm = -ts.y; // up = positive
-        if (Math.abs(yNorm) > 0.3 && dtSec > 0) {
-          const factor = 1 + 0.6 * yNorm * dtSec;
-          this.sceneEl.emit('m3c:scale', { factor: factor });
-        }
+        if (Math.abs(yNorm) > 0.3) compositeY += yNorm;
       });
+      if (compositeY !== 0 && dtSec > 0) {
+        const factor = 1 + 0.6 * compositeY * dtSec;
+        this.sceneEl.emit('m3c:scale', { factor: factor });
+      }
     },
 
     remove: function() {
