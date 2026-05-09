@@ -26,6 +26,8 @@
       // Drag thresholds (spec §4.1).
       this.DRAG_DIST_M = 0.05; // 5 cm
       this.DRAG_HOLD_MS = 250;
+      this.DOUBLE_CLICK_MS = 300;
+      this._pendingClick = null;
 
       this._onTriggerDown = this._onTriggerDown.bind(this);
       this._onTriggerUp   = this._onTriggerUp.bind(this);
@@ -80,8 +82,39 @@
       const st = this.triggerState[hand];
       if (st.phase === 'drag') {
         this.sceneEl.emit('m3c:drag-end', { hand: hand });
+        st.phase = 'idle';
+        return;
       }
-      // 'candidate' resolution is handled by Task 5; for now just reset.
+      if (st.phase !== 'candidate') {
+        st.phase = 'idle';
+        return;
+      }
+      // Candidate: triggerup before drag thresholds.
+      // If it had a raycast intersection, A-Frame's click pipeline
+      // already fires the button — do nothing extra.
+      if (st.hadIntersection) {
+        st.phase = 'idle';
+        return;
+      }
+      // Otherwise: it's a click candidate. Defer for double-click window.
+      const now = performance.now();
+      if (this._pendingClick && (now - this._pendingClick.time) <= this.DOUBLE_CLICK_MS) {
+        // Second click within window → double-click.
+        clearTimeout(this._pendingClick.timer);
+        this._pendingClick = null;
+        this.sceneEl.emit('m3c:play-pause');
+      } else {
+        // Start a new pending; resolve as single-click after window.
+        if (this._pendingClick) clearTimeout(this._pendingClick.timer);
+        const pending = { time: now, timer: 0 };
+        pending.timer = setTimeout(() => {
+          if (this._pendingClick === pending) {
+            this._pendingClick = null;
+            this.sceneEl.emit('m3c:panel-toggle');
+          }
+        }, this.DOUBLE_CLICK_MS);
+        this._pendingClick = pending;
+      }
       st.phase = 'idle';
     },
 

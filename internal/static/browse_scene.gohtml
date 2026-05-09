@@ -405,6 +405,17 @@ h1 { font-size: 1.4rem; margin: 0 0 8px 0; }
         if (cam) el.object3D.lookAt(cam.position);
       }
     });
+    scene.addEventListener('m3c:panel-toggle', function() {
+      setPanelVisible(!isPanelVisible());
+    });
+    scene.addEventListener('m3c:play-pause', function() {
+      if (video.paused) {
+        const p = video.play();
+        if (p && p.catch) p.catch(err => console.warn('stash-vr: video play failed', err));
+      } else {
+        video.pause();
+      }
+    });
 
     // Panel + lasers visibility is shared. M3c hides them by default and
     // toggles via m3c:panel-toggle (or programmatically on Enter VR /
