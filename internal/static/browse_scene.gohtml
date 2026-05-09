@@ -1093,7 +1093,7 @@ a.chip:hover { background: #3a3a3a; }
     // actually visible.
     function updateRaycasterTargets() {
       const parts = ['#vrControls .vr-btn', '#vrControls .vr-panel-bg'];
-      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker'].forEach(id => {
+      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker', 'vrBrowsePanel'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         const v = el.getAttribute('visible');
