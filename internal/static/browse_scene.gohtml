@@ -103,11 +103,17 @@ a.chip:hover { background: #3a3a3a; }
   <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
     <a-plane width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
 
-    <!-- Row 1 (top): title left, time right. -->
+    <!-- Row 1 (top): title left, time right, tiny DBG button at far
+         right (toggles the M4c diagnostic overlay; default off). -->
     <a-text id="vrTitle" value="{{.Title}}" align="left" color="#fff" width="3.0"
             position="-1.4 0.30 0.01" wrap-count="36"></a-text>
     <a-text id="vrTime" value="0:00 / 0:00" align="right" color="#fff" width="3.0"
-            position="1.4 0.30 0.01"></a-text>
+            position="1.30 0.30 0.01"></a-text>
+    <a-entity class="vr-btn" data-action="toggle-debug-overlay" position="1.50 0.30 0.01"
+              geometry="primitive:plane;width:0.18;height:0.10"
+              material="color:#444;opacity:0.85">
+      <a-text value="DBG" align="center" color="#ff0" width="2.5" position="0 0 0.005"></a-text>
+    </a-entity>
 
     <!-- Row 2: scrub bar (drag thumb to seek; click bar to seek; click marker dot to jump). -->
     <a-entity id="vrScrubBar" position="0 0.05 0.01">
@@ -375,16 +381,18 @@ a.chip:hover { background: #3a3a3a; }
 
   </a-entity><!-- /vrControlsRoot -->
 
-  <!-- M4c debug overlay — at scene root so it stays visible even when
-       vrControlsRoot is hidden. Eye-level world position 1.5m in front
-       of the user. Big yellow text on a black backdrop placed BEHIND
-       the text (z=-0.01) so semi-transparent rendering can't occlude
-       it. Initial value set both via HTML attr and JS to dodge any
-       a-frame attribute-parse race. -->
-  <a-entity id="vrM4cDebug" position="0 1.0 -1.5">
+  <!-- Generic in-VR debug overlay. Hidden by default; toggled by the
+       DBG button on the playback panel. Lives at scene root (not inside
+       vrControlsRoot) so it stays visible even after the playback UI
+       is hidden, which is the point of a debug surface. World position
+       1.5m in front of user, slightly below eye level. Yellow text on a
+       black backdrop placed behind (z=-0.01) so semi-transparent
+       rendering doesn't occlude the text. Updated each frame from the
+       m4c-browse-tick component (gated on visibility). -->
+  <a-entity id="vrDebugOverlay" position="0 1.0 -1.5" visible="false">
     <a-plane width="2.0" height="0.30" color="#000" material="shader: flat; opacity: 0.7"
              position="0 0 -0.01"></a-plane>
-    <a-text id="vrM4cDebugText" value="DEBUG OVERLAY READY" align="center" color="#ffff00"
+    <a-text id="vrDebugOverlayText" value="DEBUG OVERLAY READY" align="center" color="#ffff00"
             width="2.5" wrap-count="30" position="0 0 0"></a-text>
   </a-entity>
 
@@ -986,12 +994,13 @@ a.chip:hover { background: #3a3a3a; }
       const totalArcDeg = text.length * charDeg;
       const centerDeg   = thetaStart + thetaLength / 2;
       const startDeg    = centerDeg - totalArcDeg / 2;
-      // Glyph size: with wrap-count=4 and width = 6× charArcLen, the MSDF
-      // font scale ≈ 1.5× the slot width, so the rendered glyph fills its
-      // arc slot instead of looking tiny inside a wide padded wrap box.
-      // Long titles whose charDeg shrinks still get readable chars.
+      // Glyph size: font scale = aTextWidth / wrap-count. With width =
+      // 3.6× charArcLen and wrap-count = 4, font scale ≈ 0.9× the slot
+      // width — wide chars (M, W, K) fit comfortably without overlapping
+      // their neighbour, narrow chars (i, l, .) leave a small gap.
+      // (Earlier 6× / 4 made wide-char glyphs 50% wider than the slot.)
       const charArcLen  = R * (charDeg * Math.PI / 180);
-      const aTextWidth  = (charArcLen * 6).toFixed(3);
+      const aTextWidth  = (charArcLen * 3.6).toFixed(3);
       const aTextWrap   = '4';
 
       for (let i = 0; i < text.length; i++) {
@@ -1707,6 +1716,12 @@ a.chip:hover { background: #3a3a3a; }
       } else if (action === 'browse-close') {
         const bp = document.getElementById('vrBrowsePanel');
         if (bp) bp.setAttribute('visible', false);
+      } else if (action === 'toggle-debug-overlay') {
+        const dbg = document.getElementById('vrDebugOverlay');
+        if (dbg) {
+          const v = dbg.getAttribute('visible');
+          dbg.setAttribute('visible', !(v === true || v === 'true'));
+        }
       } else if (action === 'cols-cycle') {
         m4cCols = (m4cCols >= 6) ? 3 : (m4cCols + 1);
         localStorage.setItem('m4c.cols', String(m4cCols));
@@ -1829,8 +1844,8 @@ a.chip:hover { background: #3a3a3a; }
       }
       return false;
     }
-    // M4c diagnostics — writes what each laser's first intersection is hitting
-    // into the in-VR debug overlay AND into window.m4d() return value.
+    // Diagnostics — writes what each laser's first intersection is hitting
+    // into the in-VR debug overlay AND into window.svDebugLasers().
     function _summarizeIntersection(its) {
       if (!its || !its.length) return '(none)';
       return its.slice(0, 3).map(i => {
@@ -1849,42 +1864,46 @@ a.chip:hover { background: #3a3a3a; }
       const rc = el.components && el.components.raycaster;
       return _summarizeIntersection(rc && rc.intersections);
     }
-    window.m4d = function () {
+    window.svDebugLasers = function () {
       return { right: _laserHits('vrLaserRight'), left: _laserHits('vrLaserLeft') };
     };
 
     let m4cLastScrollTickMs = 0;
     function _setDbg(line1, line2) {
-      const dbg = document.getElementById('vrM4cDebugText');
+      const dbg = document.getElementById('vrDebugOverlayText');
       if (!dbg) return;
       // Use the text component's value prop directly — setAttribute('value', ...)
       // on an a-text triggers a full schema reparse and can be flaky.
       dbg.setAttribute('text', 'value', (line1 || '') + (line2 ? '\n' + line2 : ''));
     }
-    // Force-set initial overlay text once A-Frame has parsed the entity.
-    setTimeout(function () { _setDbg('DEBUG READY', 'open browse panel for laser/scroll state'); }, 500);
     function tickBrowseScroll() {
       const bp = document.getElementById('vrBrowsePanel');
       const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
 
-      // Always update the diagnostic overlay, even when the browse panel
-      // is closed — that way the user can see laser/thumbstick state at
-      // any time (e.g. to verify their thumbstick is being read at all).
-      const tsR = _readThumbstickAxes(document.getElementById('vrLaserRight')) || { x: 0, y: 0 };
-      const tsL = _readThumbstickAxes(document.getElementById('vrLaserLeft'))  || { x: 0, y: 0 };
       // Pick whichever laser is currently on a browse-panel surface.
       const lasers = ['vrLaserRight', 'vrLaserLeft'].map(id => document.getElementById(id));
       let activeLaser = null;
       for (let i = 0; i < lasers.length; i++) {
         if (_laserIsOnBrowsePanel(lasers[i])) { activeLaser = lasers[i]; break; }
       }
-      const dbgLine1 = 'R hits: ' + _laserHits('vrLaserRight');
-      const dbgLine2 = 'sy R=' + tsR.y.toFixed(2) + ' L=' + tsL.y.toFixed(2) +
-                       ' scroll=' + scrollY.toFixed(2) +
-                       '/' + m4cMaxScroll.toFixed(2) +
-                       ' onPanel=' + (activeLaser ? activeLaser.id.replace('vrLaser','') : 'no') +
-                       ' bp=' + (bpVis ? '1' : '0');
-      _setDbg(dbgLine1, dbgLine2);
+
+      // Update diagnostic overlay only if it's currently visible (toggled
+      // on by the DBG button on the playback panel). Saves the per-frame
+      // a-text reflow when the user isn't looking at the diagnostics.
+      const dbgRoot = document.getElementById('vrDebugOverlay');
+      const dbgVis = dbgRoot && (dbgRoot.getAttribute('visible') === true ||
+                                 dbgRoot.getAttribute('visible') === 'true');
+      if (dbgVis) {
+        const tsR = _readThumbstickAxes(document.getElementById('vrLaserRight')) || { x: 0, y: 0 };
+        const tsL = _readThumbstickAxes(document.getElementById('vrLaserLeft'))  || { x: 0, y: 0 };
+        const dbgLine1 = 'R hits: ' + _laserHits('vrLaserRight');
+        const dbgLine2 = 'sy R=' + tsR.y.toFixed(2) + ' L=' + tsL.y.toFixed(2) +
+                         ' scroll=' + scrollY.toFixed(2) +
+                         '/' + m4cMaxScroll.toFixed(2) +
+                         ' onPanel=' + (activeLaser ? activeLaser.id.replace('vrLaser','') : 'no') +
+                         ' bp=' + (bpVis ? '1' : '0');
+        _setDbg(dbgLine1, dbgLine2);
+      }
 
       if (!bpVis) {
         m4cConsumeThumbY = false;
