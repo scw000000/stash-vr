@@ -22,13 +22,13 @@ var (
 )
 
 var (
-	TagVR_DOME    = "DOME"
-	TagVR_SPHERE  = "SPHERE"
-	TagVR_FISHEYE = "FISHEYE"
-	TagVR_MKX200  = "MKX200"
-	TagVR_RF52    = "RF52"
-	TagVR_SBS     = "SBS"
-	TagVR_TB      = "TB"
+	TagVR_DOME    = "VR_DOME"
+	TagVR_SPHERE  = "VR_SPHERE"
+	TagVR_FISHEYE = "VR_FISHEYE"
+	TagVR_MKX200  = "VR_MKX200"
+	TagVR_RF52    = "VR_RF52"
+	TagVR_SBS     = "VR_SBS"
+	TagVR_TB      = "VR_TB"
 
 	TagVR_CUBEMAP = "CUBEMAP"
 	TagVR_EAC     = "EAC"
