@@ -161,12 +161,14 @@ fragment SceneParts on Scene{
     id, title, rating100, created_at, date
     files{basename, duration, path, height, video_codec}
     studio{
+        id
         name
     },
     scene_markers {
         ...SceneMarkerParts
     },
     performers {
+        id
         name
     },
     groups {

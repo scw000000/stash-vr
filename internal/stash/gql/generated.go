@@ -3393,8 +3393,12 @@ func (v *ScenePartsPathsScenePathsType) GetCaption() *string { return v.Caption 
 
 // ScenePartsPerformersPerformer includes the requested fields of the GraphQL type Performer.
 type ScenePartsPerformersPerformer struct {
+	Id   string `json:"id"`
 	Name string `json:"name"`
 }
+
+// GetId returns ScenePartsPerformersPerformer.Id, and is useful for accessing the field via an interface.
+func (v *ScenePartsPerformersPerformer) GetId() string { return v.Id }
 
 // GetName returns ScenePartsPerformersPerformer.Name, and is useful for accessing the field via an interface.
 func (v *ScenePartsPerformersPerformer) GetName() string { return v.Name }
@@ -3497,8 +3501,12 @@ func (v *ScenePartsScene_markersSceneMarker) __premarshalJSON() (*__premarshalSc
 
 // ScenePartsStudio includes the requested fields of the GraphQL type Studio.
 type ScenePartsStudio struct {
+	Id   string `json:"id"`
 	Name string `json:"name"`
 }
+
+// GetId returns ScenePartsStudio.Id, and is useful for accessing the field via an interface.
+func (v *ScenePartsStudio) GetId() string { return v.Id }
 
 // GetName returns ScenePartsStudio.Name, and is useful for accessing the field via an interface.
 func (v *ScenePartsStudio) GetName() string { return v.Name }
@@ -4924,12 +4932,14 @@ fragment SceneParts on Scene {
 		video_codec
 	}
 	studio {
+		id
 		name
 	}
 	scene_markers {
 		... SceneMarkerParts
 	}
 	performers {
+		id
 		name
 	}
 	groups {
