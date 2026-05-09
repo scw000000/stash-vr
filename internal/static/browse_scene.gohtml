@@ -982,6 +982,63 @@ a.chip:hover { background: #3a3a3a; }
       return tex;
     }
 
+    // Hover preview: swap a tile's cover texture for its WebM preview clip
+    // while the laser pointer is on it. One decoded video at a time (whichever
+    // tile is hovered). The <video> element is allocated lazily on first hover
+    // and cached on the tile entity as el._previewVideo.
+    function attachPreviewHandlers(tileEl) {
+      const plane = tileEl.querySelector('a-plane.vr-tile-cover');
+      if (!plane) return;
+
+      function ensureVideo() {
+        if (tileEl._previewVideo) return tileEl._previewVideo;
+        const v = document.createElement('video');
+        v.src = tileEl.dataset.previewUrl;
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        v.crossOrigin = 'anonymous';
+        v.preload = 'metadata';
+        tileEl._previewVideo = v;
+        return v;
+      }
+
+      plane.addEventListener('mouseenter', function() {
+        const v = ensureVideo();
+        v.currentTime = 0;
+        const playPromise = v.play();
+        if (playPromise && playPromise.catch) {
+          playPromise.catch(function(err) {
+            // Common case: 404 because Stash hasn't generated a preview for
+            // this scene. Silently keep the cover.
+            console.debug('stash-vr: preview play() failed', err);
+          });
+        }
+        const mesh = plane.getObject3D('mesh');
+        if (!mesh) return;
+        const tex = new AFRAME.THREE.VideoTexture(v);
+        tex.minFilter = AFRAME.THREE.LinearFilter;
+        tex.magFilter = AFRAME.THREE.LinearFilter;
+        mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: tex });
+        mesh.material.needsUpdate = true;
+      });
+
+      plane.addEventListener('mouseleave', function() {
+        const v = tileEl._previewVideo;
+        if (v) {
+          v.pause();
+          v.currentTime = 0;
+        }
+        const coverURL = tileEl.dataset.thumbnailUrl;
+        const coverTex = coverURL ? tileTextures[coverURL] : null;
+        const mesh = plane.getObject3D('mesh');
+        if (mesh && coverTex) {
+          mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: coverTex });
+          mesh.material.needsUpdate = true;
+        }
+      });
+    }
+
     function relayoutTiles() {
       const root = document.getElementById('vrBrowseTiles');
       if (!root) return;
@@ -1013,6 +1070,7 @@ a.chip:hover { background: #3a3a3a; }
           el.dataset.projection = JSON.stringify(tile.projection);
           el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
           el.dataset.previewUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/preview';
+          el.dataset.thumbnailUrl = tile.thumbnailURL;
 
           // Cover plane — tap → seamless scene swap (Task 8).
           const plane = document.createElement('a-plane');
@@ -1067,6 +1125,7 @@ a.chip:hover { background: #3a3a3a; }
             });
           }
 
+          attachPreviewHandlers(el);
           root.appendChild(el);
         } else {
           // Existing tile: cols may have changed → resize cover, badge, title.
