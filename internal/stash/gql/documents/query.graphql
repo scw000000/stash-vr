@@ -179,7 +179,7 @@ fragment SceneParts on Scene{
     play_count,
     o_counter,
     organized
-    paths{screenshot, preview, stream funscript interactive_heatmap caption},
+    paths{screenshot, preview, sprite, stream funscript interactive_heatmap caption},
     sceneStreams{url, mime_type, label}
     captions {
         caption_type language_code

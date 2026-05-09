@@ -3365,6 +3365,7 @@ func (v *ScenePartsGroupsSceneGroupGroup) GetName() string { return v.Name }
 type ScenePartsPathsScenePathsType struct {
 	Screenshot          *string `json:"screenshot"`
 	Preview             *string `json:"preview"`
+	Sprite              *string `json:"sprite"`
 	Stream              *string `json:"stream"`
 	Funscript           *string `json:"funscript"`
 	Interactive_heatmap *string `json:"interactive_heatmap"`
@@ -3376,6 +3377,9 @@ func (v *ScenePartsPathsScenePathsType) GetScreenshot() *string { return v.Scree
 
 // GetPreview returns ScenePartsPathsScenePathsType.Preview, and is useful for accessing the field via an interface.
 func (v *ScenePartsPathsScenePathsType) GetPreview() *string { return v.Preview }
+
+// GetSprite returns ScenePartsPathsScenePathsType.Sprite, and is useful for accessing the field via an interface.
+func (v *ScenePartsPathsScenePathsType) GetSprite() *string { return v.Sprite }
 
 // GetStream returns ScenePartsPathsScenePathsType.Stream, and is useful for accessing the field via an interface.
 func (v *ScenePartsPathsScenePathsType) GetStream() *string { return v.Stream }
@@ -4953,6 +4957,7 @@ fragment SceneParts on Scene {
 	paths {
 		screenshot
 		preview
+		sprite
 		stream
 		funscript
 		interactive_heatmap
