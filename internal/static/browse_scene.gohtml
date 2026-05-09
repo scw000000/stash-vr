@@ -1784,6 +1784,25 @@ a.chip:hover { background: #3a3a3a; }
     (function spikeWebXRLayers() {
       if (!new URLSearchParams(location.search).has('spike-layers')) return;
 
+      function tintMuteButton(color) {
+        // The mute button is the only entity with data-action="mute" in
+        // vrControls. Find it and overwrite its material color so the
+        // user can see spike state when they summon the panel.
+        const btn = document.querySelector('[data-action="mute"]');
+        if (btn) btn.setAttribute('material', 'color: ' + color + '; opacity: 0.95');
+      }
+      function spikeStatus(state, reason) {
+        // state in {'active', 'failed', 'idle'}; reason is a short string.
+        scene.dataset.spikeLayers = state + (reason ? ':' + reason : '');
+        if (state === 'active') {
+          tintMuteButton('#00cc00');
+          console.log('stash-vr spike: ACTIVE — ' + (reason || ''));
+        } else if (state === 'failed') {
+          tintMuteButton('#cc0000');
+          console.warn('stash-vr spike: FAILED — ' + (reason || ''));
+        }
+      }
+
       let mediaLayer = null;
       let geometryHidden = null; // entity we hid so we can restore on exit-vr
 
@@ -1797,21 +1816,25 @@ a.chip:hover { background: #3a3a3a; }
           // so a subsequent enter-vr can rebuild fresh.
           mediaLayer = null;
         }
+        // Reset the mute button tint so re-entering VR starts in the
+        // unset state.
+        tintMuteButton('#2c5282');
+        delete scene.dataset.spikeLayers;
       }
       scene.addEventListener('exit-vr', teardownSpike);
 
       scene.addEventListener('enter-vr', function() {
         try {
           if (typeof XRMediaBinding === 'undefined') {
-            console.warn('stash-vr spike: XRMediaBinding not available — staying on current path');
+            spikeStatus('failed', 'no-XRMediaBinding');
             return;
           }
           const xr = scene.renderer && scene.renderer.xr;
-          if (!xr) { console.warn('stash-vr spike: no xr renderer'); return; }
+          if (!xr) { spikeStatus('failed', 'no-xr-renderer'); return; }
           const xrSession = xr.getSession();
-          if (!xrSession) { console.warn('stash-vr spike: no xr session'); return; }
+          if (!xrSession) { spikeStatus('failed', 'no-session'); return; }
           const refSpace = xr.getReferenceSpace();
-          if (!refSpace) { console.warn('stash-vr spike: no reference space'); return; }
+          if (!refSpace) { spikeStatus('failed', 'no-refspace'); return; }
 
           const stereo = scene.dataset.stereo || '';
           const geom = scene.dataset.geometry || '';
@@ -1825,7 +1848,7 @@ a.chip:hover { background: #3a3a3a; }
           const mediaBinding = new XRMediaBinding(xrSession);
 
           if (geom === 'fisheye') {
-            console.warn('stash-vr spike: fisheye has no native layer type — staying on current path');
+            spikeStatus('failed', 'fisheye');
             return;
           }
 
@@ -1864,7 +1887,7 @@ a.chip:hover { background: #3a3a3a; }
           // strand it — bail in that case.
           const existingLayers = (xrSession.renderState && xrSession.renderState.layers) || null;
           if (!existingLayers || !existingLayers.length) {
-            console.warn('stash-vr spike: session has no layers array (likely XRWebGLLayer baseLayer path) — bailing without applying media layer; HUD would break');
+            spikeStatus('failed', 'legacy-baselayer');
             mediaLayer = null;
             return;
           }
@@ -1875,10 +1898,13 @@ a.chip:hover { background: #3a3a3a; }
 
           if (geometryHidden) geometryHidden.setAttribute('visible', 'false');
 
-          console.log('stash-vr spike: applied', geom || 'cinema', layout, 'layer; hid', geometryHidden && geometryHidden.id);
+          spikeStatus('active', (geom || 'cinema') + '/' + layout);
         } catch (err) {
-          console.warn('stash-vr spike: failed', err);
+          const msg = (err && err.message ? err.message : String(err)).substring(0, 60);
+          // Run teardown first (it resets the tint), then set the failed
+          // status so the red indicator survives until exit-vr.
           teardownSpike();
+          spikeStatus('failed', 'thrown:' + msg);
         }
       });
     })();
