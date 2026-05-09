@@ -1850,8 +1850,8 @@ a.chip:hover { background: #3a3a3a; }
             mediaLayer = mediaBinding.createQuadLayer(video, {
               space: refSpace,
               layout: layout,
-              width: 2.0,    // half-width of the 4m plane in WebXR convention
-              height: 1.125, // half-height of 2.25m
+              width: 4.0,    // full width in meters, matches vrFlat's plane
+              height: 2.25,  // full height in meters
               transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
             });
             geometryHidden = document.getElementById('vrFlat');
