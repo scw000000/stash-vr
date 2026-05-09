@@ -981,10 +981,12 @@ a.chip:hover { background: #3a3a3a; }
       const thetaPerTile = tileW / ARC_R;              // arc length / radius (radians)
       const thetaPerGap  = TILE_GAP_X / ARC_R;
       const thetaSpacing = thetaPerTile + thetaPerGap;
-      const arcMax       = halfCols * thetaSpacing;    // outermost tile center theta from arc center
-      // Hub Z so the outermost tile center sits at z = TILE_Z (the surface
-      // at edge column = hubZ + ARC_R * cos(arcMax) = TILE_Z).
-      const hubZ = TILE_Z - ARC_R * Math.cos(arcMax);
+      // Concave-toward-user: cylinder hub sits on the user's side of the
+      // panel; the curved surface at A-Frame theta=180° (i.e., -Z from hub)
+      // is what the user sees. hubZ + (-R) = TILE_Z → hubZ = TILE_Z + R.
+      // Edge tiles are CLOSER to user than the center tile (the curve wraps
+      // around the user like an IMAX screen).
+      const hubZ = TILE_Z + ARC_R;
 
       // Top-edge anchor: row 0's cover top at TILE_AREA_TOP_Y → row 0 center
       // is one half-cover-height below.
@@ -998,13 +1000,14 @@ a.chip:hover { background: #3a3a3a; }
           const i = row * cols + col;
           if (i >= count) break;
           const ourThetaCenter = (col - halfCols) * thetaSpacing;       // radians
-          const ourThetaStart  = ourThetaCenter - thetaPerTile / 2;
-          // Three.js CylinderGeometry uses vertex.x=sin(θ)*R, vertex.z=cos(θ)*R,
-          // so theta=0 is +Z (facing the user) — same as our convention. The
-          // mapping is identity (no +90° offset). The +ourTheta direction is
-          // user's right (+X), matching Three.js's sin(+θ) → +X.
-          const aFrameThetaStartDeg  = ourThetaStart * 180 / Math.PI;
+          // Three.js CylinderGeometry uses vertex.x=sin(θ)*R, vertex.z=cos(θ)*R.
+          // theta=0 is +Z (the side AWAY from user, since hub is on user's
+          // side). theta=180° is -Z (the side facing user). Our convention's
+          // +ourTheta = user's right = +X = sin(π - ourTheta) > 0 for
+          // ourTheta<π/2, so the mapping is aFrameTheta = π - ourTheta.
+          const aFrameThetaCenterDeg = 180 - ourThetaCenter * 180 / Math.PI;
           const aFrameThetaLengthDeg = thetaPerTile * 180 / Math.PI;
+          const aFrameThetaStartDeg  = aFrameThetaCenterDeg - aFrameThetaLengthDeg / 2;
           // All tiles in a row share x=0, z=hubZ (the cylinder hub). The
           // cylinder's theta-start handles the per-column placement on the
           // curve. tileW/tileCoverH are also passed to the caller for layout
@@ -1184,15 +1187,21 @@ a.chip:hover { background: #3a3a3a; }
 
       m4cState.tiles.forEach((tile, i) => {
         const pos = positions[i];
-        // Surface points (in tile-entity local coords; the entity is at the
-        // cylinder hub, so a surface point at theta is (R*sinθ, *, R*cosθ)).
+        // Surface points in tile-entity local coords. The tile entity is at
+        // the cylinder hub. With concave-toward-user (aFrameTheta = π-ourθ),
+        // a surface point at our_theta is at:
+        //   (sin(π-ourθ)·R, *, cos(π-ourθ)·R) = (sin(ourθ)·R, *, -cos(ourθ)·R)
+        // i.e., x uses sin (sign-preserved), z uses -cos (negated vs. convex).
         const thetaRightEdge   = pos.ourThetaCenter + pos.thetaPerTile / 2;
-        const titleSurfaceX    = ARC_R * Math.sin(pos.ourThetaCenter);
-        const titleSurfaceZ    = ARC_R * Math.cos(pos.ourThetaCenter);
-        const badgeSurfaceX    = ARC_R * Math.sin(thetaRightEdge);
-        const badgeSurfaceZ    = ARC_R * Math.cos(thetaRightEdge);
+        const titleSurfaceX    =  ARC_R * Math.sin(pos.ourThetaCenter);
+        const titleSurfaceZ    = -ARC_R * Math.cos(pos.ourThetaCenter);
+        const badgeSurfaceX    =  ARC_R * Math.sin(thetaRightEdge);
+        const badgeSurfaceZ    = -ARC_R * Math.cos(thetaRightEdge);
         const badgeLocalX      = badgeSurfaceX - badgeR - 0.005;
         const badgeLocalY      = (tileCoverH / 2) - badgeR - 0.005;
+        // +0.005 along surface→hub direction (toward user, since hub is on
+        // user's side of the curved surface). For concave the surface z is
+        // negative, hub at 0; moving toward hub = adding small positive z.
         const badgeLocalZ      = badgeSurfaceZ + 0.005;
         const badgeYawDeg      = -thetaRightEdge * 180 / Math.PI;
         const titleY           = -(tileCoverH / 2 + TITLE_GAP + TITLE_STRIP_H / 2);
