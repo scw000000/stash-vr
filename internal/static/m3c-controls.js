@@ -206,7 +206,10 @@
       if (!el) return null;
       const tc = el.components && el.components['tracked-controls'];
       const ctrl = tc && tc.controller;
-      const axes = ctrl && ctrl.axes;
+      // A-Frame stores axes on the gamepad object (XRInputSource.gamepad.axes),
+      // NOT directly on the input source. Fall back to tracked-controls'
+      // cached `axis` array (populated each tick by handleAxes) if needed.
+      const axes = (ctrl && ctrl.gamepad && ctrl.gamepad.axes) || (tc && tc.axis) || null;
       if (!axes || axes.length < 2) return null;
       // xr-standard mapping puts thumbstick on axes[2],[3]; legacy on [0],[1].
       // Prefer the pair with larger magnitude (likely non-default).
