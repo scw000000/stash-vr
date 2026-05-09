@@ -375,13 +375,17 @@ a.chip:hover { background: #3a3a3a; }
 
   </a-entity><!-- /vrControlsRoot -->
 
-  <!-- M4c debug overlay — OUTSIDE vrControlsRoot so it stays visible
-       even when the in-VR controls are hidden. Eye-level world position
-       1.5m in front of the user. Black backdrop + cyan text for contrast. -->
+  <!-- M4c debug overlay — at scene root so it stays visible even when
+       vrControlsRoot is hidden. Eye-level world position 1.5m in front
+       of the user. Big yellow text on a black backdrop placed BEHIND
+       the text (z=-0.01) so semi-transparent rendering can't occlude
+       it. Initial value set both via HTML attr and JS to dodge any
+       a-frame attribute-parse race. -->
   <a-entity id="vrM4cDebug" position="0 1.0 -1.5">
-    <a-plane width="1.6" height="0.18" color="#000" material="opacity:0.55"></a-plane>
-    <a-text id="vrM4cDebugText" value="(no panel open)" align="center" color="#0ff" width="2.2"
-            position="0 0 0.005" wrap-count="40"></a-text>
+    <a-plane width="2.0" height="0.30" color="#000" material="shader: flat; opacity: 0.7"
+             position="0 0 -0.01"></a-plane>
+    <a-text id="vrM4cDebugText" value="DEBUG OVERLAY READY" align="center" color="#ffff00"
+            width="2.5" wrap-count="30" position="0 0 0"></a-text>
   </a-entity>
 
   <!-- Laser controllers for raycast-clicking the panel buttons. -->
@@ -1832,8 +1836,12 @@ a.chip:hover { background: #3a3a3a; }
     function _setDbg(line1, line2) {
       const dbg = document.getElementById('vrM4cDebugText');
       if (!dbg) return;
-      dbg.setAttribute('value', (line1 || '') + (line2 ? '\n' + line2 : ''));
+      // Use the text component's value prop directly — setAttribute('value', ...)
+      // on an a-text triggers a full schema reparse and can be flaky.
+      dbg.setAttribute('text', 'value', (line1 || '') + (line2 ? '\n' + line2 : ''));
     }
+    // Force-set initial overlay text once A-Frame has parsed the entity.
+    setTimeout(function () { _setDbg('DEBUG READY', 'open browse panel for laser/scroll state'); }, 500);
     function tickBrowseScroll() {
       const bp = document.getElementById('vrBrowsePanel');
       const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
