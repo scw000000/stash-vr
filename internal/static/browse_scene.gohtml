@@ -100,37 +100,65 @@ a.chip:hover { background: #3a3a3a; }
 
   <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
   <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
-    <a-plane width="2.15" height="0.4" color="#000" material="opacity:0.65"></a-plane>
-    <a-entity class="vr-btn" data-action="playpause" position="-0.75 0 0.01"
-              geometry="primitive:plane;width:0.28;height:0.28"
+    <a-plane width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
+
+    <!-- Row 3 (bottom): volume widget on the left, then 7 buttons. -->
+    <!-- Volume icon (mute toggle) -->
+    <a-entity class="vr-btn" data-action="mute" position="-1.40 -0.20 0.01"
+              geometry="primitive:plane;width:0.18;height:0.20"
+              material="color:#2c5282;opacity:0.95">
+      <a-text id="vrMuteIcon" value="🔊" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
+    </a-entity>
+    <!-- Volume slider track + fill + thumb -->
+    <a-entity id="vrVolumeSlider" position="-0.96 -0.20 0.01">
+      <a-plane class="vr-vol-track vr-btn" data-action="vol-track" width="0.40" height="0.04"
+               color="#444" material="opacity:0.95"></a-plane>
+      <a-plane id="vrVolumeFill" width="0.40" height="0.04" color="#3776c2"
+               material="opacity:0.95" position="0 0 0.001"></a-plane>
+      <a-entity id="vrVolumeThumb" class="vr-btn vr-vol-thumb" data-action="vol-track"
+                geometry="primitive:plane;width:0.04;height:0.10"
+                material="color:#fff" position="0.20 0 0.005"></a-entity>
+    </a-entity>
+
+    <!-- 7 buttons to the right of the volume widget. -->
+    <a-entity class="vr-btn" data-action="cc" id="vrCCBtn" position="-0.40 -0.20 0.01"
+              geometry="primitive:plane;width:0.28;height:0.20"
+              material="color:#2c5282;opacity:0.95"
+              visible="{{if .Captions}}true{{else}}false{{end}}">
+      <a-text value="CC" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
+    </a-entity>
+    <a-entity class="vr-btn" data-action="playpause" position="-0.08 -0.20 0.01"
+              geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text value="Play/Pause" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="seek-back" position="-0.45 0 0.01"
-              geometry="primitive:plane;width:0.28;height:0.28"
+    <a-entity class="vr-btn" data-action="speed" position="0.24 -0.20 0.01"
+              geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
-      <a-text value="-10s" align="center" color="#fff" width="2" position="0 0 0.005"></a-text>
+      <a-text id="vrSpeedLabel" value="1.0x" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="seek-fwd" position="-0.15 0 0.01"
-              geometry="primitive:plane;width:0.28;height:0.28"
+    <a-entity class="vr-btn" data-action="loop" id="vrLoopBtn" position="0.56 -0.20 0.01"
+              geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
-      <a-text value="+10s" align="center" color="#fff" width="2" position="0 0 0.005"></a-text>
+      <a-text value="🔁" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="format" position="0.15 0 0.01"
-              geometry="primitive:plane;width:0.28;height:0.28"
+    <a-entity class="vr-btn" data-action="format" position="0.88 -0.20 0.01"
+              geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text value="Format" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="help" position="0.45 0 0.01"
-              geometry="primitive:plane;width:0.28;height:0.28"
+    <a-entity class="vr-btn" data-action="help" position="1.20 -0.20 0.01"
+              geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text value="?" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="exit" position="0.75 0 0.01"
-              geometry="primitive:plane;width:0.28;height:0.28"
+    <a-entity class="vr-btn" data-action="exit" position="1.52 -0.20 0.01"
+              geometry="primitive:plane;width:0.28;height:0.20"
               material="color:#a01010;opacity:0.95">
       <a-text value="Exit VR" align="center" color="#fff" width="2.2" position="0 0 0.005"></a-text>
     </a-entity>
+
+    <!-- Row 1 (title + time) and Row 2 (scrub bar) reserved for Tasks 3 + 4. -->
   </a-entity>
 
   <!--
@@ -553,7 +581,7 @@ a.chip:hover { background: #3a3a3a; }
         video.currentTime = Math.min(video.duration - 0.1, video.currentTime + delta);
       }
       // If duration is unknown (live stream / early load), silently
-      // skip forward seek — matches vrAction('seek-fwd') precedent.
+      // skip forward seek — matches the seek logic above.
     });
 
     scene.addEventListener('m3c:scale', function(e) {
@@ -611,6 +639,26 @@ a.chip:hover { background: #3a3a3a; }
     // In-VR control panel: raycast clicks fire on .vr-btn entities (via
     // A-Frame's laser-controls + cursor pipeline). Each button has a
     // data-action attribute that maps to a sceneVideo playback verb.
+    const SPEEDS = [0.5, 1.0, 1.25, 1.5, 2.0];
+    let speedIdx = 1; // start at 1.0x
+
+    function updateMuteIcon() {
+      const el = document.getElementById('vrMuteIcon');
+      if (el) el.setAttribute('value', video.muted ? '🔇' : '🔊');
+    }
+    function updateLoopBtn() {
+      const el = document.getElementById('vrLoopBtn');
+      if (!el) return;
+      el.setAttribute('material', 'color: ' + (video.loop ? '#3776c2' : '#2c5282') + '; opacity: 0.95');
+    }
+    function updateSpeedLabel() {
+      const el = document.getElementById('vrSpeedLabel');
+      if (!el) return;
+      const v = SPEEDS[speedIdx];
+      // Show "1.0x" not "1x"; show "1.25x" not "1.2500x".
+      el.setAttribute('value', (Number.isInteger(v) ? v.toFixed(1) : v.toString()) + 'x');
+    }
+
     function vrAction(action) {
       if (action === 'playpause') {
         if (video.paused) {
@@ -619,14 +667,17 @@ a.chip:hover { background: #3a3a3a; }
         } else {
           video.pause();
         }
-      } else if (action === 'seek-back') {
-        if (!isNaN(video.currentTime)) {
-          video.currentTime = Math.max(0, video.currentTime - 10);
-        }
-      } else if (action === 'seek-fwd') {
-        if (!isNaN(video.currentTime) && !isNaN(video.duration) && video.duration > 0) {
-          video.currentTime = Math.min(video.duration - 0.1, video.currentTime + 10);
-        }
+      } else if (action === 'mute') {
+        video.muted = !video.muted;
+        updateMuteIcon();
+      } else if (action === 'speed') {
+        speedIdx = (speedIdx + 1) % SPEEDS.length;
+        video.playbackRate = SPEEDS[speedIdx];
+        if ('preservesPitch' in video) video.preservesPitch = true;
+        updateSpeedLabel();
+      } else if (action === 'loop') {
+        video.loop = !video.loop;
+        updateLoopBtn();
       } else if (action === 'exit') {
         try { scene.exitVR(); } catch (e) { console.warn('stash-vr: exitVR failed', e); }
       } else if (action === 'format') {
@@ -644,6 +695,11 @@ a.chip:hover { background: #3a3a3a; }
         const help = document.getElementById('vrHelpPanel');
         if (help) help.setAttribute('visible', false);
       }
+      // 'cc' and 'vol-track' are intentional no-ops here:
+      //  - 'cc' will be wired in Task 5.
+      //  - 'vol-track' is just a click no-op; the slider drag uses
+      //    mousedown / mouseup separately so the click handler doesn't
+      //    accidentally jump volume after a drag.
     }
     document.querySelectorAll('.vr-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -657,6 +713,66 @@ a.chip:hover { background: #3a3a3a; }
         if (row) handlePickerTap(row, value);
       });
     });
+
+    // Volume slider drag — write video.volume in [0, 1] from cursor X across
+    // the slider track. Local-X math: slider element is at panel-local
+    // (-0.96, -0.20, 0.01); track center is the slider's origin and spans
+    // -0.20 .. +0.20 (width 0.40). worldToLocal converts the raycaster's
+    // world-space hit into the slider's local frame.
+    const VOL_BAR_W = 0.40;
+    const VOL_BAR_LEFT = -0.20;
+    let volActive = false;
+
+    function cursorToVol(intersection) {
+      const slider = document.getElementById('vrVolumeSlider');
+      if (!slider || !slider.object3D || !intersection || !intersection.point) return null;
+      const local = slider.object3D.worldToLocal(intersection.point.clone());
+      return Math.max(0, Math.min(1, (local.x - VOL_BAR_LEFT) / VOL_BAR_W));
+    }
+
+    function setVideoVolume(v) {
+      video.volume = Math.max(0, Math.min(1, v));
+      const fill = document.getElementById('vrVolumeFill');
+      const thumb = document.getElementById('vrVolumeThumb');
+      const w = video.volume * VOL_BAR_W;
+      if (fill) {
+        fill.setAttribute('width', w);
+        fill.setAttribute('position', { x: VOL_BAR_LEFT + w / 2, y: 0, z: 0.001 });
+      }
+      if (thumb) {
+        thumb.setAttribute('position', { x: VOL_BAR_LEFT + w, y: 0, z: 0.005 });
+      }
+    }
+
+    document.querySelectorAll('.vr-vol-track, .vr-vol-thumb').forEach(el => {
+      el.addEventListener('mousedown', function(evt) {
+        volActive = true;
+        const intersection = evt.detail && evt.detail.intersection;
+        if (intersection) {
+          const v = cursorToVol(intersection);
+          if (v !== null) setVideoVolume(v);
+        }
+      });
+      el.addEventListener('mouseup', function() { volActive = false; });
+    });
+
+    // While drag is active, sample the laser intersection each tick.
+    // raycaster-intersection fires on the raycaster entity (the laser),
+    // not on the scene; listen on both lasers.
+    ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
+      const laser = document.getElementById(id);
+      if (!laser) return;
+      laser.addEventListener('raycaster-intersection', function(evt) {
+        if (!volActive) return;
+        const its = evt.detail && evt.detail.intersections;
+        if (!its || !its.length) return;
+        const v = cursorToVol(its[0]);
+        if (v !== null) setVideoVolume(v);
+      });
+    });
+
+    // Initialize volume to 1.0; this also positions the fill + thumb at the right edge.
+    setVideoVolume(1.0);
 
     // ============================================================
     // Picker state + handlers.
