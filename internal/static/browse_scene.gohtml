@@ -546,10 +546,19 @@ a.chip:hover { background: #3a3a3a; }
        runtime so it travels with the headset. Material opacity is animated
        from 0 → 1 → 0 around a scene swap so audio + visual cross-fade
        cleanly without a WebXR session restart. The plane is huge (100×100)
-       so it fully covers the camera frustum at any reasonable FOV. -->
+       so it fully covers the camera frustum at any reasonable FOV.
+
+       depthWrite: false is critical. Without it, the plane (parented to
+       camera at z=-0.5) writes depth at 0.5m every frame even at
+       opacity 0. When transparent objects (panel BG, buttons) at greater
+       distances try to render afterward they pass depth test, but the
+       sort + multi-pass interaction made the playback panel stop showing
+       behind the fade plane. Disabling depth writes leaves the depth
+       buffer untouched, so other transparent objects render normally
+       both during and after a fade. -->
   <a-entity id="vrFadeOverlay" position="0 1.6 0">
     <a-plane id="vrFadePlane" width="100" height="100" color="#000"
-             material="opacity:0;transparent:true;shader:flat" position="0 0 -0.5"></a-plane>
+             material="opacity:0;transparent:true;shader:flat;depthWrite:false" position="0 0 -0.5"></a-plane>
   </a-entity>
 </a-scene>
 
@@ -3880,37 +3889,19 @@ a.chip:hover { background: #3a3a3a; }
     // Delegated click handler for tile interactions. Tiles are created
     // dynamically by relayoutTiles, so a single delegate on vrBrowseTiles
     // catches every cover/badge tap without needing per-tile binding.
-    // Also expose swapToScene on window for CDP-based debugging.
-    window._svSwapToScene = swapToScene;
     (function wireTileClicks() {
       const tilesRoot = document.getElementById('vrBrowseTiles');
-      if (!tilesRoot) {
-        console.warn('stash-vr: wireTileClicks no tilesRoot');
-        return;
-      }
-      console.warn('stash-vr: wireTileClicks attaching');
+      if (!tilesRoot) return;
       tilesRoot.addEventListener('click', function(evt) {
-        console.warn('stash-vr: tile-click handler fired target=' +
-          ((evt.target && evt.target.tagName) || '?') + '.' +
-          ((evt.target && evt.target.className) || ''));
         const tileEl = evt.target && evt.target.closest && evt.target.closest('.vr-tile');
-        if (!tileEl) {
-          console.warn('stash-vr: tile-click no tileEl');
-          return;
-        }
-        const isDetail = evt.target.closest('.vr-tile-detail');
-        if (isDetail) {
+        if (!tileEl) return;
+        if (evt.target.closest('.vr-tile-detail')) {
           if (typeof window.openDetailPanel === 'function') {
             window.openDetailPanel(tileEl.dataset.sceneId);
           }
           return;
         }
-        const isCover = evt.target.closest('.vr-tile-cover');
-        if (!isCover) {
-          console.warn('stash-vr: tile-click neither cover nor detail');
-          return;
-        }
-        console.warn('stash-vr: tile-click → swapToScene id=' + tileEl.dataset.sceneId);
+        if (!evt.target.closest('.vr-tile-cover')) return;
         swapToScene(tileEl);
       });
     })();
