@@ -418,19 +418,19 @@ a.chip:hover { background: #3a3a3a; }
            just in front of the BG (R=3.02) without z-fighting. Centered
            vertically in the area below the value strip (y=0.58) and
            extending to the cylinder bottom area (y=-1.0). -->
-      <a-cylinder data-col-kind="performer"
+      <a-cylinder class="vr-panel-bg" data-col-kind="performer"
                   radius="3.01" height="1.58" open-ended="true"
                   position="0 -0.21 3.02"
                   theta-start="130.38" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
       </a-cylinder>
-      <a-cylinder data-col-kind="tag"
+      <a-cylinder class="vr-panel-bg" data-col-kind="tag"
                   radius="3.01" height="1.58" open-ended="true"
                   position="0 -0.21 3.02"
                   theta-start="112.01" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
       </a-cylinder>
-      <a-cylinder data-col-kind="studio"
+      <a-cylinder class="vr-panel-bg" data-col-kind="studio"
                   radius="3.01" height="1.58" open-ended="true"
                   position="0 -0.21 3.02"
                   theta-start="93.64" theta-length="16.73"
@@ -3742,43 +3742,62 @@ a.chip:hover { background: #3a3a3a; }
     async function swapToScene(tileEl) {
       if (swapInFlight) return;
       swapInFlight = true;
-      try {
-        reparentFadeToCamera();
 
-        await Promise.all([fadeAudio(0, 200), fadeVisual(1, 200)]);
+      // Each step is independently try/caught so a failure mid-swap
+      // (bad projection JSON, applyPickerState throwing, /meta down,
+      // etc.) doesn't strand the user with a black fade overlay and a
+      // half-loaded scene. The finally block ALWAYS fades back in and
+      // hides the browse panel, even after partial failure.
+      const newSceneId = (tileEl && tileEl.dataset && tileEl.dataset.sceneId) || '';
+      const newStreamUrl = (tileEl && tileEl.dataset && tileEl.dataset.streamUrl) || '';
+      let proj = {};
+      try { proj = JSON.parse((tileEl && tileEl.dataset && tileEl.dataset.projection) || '{}'); } catch (_) {}
+
+      try {
+        try { reparentFadeToCamera(); } catch (e) { console.warn('stash-vr: reparentFade', e); }
+
+        await Promise.all([fadeAudio(0, 200), fadeVisual(1, 200)])
+          .catch(e => console.warn('stash-vr: fadeOut', e));
 
         // Swap video source.
-        video.pause();
-        video.src = tileEl.dataset.streamUrl;
-        video.load();
+        try {
+          video.pause();
+          if (newStreamUrl) {
+            video.src = newStreamUrl;
+            video.load();
+          }
+        } catch (e) { console.warn('stash-vr: video src swap', e); }
 
-        // Update the scene-level data attrs and pickerState from the
-        // tile's projection, then go through applyPickerState so the
-        // visibility / boundVR / applyAll path runs exactly once and
-        // matches what a manual Format-picker tap does.
-        let proj = {};
-        try { proj = JSON.parse(tileEl.dataset.projection || '{}'); } catch (_) {}
-        scene.dataset.geometry = proj.Geometry || '';
-        scene.dataset.fov      = String(proj.FOV || '');
-        scene.dataset.stereo   = (proj.Stereo || '').toLowerCase();
-        const fovEl = document.getElementById('vrFisheye');
-        if (fovEl) {
-          fovEl.dataset.fov  = String(proj.FOV || 180);
-          fovEl.dataset.cant = String(proj.Cant || 0);
-        }
-        const ps = projectionToPickerState(proj);
-        pickerState.type   = ps.type;
-        pickerState.degree = ps.degree;
-        pickerState.stereo = ps.stereo;
-        pickerState.initial = { type: ps.type, degree: ps.degree, stereo: ps.stereo };
-        applyPickerState();
+        // Project rebind. Update scene + vrFisheye data attrs, then
+        // route through applyPickerState so the visibility flip /
+        // boundVR reset / applyAll path matches a manual Format pick.
+        try {
+          scene.dataset.geometry = proj.Geometry || '';
+          scene.dataset.fov      = String(proj.FOV || '');
+          scene.dataset.stereo   = (proj.Stereo || '').toLowerCase();
+          const ps = projectionToPickerState(proj);
+          pickerState.type    = ps.type;
+          pickerState.degree  = ps.degree;
+          pickerState.stereo  = ps.stereo;
+          pickerState.initial = { type: ps.type, degree: ps.degree, stereo: ps.stereo };
+          applyPickerState();
+          // applyPickerState clobbers vrFisheye's data-cant to '0'
+          // (it always treats picker-driven fisheye as plain). Restore
+          // the tile's cant after, so RF52 scenes keep their canting
+          // through a swap.
+          const fovEl = document.getElementById('vrFisheye');
+          if (fovEl) {
+            fovEl.dataset.fov  = String(proj.FOV || 180);
+            fovEl.dataset.cant = String(proj.Cant || 0);
+          }
+        } catch (e) { console.warn('stash-vr: projection rebind', e); }
 
-        resetGeometry();
+        try { resetGeometry(); } catch (e) { console.warn('stash-vr: resetGeometry', e); }
 
         // Retarget all subsequent /scene/{id}/* requests at the new id.
-        sceneId = tileEl.dataset.sceneId || sceneId;
+        if (newSceneId) sceneId = newSceneId;
 
-        // Wait for video to be ready, with a 5s safety timeout.
+        // Wait for the new video to be ready, with a 5s safety timeout.
         await new Promise(resolve => {
           let done = false;
           const finish = () => { if (done) return; done = true; video.removeEventListener('canplay', onCanPlay); resolve(); };
@@ -3787,27 +3806,31 @@ a.chip:hover { background: #3a3a3a; }
           setTimeout(finish, 5000);
         });
 
-        try { await video.play(); } catch (e) { console.warn('stash-vr: post-swap play failed', e); }
+        try { await video.play(); } catch (e) { console.warn('stash-vr: post-swap play', e); }
 
-        // M4c Task 8 Step 4: refresh M4b state from the new scene's metadata.
-        try { await refreshSceneMeta(sceneId); } catch (e) { console.warn('stash-vr: refreshSceneMeta failed', e); }
-
-        await Promise.all([fadeAudio(1, 200), fadeVisual(0, 200)]);
-
-        // Hide the browse panel and any open sub-panels — the user's
-        // attention is back on the new scene.
-        const bp = document.getElementById('vrBrowsePanel');
-        if (bp) bp.setAttribute('visible', false);
-        const fp = document.getElementById('vrFiltersPanel');
-        if (fp) fp.setAttribute('visible', false);
-
-        // Update the playback panel title from the tile.
-        const titleEl = document.getElementById('vrTitle');
-        if (titleEl) {
-          const newTitle = tileEl.dataset.tileTitle || '';
-          if (newTitle) titleEl.setAttribute('value', newTitle);
-        }
+        // Refresh M4b state from the new scene's metadata.
+        try { await refreshSceneMeta(sceneId); } catch (e) { console.warn('stash-vr: refreshSceneMeta', e); }
       } finally {
+        // Always fade back in + hide browse panel + clear in-flight,
+        // so a mid-swap exception can't leave the user staring at a
+        // black overlay with the browse panel still up.
+        await Promise.all([fadeAudio(1, 200), fadeVisual(0, 200)])
+          .catch(e => console.warn('stash-vr: fadeIn', e));
+
+        // setSubpanelVisible also rebuilds the raycaster targets so
+        // hidden tiles don't keep intercepting clicks.
+        try {
+          setSubpanelVisible('vrBrowsePanel', false);
+        } catch (e) { console.warn('stash-vr: hide browse panel', e); }
+
+        // Optimistic title update from the tile snapshot. refreshSceneMeta
+        // overwrites this with the canonical server title if it succeeded.
+        try {
+          const titleEl = document.getElementById('vrTitle');
+          const newTitle = (tileEl && tileEl.dataset && tileEl.dataset.tileTitle) || '';
+          if (titleEl && newTitle) titleEl.setAttribute('value', newTitle);
+        } catch (e) { console.warn('stash-vr: title update', e); }
+
         swapInFlight = false;
       }
     }
