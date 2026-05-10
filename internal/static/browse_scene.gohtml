@@ -535,6 +535,16 @@ a.chip:hover { background: #3a3a3a; }
     <a-plane width="1.6" height="0.18" color="#000" material="opacity:0.5"></a-plane>
     <a-text id="vrSubtitleText" value="" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
   </a-entity>
+
+  <!-- M4c Task 8 fade overlay. Black plane reparented to scene.camera at
+       runtime so it travels with the headset. Material opacity is animated
+       from 0 → 1 → 0 around a scene swap so audio + visual cross-fade
+       cleanly without a WebXR session restart. The plane is huge (100×100)
+       so it fully covers the camera frustum at any reasonable FOV. -->
+  <a-entity id="vrFadeOverlay" position="0 1.6 0">
+    <a-plane id="vrFadePlane" width="100" height="100" color="#000"
+             material="opacity:0;transparent:true;shader:flat" position="0 0 -0.5"></a-plane>
+  </a-entity>
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
@@ -2338,6 +2348,9 @@ a.chip:hover { background: #3a3a3a; }
           el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
           el.dataset.previewUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/preview';
           el.dataset.thumbnailUrl = tile.thumbnailURL;
+          // Stash the full title so the swap click handler has it without
+          // re-assembling per-character a-text values from the curved label.
+          el.dataset.tileTitle = tile.title || '';
 
           // Cover: a curved cylinder segment. theta-start/theta-length
           // position the visible portion of the cylinder around the row's
@@ -3023,6 +3036,9 @@ a.chip:hover { background: #3a3a3a; }
       el.setAttribute('text', 'value', cur + ' / ' + dur);
     }
 
+    // M4c Task 8: array kept as a stable reference but mutated in place
+    // by refreshSceneMeta on a swap so renderSubtitlePicker rebuilds from
+    // the new scene's caption tracks.
     const captionsData = {{ marshal .Captions }} || [];
 
     // Picker layout — buttons in a wrapping flex of up to 4 per row.
@@ -3215,8 +3231,11 @@ a.chip:hover { background: #3a3a3a; }
 
     // null when the scene has no markers (server emits JSON null). Coerce to
     // [] so .length / forEach are always safe.
+    // M4c Task 8: sceneMarkers stays const (mutated in place on swap);
+    // sceneDurationSec is `let` so refreshSceneMeta can reassign after a
+    // scene swap before the new video.duration is reported.
     const sceneMarkers = {{ marshal .SceneMarkers }} || [];
-    const sceneDurationSec = {{ printf "%f" .DurationSec }};
+    let sceneDurationSec = {{ printf "%f" .DurationSec }};
 
     function tForMarkerX(secs) {
       if (!sceneDurationSec) return SCRUB_BAR_LEFT;
@@ -3337,6 +3356,66 @@ a.chip:hover { background: #3a3a3a; }
     }
     scene.addEventListener('loaded', buildSceneMarkerDots);
 
+    // M4c Task 8 Step 4: refresh M4b state for the newly-loaded scene.
+    // Declared here (above swapToScene's definition) so swapToScene can
+    // close over the binding and call it after the new <video>'s canplay.
+    let refreshSceneMeta = async function(id) {
+      if (!id) return;
+      let meta = null;
+      try {
+        const resp = await fetch('/browse/scene/' + encodeURIComponent(id) + '/meta', {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!resp.ok) {
+          console.warn('stash-vr: /meta returned', resp.status);
+          return;
+        }
+        meta = await resp.json();
+      } catch (e) {
+        console.warn('stash-vr: /meta fetch failed', e);
+        return;
+      }
+      if (!meta) return;
+
+      // Title — applied here in addition to the optimistic tile-snapshot
+      // update in swapToScene; the server-side title may differ from the
+      // tile's text (truncation, decoration, etc.).
+      const titleEl = document.getElementById('vrTitle');
+      if (titleEl && meta.title) titleEl.setAttribute('value', meta.title);
+
+      // Duration — used by tickScrubBar / tForMarkerX as a fallback while
+      // video.duration is still NaN. Once the new video reports duration,
+      // it takes over.
+      if (typeof meta.durationSec === 'number') {
+        sceneDurationSec = meta.durationSec;
+      }
+
+      // Scene markers — replace contents in place (sceneMarkers is a
+      // const reference held by tForMarkerX / buildSceneMarkerDots).
+      sceneMarkers.length = 0;
+      if (Array.isArray(meta.sceneMarkers)) {
+        Array.prototype.push.apply(sceneMarkers, meta.sceneMarkers);
+      }
+      buildSceneMarkerDots();
+
+      // Captions — reset playback state, swap captionsData in place,
+      // rebuild the picker buttons, toggle the CC button.
+      currentCues = [];
+      currentLang = '';
+      const subtitlePlane = document.getElementById('vrSubtitlePlane');
+      if (subtitlePlane) subtitlePlane.setAttribute('visible', false);
+      captionsData.length = 0;
+      if (Array.isArray(meta.captions)) {
+        Array.prototype.push.apply(captionsData, meta.captions);
+      }
+      renderSubtitlePicker();
+      const ccBtn = document.getElementById('vrCCBtn');
+      if (ccBtn) ccBtn.setAttribute('visible', captionsData.length > 0);
+      // Picker just rebuilt its buttons → refresh raycaster targets so
+      // the new <a-entity>s under vrSubtitlePickerButtons are pickable.
+      if (typeof updateRaycasterTargets === 'function') updateRaycasterTargets();
+    };
+
     // Drag sampling happens in tickScrubBar() inside the panel-tickers
     // component. Keep the cleared listener so a laser that leaves all targets mid-drag ends
     // the scrub cleanly (mouseup may fire on nothing).
@@ -3362,7 +3441,9 @@ a.chip:hover { background: #3a3a3a; }
     // (c) update the active-highlight per row.
     // ============================================================
 
-    const sceneId = (function() {
+    // M4c Task 8: mutable so seamless scene swap can retarget projection
+    // POSTs and caption fetches at the newly-loaded scene.
+    let sceneId = (function() {
       const m = location.pathname.match(/\/browse\/scene\/([^\/]+)/);
       return m ? m[1] : '';
     })();
@@ -3553,6 +3634,209 @@ a.chip:hover { background: #3a3a3a; }
       updatePickerHighlights();
       updatePickerDisabled();
     });
+
+    // ============================================================
+    // M4c Task 8: Seamless scene swap
+    //
+    // Click a browse tile → cross-fade the audio + visual to black,
+    // swap the <video> src + projection, fade back. The XRSession
+    // stays alive throughout — no exit/re-enter VR transition. The
+    // fade overlay (vrFadeOverlay) is reparented to the camera on
+    // first swap so the black plane travels with the headset.
+    // ============================================================
+
+    let swapInFlight = false;
+
+    function fadeAudio(target, durMs) {
+      return new Promise(resolve => {
+        const start = video.volume;
+        const t0 = performance.now();
+        function step() {
+          const elapsed = performance.now() - t0;
+          const k = Math.min(1, elapsed / durMs);
+          video.volume = start + (target - start) * k;
+          if (k < 1) requestAnimationFrame(step);
+          else resolve();
+        }
+        step();
+      });
+    }
+
+    function fadeVisual(target, durMs) {
+      return new Promise(resolve => {
+        const plane = document.getElementById('vrFadePlane');
+        if (!plane) { resolve(); return; }
+        // Read opacity off the live three.js material if available — A-Frame's
+        // material attribute string round-trips lossily for animated values.
+        const mesh = plane.getObject3D && plane.getObject3D('mesh');
+        const startOp = (mesh && mesh.material) ? mesh.material.opacity : 0;
+        const t0 = performance.now();
+        function step() {
+          const elapsed = performance.now() - t0;
+          const k = Math.min(1, elapsed / durMs);
+          const op = startOp + (target - startOp) * k;
+          if (mesh && mesh.material) {
+            mesh.material.opacity = op;
+            mesh.material.needsUpdate = true;
+          } else {
+            plane.setAttribute('material', 'opacity:' + op + ';transparent:true;shader:flat;color:#000');
+          }
+          if (k < 1) requestAnimationFrame(step);
+          else resolve();
+        }
+        step();
+      });
+    }
+
+    function reparentFadeToCamera() {
+      const fade = document.getElementById('vrFadeOverlay');
+      if (!fade || !fade.object3D || !scene.camera) return;
+      if (fade.object3D.parent !== scene.camera) {
+        if (fade.object3D.parent) fade.object3D.parent.remove(fade.object3D);
+        scene.camera.add(fade.object3D);
+        fade.object3D.position.set(0, 0, 0);
+      }
+    }
+
+    // Map a tile's Projection JSON {Geometry, FOV, Stereo, Cant} into
+    // pickerState's UI vocabulary so applyPickerState can do the rebind
+    // through the same path as a manual Format-picker tap.
+    function projectionToPickerState(p) {
+      const out = { type: 'Normal', degree: '180', stereo: '2D' };
+      const geom = p.Geometry || '';
+      const fov  = p.FOV || 0;
+      const ster = (p.Stereo || '').toLowerCase();
+      if (geom === '') {
+        out.type = 'Normal'; out.degree = 'Cinema'; out.stereo = '2D';
+      } else if (geom === 'fisheye') {
+        out.type = 'FishEye';
+        out.degree = (fov >= 200) ? '200' : '180';
+      } else if (geom === 'equirectangular' && fov === 360) {
+        out.type = 'Normal'; out.degree = '360';
+      } else if (geom === 'equirectangular') {
+        out.type = 'Normal'; out.degree = '180';
+      }
+      if (out.degree !== 'Cinema') {
+        if      (ster === 'sbs') out.stereo = 'SBS';
+        else if (ster === 'tb')  out.stereo = 'TB';
+        else                     out.stereo = '2D';
+      }
+      return out;
+    }
+
+    async function swapToScene(tileEl) {
+      if (swapInFlight) return;
+      swapInFlight = true;
+      try {
+        reparentFadeToCamera();
+
+        await Promise.all([fadeAudio(0, 200), fadeVisual(1, 200)]);
+
+        // Swap video source.
+        video.pause();
+        video.src = tileEl.dataset.streamUrl;
+        video.load();
+
+        // Update the scene-level data attrs and pickerState from the
+        // tile's projection, then go through applyPickerState so the
+        // visibility / boundVR / applyAll path runs exactly once and
+        // matches what a manual Format-picker tap does.
+        let proj = {};
+        try { proj = JSON.parse(tileEl.dataset.projection || '{}'); } catch (_) {}
+        scene.dataset.geometry = proj.Geometry || '';
+        scene.dataset.fov      = String(proj.FOV || '');
+        scene.dataset.stereo   = (proj.Stereo || '').toLowerCase();
+        const fovEl = document.getElementById('vrFisheye');
+        if (fovEl) {
+          fovEl.dataset.fov  = String(proj.FOV || 180);
+          fovEl.dataset.cant = String(proj.Cant || 0);
+        }
+        const ps = projectionToPickerState(proj);
+        pickerState.type   = ps.type;
+        pickerState.degree = ps.degree;
+        pickerState.stereo = ps.stereo;
+        pickerState.initial = { type: ps.type, degree: ps.degree, stereo: ps.stereo };
+        applyPickerState();
+
+        resetGeometry();
+
+        // Retarget all subsequent /scene/{id}/* requests at the new id.
+        sceneId = tileEl.dataset.sceneId || sceneId;
+
+        // Wait for video to be ready, with a 5s safety timeout.
+        await new Promise(resolve => {
+          let done = false;
+          const finish = () => { if (done) return; done = true; video.removeEventListener('canplay', onCanPlay); resolve(); };
+          const onCanPlay = () => finish();
+          video.addEventListener('canplay', onCanPlay);
+          setTimeout(finish, 5000);
+        });
+
+        try { await video.play(); } catch (e) { console.warn('stash-vr: post-swap play failed', e); }
+
+        // M4c Task 8 Step 4: refresh M4b state from the new scene's metadata.
+        try { await refreshSceneMeta(sceneId); } catch (e) { console.warn('stash-vr: refreshSceneMeta failed', e); }
+
+        await Promise.all([fadeAudio(1, 200), fadeVisual(0, 200)]);
+
+        // Hide the browse panel and any open sub-panels — the user's
+        // attention is back on the new scene.
+        const bp = document.getElementById('vrBrowsePanel');
+        if (bp) bp.setAttribute('visible', false);
+        const fp = document.getElementById('vrFiltersPanel');
+        if (fp) fp.setAttribute('visible', false);
+
+        // Update the playback panel title from the tile.
+        const titleEl = document.getElementById('vrTitle');
+        if (titleEl) {
+          const newTitle = tileEl.dataset.tileTitle || '';
+          if (newTitle) titleEl.setAttribute('value', newTitle);
+        }
+      } finally {
+        swapInFlight = false;
+      }
+    }
+
+    // refreshSceneMeta is declared earlier in the IIFE (alongside
+    // buildSceneMarkerDots / renderSubtitlePicker, which it calls) so
+    // its implementation has those helpers in scope. swapToScene's body
+    // only awaits it on user-triggered click events, by which point the
+    // let binding has been initialized.
+
+    // Delegated click handler for tile interactions. Tiles are created
+    // dynamically by relayoutTiles, so a single delegate on vrBrowseTiles
+    // catches every cover/badge tap without needing per-tile binding.
+    (function wireTileClicks() {
+      const tilesRoot = document.getElementById('vrBrowseTiles');
+      if (!tilesRoot) return;
+      tilesRoot.addEventListener('click', function(evt) {
+        let detail = evt.target;
+        while (detail && !(detail.classList && detail.classList.contains('vr-tile-detail'))) {
+          if (detail === tilesRoot) { detail = null; break; }
+          detail = detail.parentElement;
+        }
+        if (detail) {
+          const tileEl = detail.closest('.vr-tile');
+          if (tileEl && typeof window.openDetailPanel === 'function') {
+            window.openDetailPanel(tileEl.dataset.sceneId);
+          }
+          return;
+        }
+        let cover = evt.target;
+        while (cover && !(cover.classList && cover.classList.contains('vr-tile-cover'))) {
+          if (cover === tilesRoot) { cover = null; break; }
+          cover = cover.parentElement;
+        }
+        if (cover) {
+          const tileEl = cover.closest('.vr-tile');
+          if (!tileEl) return;
+          // tileTitle was stamped on the tile entity at creation time
+          // (relayoutTiles), so swapToScene can read it for the
+          // optimistic title update before /meta returns.
+          swapToScene(tileEl);
+        }
+      });
+    })();
 
     function show2D() {
       scene.style.display = 'none';
