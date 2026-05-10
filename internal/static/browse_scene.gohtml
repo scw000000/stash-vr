@@ -1395,7 +1395,13 @@ a.chip:hover { background: #3a3a3a; }
       cursor: '1',
       tiles: [],   // accumulated GridTile[]
       hasMore: true,
-      loading: false
+      loading: false,
+      // M4c Task 7 additions:
+      filterNames:    { performer: '', studio: '', tag: '' },        // display names for chips
+      cachedOptions:  {},                                            // kind → [{id,name}, ...] (Step 3)
+      pickerQuery:    { performer: '', studio: '', tag: '' },        // per-column search text (Step 5)
+      listScrollY:    { performer: 0, studio: 0, tag: 0 },           // per-column scroll (Step 6)
+      lastScrollFocus: 'grid'                                         // 'grid' | 'list-<kind>' | 'none'
     };
 
     function buildGridParams() {
@@ -1449,6 +1455,92 @@ a.chip:hover { background: #3a3a3a; }
           console.warn('stash-vr: grid fetch failed', err);
         });
     }
+
+    // ─── M4c Task 7 Step 2: active-filter chips ───────────────────────────
+    // Chips are dynamic curved cylinders in #vrFiltersChipsStrip (panel-local
+    // y=-1.05). Each represents one active filter; tap a chip to clear that
+    // filter. The chip strip is empty when no filters are active.
+
+    function chipLabel(kind) {
+      const fn = m4cState.filterNames;
+      const f  = m4cState.filters;
+      if (kind === 'performer') return fn.performer ? 'Performer: ' + fn.performer : '';
+      if (kind === 'studio')    return fn.studio    ? 'Studio: '    + fn.studio    : '';
+      if (kind === 'tag')       return fn.tag       ? 'Tag: '       + fn.tag       : '';
+      if (kind === 'favorite' && f.favorite === 'only') return 'Favorites: Only';
+      if (kind === 'favorite' && f.favorite === 'not')  return 'Favorites: Not';
+      if (kind === 'stars'    && f.stars > 0) return 'Stars: ' + (f.stars === 5 ? '5 only' : f.stars + '+');
+      if (kind === 'ocount'   && f.ocount > 0) return 'O-Count: ' + f.ocount + '+';
+      return '';
+    }
+
+    function clearChip(kind) {
+      if (kind === 'performer' || kind === 'studio' || kind === 'tag') {
+        m4cState.filters[kind] = '';
+        m4cState.filterNames[kind] = '';
+      } else if (kind === 'favorite') {
+        m4cState.filters.favorite = '';
+      } else if (kind === 'stars') {
+        m4cState.filters.stars = 0;
+      } else if (kind === 'ocount') {
+        m4cState.filters.ocount = 0;
+      }
+      renderActiveChips();
+      fetchGrid(true);
+    }
+
+    // Re-render the chips strip from current m4cState. Each active filter
+    // gets one curved-cylinder chip (label "Kind: Value ✕"). Chips pack
+    // right-to-left in user view (highest A-Frame θ first), starting from
+    // the right edge of the filters extension arc (θ=148.75) and extending
+    // leftward. Width grows with text length (curve-glyph spacing 0.95°/ch).
+    function renderActiveChips() {
+      const root = document.getElementById('vrFiltersChipsStrip');
+      if (!root) return;
+      while (root.firstChild) root.removeChild(root.firstChild);
+      const kinds = ['performer', 'studio', 'tag', 'favorite', 'stars', 'ocount'];
+      const items = kinds.map(k => ({ kind: k, label: chipLabel(k) })).filter(o => o.label);
+      if (items.length === 0) {
+        // Nothing to render; raycaster targets unchanged.
+        return;
+      }
+      const ARC_RIGHT_DEG = 148.75;   // right edge in user view (abuts browse close)
+      const CHAR_DEG = 0.95;          // matches placeCurvedString glyph spacing
+      const PADDING_DEG = 1.5;        // visual breathing room left+right of label
+      const GAP_DEG = 1.5;            // between adjacent chips
+      let cursor = ARC_RIGHT_DEG;
+      items.forEach(({ kind, label }) => {
+        const text = label + '  ✕';
+        const widthDeg = Math.min(40, text.length * CHAR_DEG + PADDING_DEG * 2);
+        const thetaStart = cursor - widthDeg;
+        if (thetaStart < 50) return; // out of arc; drop chip
+        const chip = document.createElement('a-cylinder');
+        chip.classList.add('vr-btn');
+        chip.dataset.action  = 'filter-chip-clear';
+        chip.dataset.chipKind = kind;
+        chip.setAttribute('data-label', text);
+        chip.setAttribute('data-label-color', '#fff');
+        chip.setAttribute('data-label-align', 'center');
+        chip.setAttribute('radius', '2.97');
+        chip.setAttribute('height', '0.10');
+        chip.setAttribute('open-ended', 'true');
+        chip.setAttribute('theta-start', thetaStart.toFixed(3));
+        chip.setAttribute('theta-length', widthDeg.toFixed(3));
+        chip.setAttribute('material', 'shader: flat; color: #3776c2; opacity: 1.0; side: double');
+        root.appendChild(chip);
+        // curveLabelInto reads radius/theta-* off the cylinder; defer one
+        // tick so A-Frame has parsed the attributes we just set.
+        requestAnimationFrame(() => curveLabelInto(chip));
+        // Click: clears this chip's filter.
+        chip.addEventListener('click', () => clearChip(kind));
+        cursor = thetaStart - GAP_DEG;
+      });
+      // Raycaster has cached the previous .vr-btn match set; re-evaluate so
+      // newly-created chip cylinders become click targets.
+      updateRaycasterTargets();
+    }
+    // Initial render (empty state — no chips until a filter is applied).
+    renderActiveChips();
 
     // Tile rendering geometry. Computed at relayout time from m4cCols
     // and the panel's usable area. Constants here are the layout *parameters*;
@@ -2045,6 +2137,32 @@ a.chip:hover { background: #3a3a3a; }
       } else if (action === 'picker-search-focus') {
         // Stub — Step 5 of Task 7 wires this to retarget the hidden
         // <input> at the tapped column. No-op for now.
+      } else if (action === 'filters-clear') {
+        // M4c Task 7 Step 2: "Clear all" wipes every filter (incl. q),
+        // resets in-VR search input/labels, re-renders chips, refetches.
+        m4cState.q = '';
+        m4cState.filters     = { performer: '', studio: '', tag: '', favorite: '', stars: 0, ocount: 0 };
+        m4cState.filterNames = { performer: '', studio: '', tag: '' };
+        m4cState.pickerQuery = { performer: '', studio: '', tag: '' };
+        const si = document.getElementById('vrSearchInput');
+        if (si) si.value = '';
+        const browseSearchBg = document.querySelector('a-cylinder.vr-search-bg[data-action="search-focus"]');
+        if (browseSearchBg) {
+          browseSearchBg.setAttribute('data-label', 'Search…');
+          browseSearchBg.setAttribute('data-label-color', '#888');
+          curveLabelInto(browseSearchBg);
+        }
+        document.querySelectorAll('a-cylinder.vr-search-bg[data-action="picker-search-focus"]').forEach(bg => {
+          bg.setAttribute('data-label', 'Search…');
+          bg.setAttribute('data-label-color', '#888');
+          curveLabelInto(bg);
+        });
+        renderActiveChips();
+        fetchGrid(true);
+      } else if (action === 'filter-chip-clear') {
+        // The chip's own click handler already calls clearChip(kind);
+        // this dispatcher branch is a no-op kept here so the global
+        // .vr-btn click router doesn't log an unknown-action warning.
       } else if (action === 'toggle-debug-overlay') {
         // Not a sub-panel — no raycast targets, so direct setAttribute is fine.
         const dbg = document.getElementById('vrDebugOverlay');
