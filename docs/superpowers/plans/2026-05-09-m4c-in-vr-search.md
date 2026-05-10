@@ -844,121 +844,114 @@ git commit -m "m4c: vertical scroll + lazy load + thumbstick handoff with M3c"
 
 ---
 
-## Task 6: Search field via DOM overlay
+## Task 6: Search field via invisible-input + 3D echo
 
 **Files:**
 - Modify: `internal/static/browse_scene.gohtml`
 
-**Goal:** Tap the search field plane → overlay's `<input>` focuses → Quest VR keyboard pops. Typing filters the grid live (debounced 250 ms).
+**Goal:** Tap the curved `vr-search-bg` button → focus a hidden `<input>` → Quest VR system keyboard pops. Typing filters the grid live (debounced 250 ms). The typed text is echoed onto the existing curved label of `vr-search-bg` (no DOM overlay).
 
-- [ ] **Step 1: Replace the spike overlay with the production overlay**
+**Spike outcome (resolved 2026-05-09):** Meta Browser refuses the WebXR DOM Overlay Module (`session.domOverlayState === null`), so a visible HTML `<input>` over the XR content is not viable. **However**, focusing a hidden DOM `<input>` from JS still pops Quest's system VR keyboard, and `input` events still fire with the typed value. Task 6 uses the hidden-input pattern: the `<input>` is just a buffer endpoint that pulls the keyboard up; all visuals (the search field, the typed text echo) are A-Frame entities on the panel.
 
-Replace the spike `<div id="vrDomOverlay">` from Task 1 with the production version, which sits hidden by default and only appears when the browse panel is open and the search field is tapped:
+The `vr-search-bg` cylinder, its `data-action="search-focus"` and per-character curved label already exist. Task 6 adds: (a) a hidden `<input>` element, (b) a `search-focus` handler that focuses it, (c) an `input` listener that updates `m4cState.q` + refetches + relabels the cylinder, (d) auto-blur on browse-panel close.
+
+- [ ] **Step 1: Add the hidden `<input>` buffer**
+
+Insert immediately before `<a-scene>` (so it's a sibling, not a child of the scene — A-Frame treats unknown DOM children oddly):
 
 ```html
-<div id="vrDomOverlay" style="display:none; position:fixed; bottom:20%; left:50%; transform:translateX(-50%); padding:12px; background:rgba(0,0,0,0.85); color:#fff; border-radius:8px; z-index:9999; min-width:320px;">
-  <input id="vrSearchInput" type="text" placeholder="Search scenes…" autocomplete="off"
-         style="font-size:18px; padding:10px; width:100%; box-sizing:border-box; background:#222; color:#fff; border:1px solid #444; border-radius:4px;" />
-</div>
+<input id="vrSearchInput" type="text" autocomplete="off" inputmode="search"
+       style="position:fixed; top:-1000px; left:-1000px; opacity:0; width:1px; height:1px;
+              pointer-events:none;" />
 ```
 
-- [ ] **Step 2: Wire the search-focus button + input event**
+- [ ] **Step 2: Wire the `search-focus` action**
+
+In the IIFE, find the `vrAction(action)` switch (currently has `playpause`, `mute`, …, `cols-cycle`, …). Add a new branch alongside `cols-cycle`:
 
 ```javascript
-function showSearchOverlay() {
-  const overlay = document.getElementById('vrDomOverlay');
-  const input = document.getElementById('vrSearchInput');
-  if (!overlay || !input) return;
-  overlay.style.display = 'block';
-  setTimeout(() => input.focus(), 50);
-}
-function hideSearchOverlay() {
-  const overlay = document.getElementById('vrDomOverlay');
-  if (overlay) overlay.style.display = 'none';
-}
-
-// Add to vrAction switch:
-} else if (action === 'search-focus') {
-  showSearchOverlay();
-} else if (action === 'browse-close') {
-  // existing close logic + hide overlay
-  const bp = document.getElementById('vrBrowsePanel');
-  if (bp) bp.setAttribute('visible', false);
-  hideSearchOverlay();
-}
-
-// Auto-hide overlay when browse panel hides:
-const bpEl = document.getElementById('vrBrowsePanel');
-if (bpEl) {
-  // A-Frame fires componentchanged for visible toggles.
-  bpEl.addEventListener('componentchanged', function(evt) {
-    if (evt.detail.name === 'visible' && bpEl.getAttribute('visible') === false) {
-      hideSearchOverlay();
-    }
-  });
-}
+      } else if (action === 'search-focus') {
+        // Focus the hidden <input>. Quest's Meta Browser auto-pops the
+        // system VR keyboard on input focus, even though it refuses the
+        // WebXR DOM Overlay Module. The input itself is invisible — we
+        // mirror its value onto the curved cylinder label.
+        const si = document.getElementById('vrSearchInput');
+        if (si) si.focus();
 ```
 
-- [ ] **Step 3: Live filter on input change (debounced)**
+- [ ] **Step 3: Wire the input listener with debounce + label update**
+
+Just after `updateColsLabel();` (so `m4cState`, `fetchGrid`, and `curveLabelInto` are all in scope), add:
 
 ```javascript
-let searchTimer = null;
-const searchInput = document.getElementById('vrSearchInput');
-if (searchInput) {
-  searchInput.addEventListener('input', function() {
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      m4cState.q = searchInput.value.trim();
-      // Update the search field's placeholder text on the panel.
-      const bgPlane = document.querySelector('.vr-search-bg a-text');
-      if (bgPlane) {
-        bgPlane.setAttribute('value', m4cState.q || 'Search…');
-        bgPlane.setAttribute('color', m4cState.q ? '#fff' : '#888');
+    // M4c Task 6: live search via hidden <input>. Quest's keyboard
+    // delivers chars to the input even though the input itself isn't
+    // visible during the WebXR session (DOM overlay is refused). We
+    // mirror the value onto the existing curved search-bar label.
+    (function wireSearchInput() {
+      const si = document.getElementById('vrSearchInput');
+      if (!si) return;
+      const bg = document.querySelector('.vr-search-bg');
+      let timer = null;
+
+      function updateSearchLabel() {
+        if (!bg) return;
+        const v = si.value;
+        bg.setAttribute('data-label', v || 'Search…');
+        bg.setAttribute('data-label-color', v ? '#fff' : '#888');
+        curveLabelInto(bg);
       }
-      fetchGrid(true);
-    }, 250);
-  });
 
-  // Enter key dismisses the keyboard but keeps the panel open.
-  searchInput.addEventListener('keydown', function(evt) {
-    if (evt.key === 'Enter') {
-      hideSearchOverlay();
-    }
-  });
-}
+      si.addEventListener('input', function() {
+        updateSearchLabel();
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function() {
+          const q = si.value.trim();
+          if (q === m4cState.q) return;
+          m4cState.q = q;
+          fetchGrid(true);
+        }, 250);
+      });
+
+      // Enter dismisses Quest's keyboard but keeps panel open.
+      si.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') si.blur();
+      });
+
+      // When the browse panel hides, drop focus so the keyboard goes away.
+      const bp = document.getElementById('vrBrowsePanel');
+      if (bp) {
+        bp.addEventListener('componentchanged', function(evt) {
+          if (evt.detail && evt.detail.name === 'visible') {
+            const v = bp.getAttribute('visible');
+            if (v === false || v === 'false') si.blur();
+          }
+        });
+      }
+    })();
 ```
 
-- [ ] **Step 4: Update the search-field plane to show the current query**
-
-Modify the search-bg plane in Task 3's HTML so the `<a-text>` inside it has an id we can update:
-
-```html
-<a-plane class="vr-search-bg vr-btn" data-action="search-focus" width="1.2" height="0.16"
-         color="#222" material="opacity:0.9" position="-1.0 0 0">
-  <a-text id="vrSearchLabel" value="Search…" align="left" color="#888" width="3" position="-0.55 0 0.005"></a-text>
-</a-plane>
-```
-
-And the JS uses `getElementById('vrSearchLabel')` rather than the awkward query.
-
-- [ ] **Step 5: Vet, build, manually verify on Quest 3**
-
-Run: `go vet ./...` then `go build ./...` — expect clean.
-
-Build, install on Quest 3, run. Open a scene, enter VR, click Browse, click search field. Verify:
-
-- DOM overlay appears at bottom of view in VR.
-- Quest VR keyboard pops up.
-- Typing inserts characters; search field plane on the panel reflects current text.
-- After 250 ms idle, grid filters to matching scenes.
-- Press Enter → keyboard dismisses; overlay hides; grid stays filtered.
-- Click ✕ to close browse panel → overlay also hides.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Vet, build, manually verify on Quest 3**
 
 ```
-git add internal/static/browse_scene.gohtml
-git commit -m "m4c: search field via DOM-overlay input with live debounced filter"
+go vet ./...
+go build ./...
+```
+
+On Quest 3:
+- Open a scene, Enter VR, summon control panel, click Browse.
+- Tap the curved "Search…" cylinder → Quest's system VR keyboard pops.
+- Type a few characters → cylinder label updates char-by-char (gray "Search…" replaced with white typed text).
+- After 250 ms idle, grid refetches with `?q=...`.
+- Press Enter → keyboard hides; label keeps the typed text; grid stays filtered.
+- Tap "Clear all" or backspace to empty → label reverts to gray "Search…", grid refetches without `q`.
+- Close browse panel (✕) → keyboard hides on the next tap if it was open.
+
+- [ ] **Step 5: Commit**
+
+```
+git add internal/static/browse_scene.gohtml docs/superpowers/plans/2026-05-09-m4c-in-vr-search.md docs/superpowers/specs/2026-05-09-m4c-in-vr-search.md
+git commit -m "m4c: in-VR search via hidden <input> + curved-label echo (Quest VR keyboard)"
 ```
 
 ---

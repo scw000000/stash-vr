@@ -70,6 +70,16 @@ a.chip:hover { background: #3a3a3a; }
 {{if .DirectStreamURL}}
 <button id="enterVR" class="btn-vr" type="button">{{if .Projection.Geometry}}▥ Enter VR{{else}}▥ Watch on virtual screen{{end}}</button>
 
+<!-- Hidden text-input buffer for in-VR search. Quest's Meta Browser
+     refuses the WebXR DOM Overlay Module so we can't show an HTML
+     <input> on top of the XR content; however focusing this input
+     from JS still pops the system VR keyboard, and `input` events
+     still deliver the typed value. We mirror it onto the curved
+     search-bar label inside the scene. Sibling of <a-scene>, not a
+     child — A-Frame doesn't care for unknown DOM children. -->
+<input id="vrSearchInput" type="text" autocomplete="off" inputmode="search"
+       style="position:fixed; top:-1000px; left:-1000px; opacity:0; width:1px; height:1px; pointer-events:none;" />
+
 <a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" webxr="optionalFeatures: layers" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
   <a-entity camera position="0 1.6 0"></a-entity>
   <!--
@@ -1227,6 +1237,52 @@ a.chip:hover { background: #3a3a3a; }
     }
     updateColsLabel();
 
+    // M4c Task 6: live search via hidden <input>. Quest's keyboard
+    // delivers chars to the input even though the input itself isn't
+    // visible during the WebXR session (DOM overlay is refused). We
+    // mirror the value onto the existing curved search-bar label.
+    (function wireSearchInput() {
+      const si = document.getElementById('vrSearchInput');
+      if (!si) return;
+      const bg = document.querySelector('.vr-search-bg');
+      let timer = null;
+
+      function updateSearchLabel() {
+        if (!bg) return;
+        const v = si.value;
+        bg.setAttribute('data-label', v || 'Search…');
+        bg.setAttribute('data-label-color', v ? '#fff' : '#888');
+        curveLabelInto(bg);
+      }
+
+      si.addEventListener('input', function() {
+        updateSearchLabel();
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function() {
+          const q = si.value.trim();
+          if (q === m4cState.q) return;
+          m4cState.q = q;
+          fetchGrid(true);
+        }, 250);
+      });
+
+      // Enter dismisses Quest's keyboard but keeps the panel open.
+      si.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') si.blur();
+      });
+
+      // Browse panel closes → drop focus so the keyboard hides.
+      const bp = document.getElementById('vrBrowsePanel');
+      if (bp) {
+        bp.addEventListener('componentchanged', function(evt) {
+          if (evt.detail && evt.detail.name === 'visible') {
+            const v = bp.getAttribute('visible');
+            if (v === false || v === 'false') si.blur();
+          }
+        });
+      }
+    })();
+
     // M4c Task 4: in-VR browse grid state + tile rendering on a cylinder curve.
     const m4cState = {
       q: '',
@@ -1886,6 +1942,13 @@ a.chip:hover { background: #3a3a3a; }
           const v = dbg.getAttribute('visible');
           dbg.setAttribute('visible', !(v === true || v === 'true'));
         }
+      } else if (action === 'search-focus') {
+        // Focus the hidden <input>. Quest's Meta Browser auto-pops the
+        // system VR keyboard on input focus even though it refuses the
+        // WebXR DOM Overlay Module — the input is invisible, we mirror
+        // its value onto the curved search-bar label.
+        const si = document.getElementById('vrSearchInput');
+        if (si) si.focus();
       } else if (action === 'cols-cycle') {
         m4cCols = (m4cCols >= 6) ? 3 : (m4cCols + 1);
         localStorage.setItem('m4c.cols', String(m4cCols));
