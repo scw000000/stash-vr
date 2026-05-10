@@ -3662,6 +3662,16 @@ a.chip:hover { background: #3a3a3a; }
 
     let swapInFlight = false;
 
+    // Fade helpers step on setTimeout, NOT requestAnimationFrame. WebXR
+    // immersive sessions pause window.requestAnimationFrame on Quest /
+    // Meta Browser — the browser drives frames from XRSession.
+    // requestAnimationFrame instead, leaving raw rAF callbacks queued
+    // forever. Earlier the fade hung at first step (opacity ~0.0005) and
+    // swapInFlight stayed true, blocking every subsequent click.
+    // setTimeout fires regardless of XR state. ~30Hz is fine for a 200ms
+    // crossfade — we don't need per-frame precision.
+    const FADE_STEP_MS = 33;
+
     function fadeAudio(target, durMs) {
       return new Promise(resolve => {
         const start = video.volume;
@@ -3670,7 +3680,7 @@ a.chip:hover { background: #3a3a3a; }
           const elapsed = performance.now() - t0;
           const k = Math.min(1, elapsed / durMs);
           video.volume = start + (target - start) * k;
-          if (k < 1) requestAnimationFrame(step);
+          if (k < 1) setTimeout(step, FADE_STEP_MS);
           else resolve();
         }
         step();
@@ -3696,7 +3706,7 @@ a.chip:hover { background: #3a3a3a; }
           } else {
             plane.setAttribute('material', 'opacity:' + op + ';transparent:true;shader:flat;color:#000');
           }
-          if (k < 1) requestAnimationFrame(step);
+          if (k < 1) setTimeout(step, FADE_STEP_MS);
           else resolve();
         }
         step();
