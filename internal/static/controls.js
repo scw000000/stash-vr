@@ -1,14 +1,14 @@
-/* M3c controller mappings — see docs/superpowers/specs/2026-05-08-m3c-skybox-controller-mappings.md
+/* Controller mappings — see docs/superpowers/specs/2026-05-08-m3c-skybox-controller-mappings.md
  *
  * This component listens for controller input on <a-scene> and emits
- * semantic events (m3c:panel-toggle, m3c:play-pause, m3c:seek, m3c:scale,
- * m3c:drag-start/move/end, m3c:reset-short, m3c:reset-long). The inline
+ * semantic events (vr:panel-toggle, vr:play-pause, vr:seek, vr:scale,
+ * vr:drag-start/move/end, vr:reset-short, vr:reset-long). The inline
  * IIFE in browse_scene.gohtml owns DOM/video state mutation in response.
  */
 (function() {
   if (typeof AFRAME === 'undefined') return;
 
-  AFRAME.registerComponent('m3c-controls', {
+  AFRAME.registerComponent('controls', {
     init: function() {
       this.sceneEl = this.el.sceneEl || this.el;
       this.curPos = new AFRAME.THREE.Vector3();
@@ -144,7 +144,7 @@
     _onTriggerUp: function(hand) {
       const st = this.triggerState[hand];
       if (st.phase === 'drag') {
-        this.sceneEl.emit('m3c:drag-end', { hand: hand });
+        this.sceneEl.emit('vr:drag-end', { hand: hand });
         st.phase = 'idle';
         return;
       }
@@ -165,7 +165,7 @@
         // Second click within window → double-click.
         clearTimeout(this._pendingClick.timer);
         this._pendingClick = null;
-        this.sceneEl.emit('m3c:play-pause');
+        this.sceneEl.emit('vr:play-pause');
       } else {
         // Start a new pending; resolve as single-click after window.
         if (this._pendingClick) clearTimeout(this._pendingClick.timer);
@@ -173,7 +173,7 @@
         pending.timer = setTimeout(() => {
           if (this._pendingClick === pending) {
             this._pendingClick = null;
-            this.sceneEl.emit('m3c:panel-toggle');
+            this.sceneEl.emit('vr:panel-toggle');
           }
         }, this.DOUBLE_CLICK_MS);
         this._pendingClick = pending;
@@ -187,7 +187,7 @@
       if (this._pendingClick && (now - this._pendingClick.time) <= this.DOUBLE_CLICK_MS) {
         clearTimeout(this._pendingClick.timer);
         this._pendingClick = null;
-        this.sceneEl.emit('m3c:play-pause');
+        this.sceneEl.emit('vr:play-pause');
         return;
       }
       if (this._pendingClick) clearTimeout(this._pendingClick.timer);
@@ -195,7 +195,7 @@
       pending.timer = setTimeout(() => {
         if (this._pendingClick === pending) {
           this._pendingClick = null;
-          this.sceneEl.emit('m3c:panel-toggle');
+          this.sceneEl.emit('vr:panel-toggle');
         }
       }, this.DOUBLE_CLICK_MS);
       this._pendingClick = pending;
@@ -215,7 +215,7 @@
       if (wasFired) return; // long-press already fired
       if (pressTime !== 0 && performance.now() - pressTime < this.LONG_PRESS_MS) {
         const mode = this._currentMode();
-        this.sceneEl.emit('m3c:reset-short', { mode: mode });
+        this.sceneEl.emit('vr:reset-short', { mode: mode });
       }
     },
     _currentMode: function() {
@@ -262,13 +262,13 @@
           const dist = this.deltaPos.length();
           if (dist > this.DRAG_DIST_M || elapsed > this.DRAG_HOLD_MS) {
             st.phase = 'drag';
-            this.sceneEl.emit('m3c:drag-start', { hand: hand });
+            this.sceneEl.emit('vr:drag-start', { hand: hand });
           }
         }
         if (st.phase === 'drag') {
           this._getControllerPos(hand, this.curPos);
           this.deltaPos.subVectors(this.curPos, st.startPos);
-          this.sceneEl.emit('m3c:drag-move', {
+          this.sceneEl.emit('vr:drag-move', {
             hand: hand,
             dx: this.deltaPos.x,
             dy: this.deltaPos.y,
@@ -284,7 +284,7 @@
         if (performance.now() - st.downTime >= this.LONG_PRESS_MS) {
           st.fired = true;
           const mode = this._currentMode();
-          this.sceneEl.emit('m3c:reset-long', { mode: mode });
+          this.sceneEl.emit('vr:reset-long', { mode: mode });
         }
       });
 
@@ -296,7 +296,7 @@
         const ax = Math.abs(ts.x);
         if (st.seekArmed && ax > this.SEEK_TRIGGER) {
           const sign = ts.x > 0 ? 1 : -1;
-          this.sceneEl.emit('m3c:seek', { sign: sign, seconds: this.SEEK_SECONDS });
+          this.sceneEl.emit('vr:seek', { sign: sign, seconds: this.SEEK_SECONDS });
           st.seekArmed = false;
         } else if (!st.seekArmed && ax < this.SEEK_REARM) {
           st.seekArmed = true;
@@ -317,7 +317,7 @@
       });
       if (compositeY !== 0 && dtSec > 0) {
         const factor = 1 + 0.6 * compositeY * dtSec;
-        this.sceneEl.emit('m3c:scale', { factor: factor });
+        this.sceneEl.emit('vr:scale', { factor: factor });
       }
     },
 

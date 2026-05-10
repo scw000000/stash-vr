@@ -505,7 +505,7 @@ a.chip:hover { background: #3a3a3a; }
        1.5m in front of user, slightly below eye level. Yellow text on a
        black backdrop placed behind (z=-0.01) so semi-transparent
        rendering doesn't occlude the text. Updated each frame from the
-       m4c-browse-tick component (gated on visibility). -->
+       browse-tick component (gated on visibility). -->
   <a-entity id="vrDebugOverlay" position="0 1.0 -1.5" visible="false">
     <a-plane width="2.0" height="0.30" color="#000" material="shader: flat; opacity: 0.7"
              position="0 0 -0.01"></a-plane>
@@ -526,7 +526,7 @@ a.chip:hover { background: #3a3a3a; }
   <!-- M3c controller-mapping component. Hosts the trigger state machine,
        gamepad polling, and B/Y long-press timer. Emits semantic events
        on <a-scene>; the inline IIFE applies them. -->
-  <a-entity m3c-controls></a-entity>
+  <a-entity controls></a-entity>
 
   <!-- Subtitle render plane. Starts as a child of <a-scene>; JS reparents
        it to vrFlat (cinema) or scene.camera (immersive) when a cue is
@@ -538,7 +538,7 @@ a.chip:hover { background: #3a3a3a; }
 </a-scene>
 
 <script src="/vendor/aframe.min.js"></script>
-<script src="/m3c-controls.js"></script>
+<script src="/controls.js"></script>
 <script>
   (function() {
     const btn          = document.getElementById('enterVR');
@@ -1001,7 +1001,7 @@ a.chip:hover { background: #3a3a3a; }
     // motion looks right. Spheres are at radius 100 so a 30cm hand motion
     // shifts the center by 0.3% of the sphere — invisible. Scale up for
     // the spheres so motion is perceptible.
-    scene.addEventListener('m3c:drag-move', function(e) {
+    scene.addEventListener('vr:drag-move', function(e) {
       const el = activeGeometry();
       if (!el || !el.object3D) return;
       const isImmersive = el.id !== 'vrFlat';
@@ -1014,10 +1014,10 @@ a.chip:hover { background: #3a3a3a; }
         if (cam) el.object3D.lookAt(cam.position);
       }
     });
-    scene.addEventListener('m3c:panel-toggle', function() {
+    scene.addEventListener('vr:panel-toggle', function() {
       setPanelVisible(!isPanelVisible());
     });
-    scene.addEventListener('m3c:play-pause', function() {
+    scene.addEventListener('vr:play-pause', function() {
       if (video.paused) {
         const p = video.play();
         if (p && p.catch) p.catch(err => console.warn('stash-vr: video play failed', err));
@@ -1074,7 +1074,7 @@ a.chip:hover { background: #3a3a3a; }
       el.object3D.rotation.y = -yaw;
     }
 
-    scene.addEventListener('m3c:reset-short', function(e) {
+    scene.addEventListener('vr:reset-short', function(e) {
       if (e.detail.mode === 'cinema') {
         resetGeometry();
       } else {
@@ -1082,13 +1082,13 @@ a.chip:hover { background: #3a3a3a; }
       }
     });
 
-    scene.addEventListener('m3c:reset-long', function() {
+    scene.addEventListener('vr:reset-long', function() {
       // Full recenter: yaw recenter + geometry reset, both modes.
       recenterYaw();
       resetGeometry();
     });
 
-    scene.addEventListener('m3c:seek', function(e) {
+    scene.addEventListener('vr:seek', function(e) {
       if (isNaN(video.currentTime)) return;
       const delta = e.detail.sign * e.detail.seconds;
       if (delta < 0) {
@@ -1100,11 +1100,11 @@ a.chip:hover { background: #3a3a3a; }
       // skip forward seek — matches the seek logic above.
     });
 
-    scene.addEventListener('m3c:scale', function(e) {
+    scene.addEventListener('vr:scale', function(e) {
       // Suppress geometry scale while the browse panel is grabbing thumbstick
       // Y for grid scrolling — otherwise the user scrolls the grid AND
       // simultaneously rescales the cinema/immersive geometry.
-      if (m4cConsumeThumbY) return;
+      if (browseConsumeThumbY) return;
       const el = activeGeometry();
       if (!el || !el.object3D) return;
       const newScale = el.object3D.scale.x * e.detail.factor;
@@ -1206,7 +1206,7 @@ a.chip:hover { background: #3a3a3a; }
     // intercept clicks at their world position. Always include the main
     // panel's targets + all panel backgrounds (so trigger lands on the
     // dark area between buttons count as a panel hit and don't fire
-    // m3c:panel-toggle). Only include a sub-panel's targets while it is
+    // vr:panel-toggle). Only include a sub-panel's targets while it is
     // actually visible.
     function updateRaycasterTargets() {
       const parts = ['#vrControls .vr-btn', '#vrControls .vr-panel-bg'];
@@ -1235,8 +1235,8 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     // M4c: persisted column-count for the browse grid. Cycles 3→4→5→6→3.
-    let m4cCols = parseInt(localStorage.getItem('m4c.cols') || '4', 10);
-    if (m4cCols < 3 || m4cCols > 6) m4cCols = 4;
+    let browseCols = parseInt(localStorage.getItem('browse.cols') || '4', 10);
+    if (browseCols < 3 || browseCols > 6) browseCols = 4;
 
     // Place a string as a row of single-character a-text entities laid
     // along an arc, so the whole label visually follows a cylinder curve.
@@ -1342,7 +1342,7 @@ a.chip:hover { background: #3a3a3a; }
     function updateColsLabel() {
       const el = document.getElementById('vrColsBtn');
       if (!el) return;
-      el.setAttribute('data-label', 'Cols: ' + m4cCols);
+      el.setAttribute('data-label', 'Cols: ' + browseCols);
       curveLabelInto(el);
     }
     updateColsLabel();
@@ -1359,10 +1359,10 @@ a.chip:hover { background: #3a3a3a; }
       // Find the curved cylinder that should mirror the typed text for
       // whichever search input is currently active. Browse top-strip
       // search-bg for grid; per-column picker-search-bg for picker
-      // queries. m4cState may not be initialized yet at module-load
+      // queries. browseState may not be initialized yet at module-load
       // time, so default to 'grid'.
       function activeBg() {
-        const target = (m4cState && m4cState.overlayTarget) || 'grid';
+        const target = (browseState && browseState.overlayTarget) || 'grid';
         if (target === 'grid') {
           return document.querySelector('a-cylinder.vr-search-bg[data-action="search-focus"]');
         }
@@ -1384,7 +1384,7 @@ a.chip:hover { background: #3a3a3a; }
       si.addEventListener('input', function() {
         updateActiveSearchLabel(si.value);
         if (timer) clearTimeout(timer);
-        const target = (m4cState && m4cState.overlayTarget) || 'grid';
+        const target = (browseState && browseState.overlayTarget) || 'grid';
         // Picker search is local-only (filters cached options, no
         // network), so a tighter debounce feels snappier. Grid search
         // hits the backend each time so 250ms balances feel vs cost.
@@ -1392,15 +1392,15 @@ a.chip:hover { background: #3a3a3a; }
         timer = setTimeout(function() {
           if (target === 'grid') {
             const q = si.value.trim();
-            if (q === m4cState.q) return;
-            m4cState.q = q;
+            if (q === browseState.q) return;
+            browseState.q = q;
             fetchGrid(true);
           } else if (target.indexOf('picker-') === 0) {
             const kind = target.slice(7);
             const q = si.value;
-            if (q === m4cState.pickerQuery[kind]) return;
-            m4cState.pickerQuery[kind] = q;
-            m4cState.listScrollY[kind] = 0; // reset per-column scroll on filter change
+            if (q === browseState.pickerQuery[kind]) return;
+            browseState.pickerQuery[kind] = q;
+            browseState.listScrollY[kind] = 0; // reset per-column scroll on filter change
             renderColumnList(kind);
           }
         }, debounceMs);
@@ -1431,7 +1431,7 @@ a.chip:hover { background: #3a3a3a; }
         }
       }
       // Expose so vrAction can call it.
-      window._m4cClearSearchTarget = clearSearchTarget;
+      window._browseClearSearchTarget = clearSearchTarget;
 
       // Browse panel closes → drop focus so the keyboard hides.
       const bp = document.getElementById('vrBrowsePanel');
@@ -1446,7 +1446,7 @@ a.chip:hover { background: #3a3a3a; }
     })();
 
     // M4c Task 4: in-VR browse grid state + tile rendering on a cylinder curve.
-    const m4cState = {
+    const browseState = {
       q: '',
       // performer/studio/tag are arrays for multi-select; favorite/stars/
       // ocount stay scalar. filterNames is parallel-indexed with the id
@@ -1468,28 +1468,28 @@ a.chip:hover { background: #3a3a3a; }
 
     function buildGridParams() {
       const p = new URLSearchParams();
-      if (m4cState.q) p.set('q', m4cState.q);
+      if (browseState.q) p.set('q', browseState.q);
       // Multi-value: server reads q.URL.Query()["performer"] (etc.) which
       // returns all values for that param. Each .append adds another.
-      m4cState.filters.performer.forEach(id => p.append('performer', id));
-      m4cState.filters.studio.forEach(id    => p.append('studio',    id));
-      m4cState.filters.tag.forEach(id       => p.append('tag',       id));
-      if (m4cState.filters.favorite)  p.set('favorite',  m4cState.filters.favorite);
-      if (m4cState.filters.stars > 0) p.set('stars',     String(m4cState.filters.stars));
-      if (m4cState.filters.ocount > 0) p.set('ocount',   String(m4cState.filters.ocount));
-      if (m4cState.cursor !== '1')    p.set('cursor',    m4cState.cursor);
+      browseState.filters.performer.forEach(id => p.append('performer', id));
+      browseState.filters.studio.forEach(id    => p.append('studio',    id));
+      browseState.filters.tag.forEach(id       => p.append('tag',       id));
+      if (browseState.filters.favorite)  p.set('favorite',  browseState.filters.favorite);
+      if (browseState.filters.stars > 0) p.set('stars',     String(browseState.filters.stars));
+      if (browseState.filters.ocount > 0) p.set('ocount',   String(browseState.filters.ocount));
+      if (browseState.cursor !== '1')    p.set('cursor',    browseState.cursor);
       return p;
     }
 
     function fetchGrid(reset) {
-      if (m4cState.loading) return;
+      if (browseState.loading) return;
       if (reset) {
-        m4cState.cursor = '1';
-        m4cState.tiles = [];
-        m4cState.hasMore = true;
+        browseState.cursor = '1';
+        browseState.tiles = [];
+        browseState.hasMore = true;
       }
-      if (!m4cState.hasMore) return;
-      m4cState.loading = true;
+      if (!browseState.hasMore) return;
+      browseState.loading = true;
       const sentinel = document.getElementById('vrBrowseLoadMore');
       if (sentinel) {
         sentinel.setAttribute('value', 'Loading…');
@@ -1500,18 +1500,18 @@ a.chip:hover { background: #3a3a3a; }
       })
         .then(r => r.json())
         .then(json => {
-          m4cState.tiles = m4cState.tiles.concat(json.tiles || []);
-          m4cState.hasMore = !!json.hasMore;
-          m4cState.cursor = json.nextCursor || '1';
-          m4cState.loading = false;
+          browseState.tiles = browseState.tiles.concat(json.tiles || []);
+          browseState.hasMore = !!json.hasMore;
+          browseState.cursor = json.nextCursor || '1';
+          browseState.loading = false;
           relayoutTiles();
           if (sentinel) {
-            sentinel.setAttribute('value', m4cState.hasMore ? '' : (m4cState.tiles.length ? 'No more scenes' : 'No scenes found'));
+            sentinel.setAttribute('value', browseState.hasMore ? '' : (browseState.tiles.length ? 'No more scenes' : 'No scenes found'));
             sentinel.setAttribute('visible', !!sentinel.getAttribute('value'));
           }
         })
         .catch(err => {
-          m4cState.loading = false;
+          browseState.loading = false;
           if (sentinel) {
             sentinel.setAttribute('value', 'fetch failed');
             sentinel.setAttribute('visible', 'true');
@@ -1529,7 +1529,7 @@ a.chip:hover { background: #3a3a3a; }
     // tag are visualized per-column in their respective lane via the
     // selected sub-list, so duplicating them as chips is redundant).
     function chipLabel(kind) {
-      const f  = m4cState.filters;
+      const f  = browseState.filters;
       if (kind === 'favorite' && f.favorite === 'only') return 'Favorites: Only';
       if (kind === 'favorite' && f.favorite === 'not')  return 'Favorites: Not';
       if (kind === 'stars'    && f.stars > 0) return 'Stars: ' + (f.stars === 5 ? '5 only' : f.stars + '+');
@@ -1539,17 +1539,17 @@ a.chip:hover { background: #3a3a3a; }
 
     function clearChip(kind) {
       if (kind === 'favorite') {
-        m4cState.filters.favorite = '';
+        browseState.filters.favorite = '';
       } else if (kind === 'stars') {
-        m4cState.filters.stars = 0;
+        browseState.filters.stars = 0;
       } else if (kind === 'ocount') {
-        m4cState.filters.ocount = 0;
+        browseState.filters.ocount = 0;
       }
       renderActiveChips();
       fetchGrid(true);
     }
 
-    // Re-render the chips strip from current m4cState. Each active filter
+    // Re-render the chips strip from current browseState. Each active filter
     // gets one curved-cylinder chip (label "Kind: Value ✕"). Chips pack
     // right-to-left in user view (highest A-Frame θ first), starting from
     // the right edge of the filters extension arc (θ=148.75) and extending
@@ -1622,18 +1622,16 @@ a.chip:hover { background: #3a3a3a; }
     const LIST_ROW_H    = 0.10;    // row pitch (height + small gap)
     const LIST_ROW_GEOM_H = 0.09;  // row cylinder height (leaves 0.01 gap)
     const LIST_TOP_Y    = 0.50;    // y of first regular row's center (below value strip at y=0.65)
-    const LIST_REGULAR_BOTTOM_Y = -0.30;  // last regular row center (9 visible: 0.5 → -0.3 step 0.1)
-    const LIST_SELECTED_TOP_Y   = -0.40;  // first selected sub-list row center (gap below regular)
-    const LIST_SELECTED_BOTTOM_Y = -0.95; // last selected row center (6 visible: -0.4 → -0.95 step 0.1)
-    const LIST_VISIBLE_REGULAR  = Math.floor((LIST_TOP_Y - LIST_REGULAR_BOTTOM_Y) / LIST_ROW_H) + 1; // 9
-    const LIST_VISIBLE_SELECTED = Math.floor((LIST_SELECTED_TOP_Y - LIST_SELECTED_BOTTOM_Y) / LIST_ROW_H) + 1; // 6
+    const LIST_REGULAR_BOTTOM_Y = -0.95;  // last regular row center; spans the full lane bg (top y=0.58, bottom y=-1.0). 15 visible rows at scrollY=0.
+    const LIST_SELECTED_TOP_Y   = -1.20;  // first selected sub-list row center; sits well BELOW the lane bg (y=-1.0) so the blue chips have visible breathing room from the last regular row. Chips overflow into the area beneath the lane (over the video / playback panel) — that's intentional, matches the requested "green area" growth.
+    const LIST_VISIBLE_REGULAR  = Math.floor((LIST_TOP_Y - LIST_REGULAR_BOTTOM_Y) / LIST_ROW_H) + 1; // 15
 
     function ensureCachedOptions(kind) {
       return new Promise(resolve => {
-        if (m4cState.cachedOptions[kind]) { resolve(m4cState.cachedOptions[kind]); return; }
+        if (browseState.cachedOptions[kind]) { resolve(browseState.cachedOptions[kind]); return; }
         fetch('/browse/filter-options/' + kind, { headers: { 'Accept': 'application/json' } })
           .then(r => r.json())
-          .then(opts => { m4cState.cachedOptions[kind] = opts || []; resolve(m4cState.cachedOptions[kind]); })
+          .then(opts => { browseState.cachedOptions[kind] = opts || []; resolve(browseState.cachedOptions[kind]); })
           .catch(err => { console.warn('stash-vr: filter options fetch failed', err); resolve([]); });
       });
     }
@@ -1726,11 +1724,16 @@ a.chip:hover { background: #3a3a3a; }
         'shader: flat; color: ' + (isSelected ? '#3776c2' : '#222') + '; opacity: 1.0; side: double');
       attachRowLabel(row, opt.name || '', colTheta, colLen);
       row.addEventListener('click', function() {
-        m4cState.lastScrollFocus = 'list-' + kind;
+        browseState.lastScrollFocus = 'list-' + kind;
         applyFilterPick(kind, opt.id, opt.name);
       });
       return row;
     }
+
+    // Cached state-hash per column so renderColumnList skips rebuilding
+    // the row DOM when only scrollY changed (the scroll path mutates
+    // object3D.position directly via updateColumnScroll instead).
+    const _columnStateHash = { performer: null, studio: null, tag: null };
 
     function renderColumnList(kind) {
       const root = document.getElementById('vrFiltersList-' + kind);
@@ -1741,44 +1744,136 @@ a.chip:hover { background: #3a3a3a; }
 
       ensureCachedOptions(kind).then(opts => {
         if (!root.parentNode) return; // panel torn down
+
+        const q = (browseState.pickerQuery[kind] || '').trim().toLowerCase();
+        const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
+        const selectedIds = browseState.filters[kind] || [];
+        const selectedNames = browseState.filterNames[kind] || [];
+
+        // Skip rebuild when only the scroll position changed — the scroll
+        // path uses updateColumnScroll which only translates the content
+        // container and toggles per-row visibility. Hash everything that
+        // affects which rows exist or how they look (NOT scrollY).
+        const hash = JSON.stringify([
+          filtered.map(o => o.id),
+          selectedIds.map(String),
+        ]);
+        if (_columnStateHash[kind] === hash) {
+          updateColumnScroll(kind);
+          return;
+        }
+        _columnStateHash[kind] = hash;
+
         while (root.firstChild) root.removeChild(root.firstChild);
 
-        const q = (m4cState.pickerQuery[kind] || '').trim().toLowerCase();
-        const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
-        const scrollY = m4cState.listScrollY[kind] || 0;
-        const selectedIds = m4cState.filters[kind] || [];
-        const selectedNames = m4cState.filterNames[kind] || [];
-
-        // Regular options list — top of column, scrollable. Visible band
-        // is [LIST_TOP_Y, LIST_REGULAR_BOTTOM_Y]; rows outside are culled.
+        // Regular-list content container. Rows are positioned at fixed
+        // local y = -i * LIST_ROW_H (row 0 at container origin). The
+        // container's own y position carries the scroll offset, which lets
+        // applyListScroll just nudge container.object3D.position.y per
+        // frame for buttery-smooth scrolling — no DOM churn, no canvas-
+        // texture rebuilds. Row visibility is toggled in updateColumnScroll
+        // so rows scrolled outside [LIST_TOP_Y, LIST_REGULAR_BOTTOM_Y]
+        // disappear instead of poking out above headers / below the lane.
+        //
+        // Important: A-Frame entity components init asynchronously via a
+        // MutationObserver microtask after appendChild, so object3D doesn't
+        // exist synchronously. The initial position + per-row visibility
+        // therefore go through setAttribute so the component lifecycle
+        // applies them on init. updateColumnScroll's direct object3D
+        // mutations only kick in from later scroll frames, by which point
+        // the entities are fully initialized.
+        const initialScrollY = browseState.listScrollY[kind] || 0;
+        const half = LIST_ROW_H / 2;
+        const visTop = LIST_TOP_Y + half;
+        const visBottom = LIST_REGULAR_BOTTOM_Y - half;
+        const content = document.createElement('a-entity');
+        content.id = 'vrFiltersListContent-' + kind;
+        content.setAttribute('position', '0 ' + (LIST_TOP_Y + initialScrollY) + ' 0');
         filtered.forEach((opt, i) => {
-          const y = LIST_TOP_Y - i * LIST_ROW_H + scrollY;
-          if (y > LIST_TOP_Y + LIST_ROW_H/2 || y < LIST_REGULAR_BOTTOM_Y - LIST_ROW_H/2) return;
           const isSelected = selectedIds.indexOf(String(opt.id)) >= 0 || selectedIds.indexOf(opt.id) >= 0;
-          root.appendChild(makeFilterRow(kind, opt, y, colTheta, colLen, isSelected));
+          const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, colTheta, colLen, isSelected);
+          row.dataset.rowIdx = String(i);
+          const worldY = LIST_TOP_Y + initialScrollY - i * LIST_ROW_H;
+          if (worldY > visTop || worldY < visBottom) {
+            row.setAttribute('visible', false);
+          }
+          content.appendChild(row);
         });
+        root.appendChild(content);
 
-        // Selected sub-list — bottom of column. One row per active filter
-        // for this kind, always blue, click toggles off (calls applyFilterPick
-        // which sees the id is present and removes it). Same dimensions as
-        // regular rows. Caps at LIST_VISIBLE_SELECTED to avoid spilling
-        // past the lane bottom; surplus selections live in state but aren't
-        // shown until user clears something.
-        selectedIds.slice(0, LIST_VISIBLE_SELECTED).forEach((id, i) => {
-          const name = selectedNames[i] || '';
-          const y = LIST_SELECTED_TOP_Y - i * LIST_ROW_H;
-          root.appendChild(makeFilterRow(kind, { id: id, name: name }, y, colTheta, colLen, true));
-        });
+        // Selected sub-list — sits BELOW the lane bg so it never overlaps
+        // the regular list area. Renders all selected entries (no visible
+        // cap); the user explicitly OK'd letting chips overflow past the
+        // lane boundary. Static container, no scroll handoff.
+        if (selectedIds.length) {
+          const sel = document.createElement('a-entity');
+          sel.id = 'vrFiltersSelected-' + kind;
+          sel.setAttribute('position', '0 0 0');
+          selectedIds.forEach((id, i) => {
+            const name = selectedNames[i] || '';
+            const y = LIST_SELECTED_TOP_Y - i * LIST_ROW_H;
+            sel.appendChild(makeFilterRow(kind, { id: id, name: name }, y, colTheta, colLen, true));
+          });
+          root.appendChild(sel);
+        }
 
+        // Initial position + visibility were baked into setAttribute calls
+        // above so they apply via the component init lifecycle. Skip the
+        // synchronous updateColumnScroll here — object3D doesn't exist yet
+        // and the call would be a no-op (the !object3D guard would bail).
         updateRaycasterTargets();
       });
+    }
+
+    // Per-frame scroll application. Translates the content container
+    // (cheap object3D mutation, no a-frame attr churn) and toggles row
+    // visibility based on whether each row's effective world-y falls
+    // inside the visible band.
+    function updateColumnScroll(kind) {
+      const content = document.getElementById('vrFiltersListContent-' + kind);
+      if (!content || !content.object3D) return;
+      const scrollY = browseState.listScrollY[kind] || 0;
+      content.object3D.position.set(0, LIST_TOP_Y + scrollY, 0);
+      const half = LIST_ROW_H / 2;
+      const top = LIST_TOP_Y + half;
+      const bottom = LIST_REGULAR_BOTTOM_Y - half;
+      const rows = content.children;
+      for (let j = 0; j < rows.length; j++) {
+        const row = rows[j];
+        const i = parseFloat(row.dataset.rowIdx);
+        if (!isFinite(i)) continue;
+        const worldY = LIST_TOP_Y + scrollY - i * LIST_ROW_H;
+        const vis = worldY <= top && worldY >= bottom;
+        if (row.object3D && row.object3D.visible !== vis) {
+          row.object3D.visible = vis;
+        }
+      }
+    }
+
+    function maxListScrollY(kind) {
+      const opts = browseState.cachedOptions[kind] || [];
+      const q = (browseState.pickerQuery[kind] || '').trim().toLowerCase();
+      const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
+      const overflow = filtered.length - LIST_VISIBLE_REGULAR;
+      return Math.max(0, overflow * LIST_ROW_H);
+    }
+    function applyListScroll(kind, stickY, dt) {
+      const max = maxListScrollY(kind);
+      if (max <= 0) return;
+      const cur = browseState.listScrollY[kind] || 0;
+      // Stick DOWN (stickY = +1) → scrollY INCREASES → later rows reveal,
+      // matching the tile-grid scroll convention from tickBrowseScroll.
+      const target = Math.max(0, Math.min(cur + stickY * 0.6 * dt, max));
+      if (Math.abs(target - cur) < 0.0001) return;
+      browseState.listScrollY[kind] = target;
+      updateColumnScroll(kind);
     }
 
     function applyFilterPick(kind, id, name) {
       if (kind === 'performer' || kind === 'studio' || kind === 'tag') {
         // Multi-select toggle: present → remove, absent → append.
-        const ids = m4cState.filters[kind];
-        const names = m4cState.filterNames[kind];
+        const ids = browseState.filters[kind];
+        const names = browseState.filterNames[kind];
         const idx = ids.indexOf(id);
         if (idx >= 0) {
           ids.splice(idx, 1);
@@ -1789,15 +1884,15 @@ a.chip:hover { background: #3a3a3a; }
         }
         renderColumnList(kind);
       } else if (kind === 'favorite') {
-        m4cState.filters.favorite = m4cState.filters.favorite === id ? '' : id;
+        browseState.filters.favorite = browseState.filters.favorite === id ? '' : id;
         renderValuesRow();
       } else if (kind === 'stars') {
         const n = parseInt(id || '0', 10);
-        m4cState.filters.stars = m4cState.filters.stars === n ? 0 : n;
+        browseState.filters.stars = browseState.filters.stars === n ? 0 : n;
         renderValuesRow();
       } else if (kind === 'ocount') {
         const n = parseInt(id || '0', 10);
-        m4cState.filters.ocount = m4cState.filters.ocount === n ? 0 : n;
+        browseState.filters.ocount = browseState.filters.ocount === n ? 0 : n;
         renderValuesRow();
       }
       renderActiveChips();
@@ -1839,9 +1934,9 @@ a.chip:hover { background: #3a3a3a; }
         cursor -= GAP;
         const thetaStart = cursor - BUTTON_W;
         const isSelected = (
-          (btn.kind === 'favorite' && m4cState.filters.favorite === btn.value) ||
-          (btn.kind === 'stars'    && String(m4cState.filters.stars)  === btn.value) ||
-          (btn.kind === 'ocount'   && String(m4cState.filters.ocount) === btn.value)
+          (btn.kind === 'favorite' && browseState.filters.favorite === btn.value) ||
+          (btn.kind === 'stars'    && String(browseState.filters.stars)  === btn.value) ||
+          (btn.kind === 'ocount'   && String(browseState.filters.ocount) === btn.value)
         );
         const cyl = document.createElement('a-cylinder');
         cyl.classList.add('vr-btn');
@@ -1865,7 +1960,7 @@ a.chip:hover { background: #3a3a3a; }
           y: 0,
         }, 'curved-value-char');
         cyl.addEventListener('click', function() {
-          m4cState.lastScrollFocus = 'none';
+          browseState.lastScrollFocus = 'none';
           applyFilterPick(btn.kind, btn.value);
         });
         cursor = thetaStart;
@@ -1881,7 +1976,7 @@ a.chip:hover { background: #3a3a3a; }
     // panel is actually shown, and we don't want to fetch /browse/filter-
     // options until then).
 
-    // Tile rendering geometry. Computed at relayout time from m4cCols
+    // Tile rendering geometry. Computed at relayout time from browseCols
     // and the panel's usable area. Constants here are the layout *parameters*;
     // derived per-tile dimensions live inside relayoutTiles().
     const PANEL_USABLE_W = 3.4;     // panel width (3.6) minus 0.1m padding each side
@@ -1901,12 +1996,12 @@ a.chip:hover { background: #3a3a3a; }
     const BTN_R              = 2.97;   // top-strip button surface at z=0.05 (in front of tiles)
     const TILE_Z = HUB_Z - ARC_R;     // 0.02 — for back-compat reads only
     let scrollY = 0;                // updated by thumbstick scroll
-    let m4cMaxScroll = 0;           // computed in relayoutTiles each pass
+    let browseMaxScroll = 0;           // computed in relayoutTiles each pass
     // Set true (in tickBrowseScroll) when the laser is hovering on the
-    // browse panel AND the panel is visible. Read by the m3c:scale handler
+    // browse panel AND the panel is visible. Read by the vr:scale handler
     // to suppress geometry-scale binding while the user is scrolling
     // the grid with the thumbstick.
-    let m4cConsumeThumbY = false;
+    let browseConsumeThumbY = false;
 
     // ─── Tile cover: clip planes + UV-mirror helper ──────────────────────
     // The tile covers are partial cylinders viewed from the inside (hub on
@@ -1920,11 +2015,11 @@ a.chip:hover { background: #3a3a3a; }
     // of TILE_AREA), transformed to world coords once the panel is in the
     // scene. The same plane *array* is shared across all tile covers so we
     // can mutate-in-place without re-assigning per material.
-    const m4cClipPlanes = [
+    const browseClipPlanes = [
       new AFRAME.THREE.Plane(new AFRAME.THREE.Vector3(0,  1, 0), -TILE_AREA_BOTTOM_Y),
       new AFRAME.THREE.Plane(new AFRAME.THREE.Vector3(0, -1, 0),  TILE_AREA_TOP_Y),
     ];
-    let m4cClipPlanesReady = false;
+    let browseClipPlanesReady = false;
     function setupBrowseClipping() {
       // Idempotent: enable local clipping on the renderer and recompute
       // clip planes in world coords from the panel's worldMatrix. Called
@@ -1937,11 +2032,11 @@ a.chip:hover { background: #3a3a3a; }
       // Reset planes to panel-local, then transform to world in-place. THREE.Plane
       // doesn't have a "set local" method, so we re-init from the original normals
       // each time before applying the matrix.
-      m4cClipPlanes[0].set(new AFRAME.THREE.Vector3(0,  1, 0), -TILE_AREA_BOTTOM_Y);
-      m4cClipPlanes[1].set(new AFRAME.THREE.Vector3(0, -1, 0),  TILE_AREA_TOP_Y);
-      m4cClipPlanes[0].applyMatrix4(mat);
-      m4cClipPlanes[1].applyMatrix4(mat);
-      m4cClipPlanesReady = true;
+      browseClipPlanes[0].set(new AFRAME.THREE.Vector3(0,  1, 0), -TILE_AREA_BOTTOM_Y);
+      browseClipPlanes[1].set(new AFRAME.THREE.Vector3(0, -1, 0),  TILE_AREA_TOP_Y);
+      browseClipPlanes[0].applyMatrix4(mat);
+      browseClipPlanes[1].applyMatrix4(mat);
+      browseClipPlanesReady = true;
     }
 
     // Apply the standard cover-material settings (UV mirror + clipping +
@@ -1959,8 +2054,8 @@ a.chip:hover { background: #3a3a3a; }
         texture.needsUpdate = true;
       }
       material.side = AFRAME.THREE.DoubleSide;
-      if (m4cClipPlanesReady) {
-        material.clippingPlanes = m4cClipPlanes;
+      if (browseClipPlanesReady) {
+        material.clippingPlanes = browseClipPlanes;
         material.clipShadows = false;
       }
       material.needsUpdate = true;
@@ -1984,7 +2079,7 @@ a.chip:hover { background: #3a3a3a; }
     // regardless of cols, so changing column count never pushes the first
     // row up into the top button strip.
     function tileCellPositions(tileW, tileH, tileCoverH, count) {
-      const cols = m4cCols;
+      const cols = browseCols;
       const halfCols = (cols - 1) / 2;
       const thetaPerTile = tileW / ARC_R;              // arc length / radius (radians)
       const thetaPerGap  = TILE_GAP_X / ARC_R;
@@ -2187,30 +2282,30 @@ a.chip:hover { background: #3a3a3a; }
       const root = document.getElementById('vrBrowseTiles');
       if (!root) return;
 
-      const cols = m4cCols;
+      const cols = browseCols;
       const tileW = (PANEL_USABLE_W - (cols - 1) * TILE_GAP_X) / cols;
       const tileCoverH = tileW * 9 / 16;
       const tileH = tileCoverH + TITLE_GAP + TITLE_STRIP_H;
       const badgeR = Math.min(0.04, tileW * 0.07);
 
       // Remove tile entities for tiles no longer in state.tiles.
-      const expected = new Set(m4cState.tiles.map(t => t.id));
+      const expected = new Set(browseState.tiles.map(t => t.id));
       Array.from(root.children).forEach(child => {
         if (!expected.has(child.dataset.sceneId)) {
           root.removeChild(child);
         }
       });
 
-      const positions = tileCellPositions(tileW, tileH, tileCoverH, m4cState.tiles.length);
+      const positions = tileCellPositions(tileW, tileH, tileCoverH, browseState.tiles.length);
 
       // Max scroll: total content height minus visible band. When content
       // fits in band, max=0 (no scroll). Used by tickBrowseScroll to clamp.
-      const totalRows = Math.ceil(m4cState.tiles.length / cols);
+      const totalRows = Math.ceil(browseState.tiles.length / cols);
       const totalContentH = totalRows > 0 ? totalRows * (tileH + TILE_GAP_Y) - TILE_GAP_Y : 0;
       const visibleH = TILE_AREA_TOP_Y - TILE_AREA_BOTTOM_Y;
-      m4cMaxScroll = Math.max(0, totalContentH - visibleH);
+      browseMaxScroll = Math.max(0, totalContentH - visibleH);
 
-      m4cState.tiles.forEach((tile, i) => {
+      browseState.tiles.forEach((tile, i) => {
         const pos = positions[i];
         // Surface points in tile-entity local coords. The tile entity is at
         // the cylinder hub. With concave-toward-user (aFrameTheta = π-ourθ),
@@ -2413,7 +2508,7 @@ a.chip:hover { background: #3a3a3a; }
       document.querySelectorAll('#vrBrowseTiles .vr-tile-cover').forEach(function(c) {
         const mesh = c.getObject3D && c.getObject3D('mesh');
         if (mesh && mesh.material) {
-          mesh.material.clippingPlanes = m4cClipPlanes;
+          mesh.material.clippingPlanes = browseClipPlanes;
           mesh.material.clipShadows = false;
           mesh.material.needsUpdate = true;
         }
@@ -2483,15 +2578,15 @@ a.chip:hover { background: #3a3a3a; }
         // a clean state. Existing filtered results refresh accordingly.
         const kind = el && el.dataset && el.dataset.pickerKind;
         if (!kind) return;
-        m4cState.overlayTarget = 'picker-' + kind;
-        m4cState.lastScrollFocus = 'list-' + kind;
-        const had = m4cState.pickerQuery[kind] !== '';
-        m4cState.pickerQuery[kind] = '';
-        if (typeof window._m4cClearSearchTarget === 'function') {
-          window._m4cClearSearchTarget('picker-' + kind);
+        browseState.overlayTarget = 'picker-' + kind;
+        browseState.lastScrollFocus = 'list-' + kind;
+        const had = browseState.pickerQuery[kind] !== '';
+        browseState.pickerQuery[kind] = '';
+        if (typeof window._browseClearSearchTarget === 'function') {
+          window._browseClearSearchTarget('picker-' + kind);
         }
         if (had) {
-          m4cState.listScrollY[kind] = 0;
+          browseState.listScrollY[kind] = 0;
           renderColumnList(kind);
         }
         const si = document.getElementById('vrSearchInput');
@@ -2500,10 +2595,10 @@ a.chip:hover { background: #3a3a3a; }
         // M4c Task 7: "Clear all" wipes every filter (incl. q + arrays),
         // resets in-VR search input/labels, re-renders chips + per-column
         // lists, refetches.
-        m4cState.q = '';
-        m4cState.filters     = { performer: [], studio: [], tag: [], favorite: '', stars: 0, ocount: 0 };
-        m4cState.filterNames = { performer: [], studio: [], tag: [] };
-        m4cState.pickerQuery = { performer: '', studio: '', tag: '' };
+        browseState.q = '';
+        browseState.filters     = { performer: [], studio: [], tag: [], favorite: '', stars: 0, ocount: 0 };
+        browseState.filterNames = { performer: [], studio: [], tag: [] };
+        browseState.pickerQuery = { performer: '', studio: '', tag: '' };
         const si = document.getElementById('vrSearchInput');
         if (si) si.value = '';
         const browseSearchBg = document.querySelector('a-cylinder.vr-search-bg[data-action="search-focus"]');
@@ -2518,7 +2613,10 @@ a.chip:hover { background: #3a3a3a; }
           curveLabelInto(bg);
         });
         renderActiveChips();
-        ['performer', 'tag', 'studio'].forEach(renderColumnList);
+        ['performer', 'tag', 'studio'].forEach(kind => {
+          browseState.listScrollY[kind] = 0;
+          renderColumnList(kind);
+        });
         renderValuesRow();
         fetchGrid(true);
       } else if (action === 'filter-chip-clear') {
@@ -2536,18 +2634,18 @@ a.chip:hover { background: #3a3a3a; }
         // Retarget the hidden <input> at the grid search. Tap-to-clear:
         // wipe q + curved label + input value before focusing so the
         // empty Quest keyboard pop matches a clean state.
-        m4cState.overlayTarget = 'grid';
-        const had = m4cState.q !== '';
-        m4cState.q = '';
-        if (typeof window._m4cClearSearchTarget === 'function') {
-          window._m4cClearSearchTarget('grid');
+        browseState.overlayTarget = 'grid';
+        const had = browseState.q !== '';
+        browseState.q = '';
+        if (typeof window._browseClearSearchTarget === 'function') {
+          window._browseClearSearchTarget('grid');
         }
         if (had) fetchGrid(true);
         const si = document.getElementById('vrSearchInput');
         if (si) si.focus();
       } else if (action === 'cols-cycle') {
-        m4cCols = (m4cCols >= 6) ? 3 : (m4cCols + 1);
-        localStorage.setItem('m4c.cols', String(m4cCols));
+        browseCols = (browseCols >= 6) ? 3 : (browseCols + 1);
+        localStorage.setItem('browse.cols', String(browseCols));
         updateColsLabel();
         if (typeof relayoutTiles === 'function') relayoutTiles(); // Task 4 defines
       } else if (action === 'cc') {
@@ -2630,7 +2728,7 @@ a.chip:hover { background: #3a3a3a; }
     // to subscribe to thumbstickmoved events that may not fire on every
     // platform. Active only while the browse panel is visible AND a laser
     // is intersecting one of its surfaces — that's also the gate that tells
-    // m3c:scale to skip (so the user doesn't simultaneously scale the
+    // vr:scale to skip (so the user doesn't simultaneously scale the
     // cinema/immersive geometry while scrolling the grid). M4c spec §4.4:
     // stick-up (positive normalized y) → scroll up (decrease scrollY).
     function _readThumbstickAxes(laserEl) {
@@ -2640,7 +2738,7 @@ a.chip:hover { background: #3a3a3a; }
       const axes = (ctrl && ctrl.gamepad && ctrl.gamepad.axes) || (tc && tc.axis) || null;
       if (!axes || axes.length < 2) return null;
       const safe = (n) => (typeof n === 'number' && !isNaN(n)) ? n : 0;
-      // Same dual-slot probe as m3c-controls._getThumbstick.
+      // Same dual-slot probe as controls._getThumbstick.
       const x2 = axes.length >= 3 ? safe(axes[2]) : 0;
       const y2 = axes.length >= 4 ? safe(axes[3]) : 0;
       const x0 = safe(axes[0]);
@@ -2667,6 +2765,32 @@ a.chip:hover { background: #3a3a3a; }
       }
       return false;
     }
+    // M4c Task 7 Step 6: figure out which surface the laser is over so the
+    // thumbstick scrolls the right list. Walks up the DOM from the first
+    // intersection: a #vrFiltersList-{kind} ancestor under #vrBrowsePanel
+    // means the user is pointing at a column → scroll that column. Anything
+    // else under #vrBrowsePanel → scroll the tile grid. No browse-panel
+    // ancestor → null (laser is off-panel; caller bails).
+    function _laserBrowseScrollTarget(laserEl) {
+      if (!laserEl) return null;
+      const rc = laserEl.components && laserEl.components.raycaster;
+      if (!rc) return null;
+      const its = rc.intersections || [];
+      if (!its.length) return null;
+      let target = its[0].el || (its[0].object && its[0].object.el);
+      if (!target) return null;
+      let onBrowsePanel = false;
+      let columnKind = null;
+      while (target) {
+        if (target.id && target.id.indexOf('vrFiltersList-') === 0 && !columnKind) {
+          columnKind = target.id.substring('vrFiltersList-'.length);
+        }
+        if (target.id === 'vrBrowsePanel') { onBrowsePanel = true; break; }
+        target = target.parentElement;
+      }
+      if (!onBrowsePanel) return null;
+      return columnKind ? ('list-' + columnKind) : 'grid';
+    }
     // Diagnostics — writes what each laser's first intersection is hitting
     // into the in-VR debug overlay AND into window.svDebugLasers().
     function _summarizeIntersection(its) {
@@ -2691,7 +2815,7 @@ a.chip:hover { background: #3a3a3a; }
       return { right: _laserHits('vrLaserRight'), left: _laserHits('vrLaserLeft') };
     };
 
-    let m4cLastScrollTickMs = 0;
+    let browseLastScrollTickMs = 0;
     function _setDbg(line1, line2) {
       const dbg = document.getElementById('vrDebugOverlayText');
       if (!dbg) return;
@@ -2722,47 +2846,58 @@ a.chip:hover { background: #3a3a3a; }
         const dbgLine1 = 'R hits: ' + _laserHits('vrLaserRight');
         const dbgLine2 = 'sy R=' + tsR.y.toFixed(2) + ' L=' + tsL.y.toFixed(2) +
                          ' scroll=' + scrollY.toFixed(2) +
-                         '/' + m4cMaxScroll.toFixed(2) +
+                         '/' + browseMaxScroll.toFixed(2) +
                          ' onPanel=' + (activeLaser ? activeLaser.id.replace('vrLaser','') : 'no') +
                          ' bp=' + (bpVis ? '1' : '0');
         _setDbg(dbgLine1, dbgLine2);
       }
 
       if (!bpVis) {
-        m4cConsumeThumbY = false;
-        m4cLastScrollTickMs = 0;
+        browseConsumeThumbY = false;
+        browseLastScrollTickMs = 0;
         return;
       }
       if (!activeLaser) {
-        m4cConsumeThumbY = false;
-        m4cLastScrollTickMs = 0;
+        browseConsumeThumbY = false;
+        browseLastScrollTickMs = 0;
         return;
       }
-      m4cConsumeThumbY = true;  // suppress m3c:scale while we own thumbstick
+      browseConsumeThumbY = true;  // suppress vr:scale while we own thumbstick
 
       const ts = _readThumbstickAxes(activeLaser);
-      if (!ts) { m4cLastScrollTickMs = 0; return; }
+      if (!ts) { browseLastScrollTickMs = 0; return; }
       // xr-standard: stick-up reads as ts.y = -1, stick-down as +1.
       // Deadzone matches M3c's scale gate (0.3) so light drift doesn't scroll.
-      if (Math.abs(ts.y) < 0.3) { m4cLastScrollTickMs = 0; return; }
+      if (Math.abs(ts.y) < 0.3) { browseLastScrollTickMs = 0; return; }
 
       const now = performance.now();
-      const dt = m4cLastScrollTickMs ? Math.min(0.1, (now - m4cLastScrollTickMs) / 1000) : 1 / 60;
-      m4cLastScrollTickMs = now;
+      const dt = browseLastScrollTickMs ? Math.min(0.1, (now - browseLastScrollTickMs) / 1000) : 1 / 60;
+      browseLastScrollTickMs = now;
+
+      // M4c Task 7 Step 6: route the scroll to whichever surface the laser
+      // is hovering on. Pointing at a filter column → scroll that column's
+      // option list; anywhere else on the browse panel → scroll the tile
+      // grid (existing behavior).
+      const scrollTarget = _laserBrowseScrollTarget(activeLaser);
+      if (scrollTarget && scrollTarget.indexOf('list-') === 0) {
+        applyListScroll(scrollTarget.substring(5), ts.y, dt);
+        return;
+      }
+
       // 0.6 m/s at full deflection. Stick DOWN (ts.y = +1) → scroll
       // forward (scrollY INCREASES → tiles shift up → next rows revealed
       // below). Stick UP reverses; scrollY clamps at 0 (top). Matches the
       // mobile "drag down to scroll down" convention requested by the user.
       const rate = 0.6;
       const target = scrollY + ts.y * rate * dt;
-      const clamped = Math.max(0, Math.min(target, m4cMaxScroll));
+      const clamped = Math.max(0, Math.min(target, browseMaxScroll));
       if (Math.abs(clamped - scrollY) < 0.0001) return;
       scrollY = clamped;
       relayoutTiles();
       // Lazy-load when nearing the bottom of currently-loaded content. The
       // 0.5m buffer gives time for the fetch round-trip before the user
       // scrolls past the end.
-      if (m4cState.hasMore && !m4cState.loading && scrollY > m4cMaxScroll - 0.5) {
+      if (browseState.hasMore && !browseState.loading && scrollY > browseMaxScroll - 0.5) {
         fetchGrid(false);
       }
     }
@@ -2805,7 +2940,7 @@ a.chip:hover { background: #3a3a3a; }
       el.addEventListener('mouseup', function() { volActive = false; });
     });
 
-    // Drag sampling itself happens in tickSliders() inside the m4b-tickers
+    // Drag sampling itself happens in tickSliders() inside the panel-tickers
     // component. The cleared listener stays as a backstop: if the laser leaves all
     // targets mid-drag, the matching mouseup fires on whatever the laser
     // landed on (often nothing), so we end the drag here instead.
@@ -3061,12 +3196,12 @@ a.chip:hover { background: #3a3a3a; }
     // the browse-scroll tick from an A-Frame component instead, whose
     // tick() fires inside the scene tick — i.e. after the raycaster has
     // updated its intersections array for this frame.
-    AFRAME.registerComponent('m4c-browse-tick', {
+    AFRAME.registerComponent('browse-tick', {
       tick: function () {
         try { tickBrowseScroll(); } catch (e) { console.warn('stash-vr: tickBrowseScroll', e); }
       },
     });
-    scene.setAttribute('m4c-browse-tick', '');
+    scene.setAttribute('browse-tick', '');
 
     // ============================================================
     // Scrub bar: per-frame fill/thumb advance, drag-to-seek, scene
@@ -3202,7 +3337,7 @@ a.chip:hover { background: #3a3a3a; }
     }
     scene.addEventListener('loaded', buildSceneMarkerDots);
 
-    // Drag sampling happens in tickScrubBar() inside the m4b-tickers
+    // Drag sampling happens in tickScrubBar() inside the panel-tickers
     // component. Keep the cleared listener so a laser that leaves all targets mid-drag ends
     // the scrub cleanly (mouseup may fire on nothing).
     ['vrLaserRight', 'vrLaserLeft'].forEach(id => {
@@ -3460,7 +3595,7 @@ a.chip:hover { background: #3a3a3a; }
     // every render frame — including XR frames, unlike window.rAF which
     // is paused while an XRSession is presenting.
     if (typeof AFRAME !== 'undefined') {
-      AFRAME.registerComponent('m4b-tickers', {
+      AFRAME.registerComponent('panel-tickers', {
         tick: function() {
           const now = performance.now();
           try { tickTimeDisplay(now); } catch (e) { console.warn('stash-vr: tickTimeDisplay', e); }
@@ -3469,7 +3604,7 @@ a.chip:hover { background: #3a3a3a; }
           try { tickSubtitles(); }     catch (e) { console.warn('stash-vr: tickSubtitles', e); }
         }
       });
-      scene.setAttribute('m4b-tickers', '');
+      scene.setAttribute('panel-tickers', '');
     }
 
     // ============================================================
