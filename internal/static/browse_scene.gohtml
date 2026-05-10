@@ -354,12 +354,6 @@ a.chip:hover { background: #3a3a3a; }
                   theta-start="188.15" theta-length="23.10"
                   material="shader: flat; color: #222; opacity: 0.9; side: double">
       </a-cylinder>
-      <a-cylinder class="vr-btn" data-action="filters"
-                  data-label="Filters ▾" data-label-color="#fff" data-label-align="center"
-                  radius="2.97" height="0.16" open-ended="true"
-                  theta-start="177.59" theta-length="8.68"
-                  material="shader: flat; color: #2c5282; opacity: 0.95; side: double">
-      </a-cylinder>
       <a-cylinder class="vr-btn" data-action="filters-clear"
                   data-label="Clear all" data-label-color="#fff" data-label-align="center"
                   radius="2.97" height="0.16" open-ended="true"
@@ -386,6 +380,114 @@ a.chip:hover { background: #3a3a3a; }
     <!-- "Loading more..." sentinel (Task 5 toggles). -->
     <a-text id="vrBrowseLoadMore" value="" align="center" color="#888" width="3"
             position="0 -1.05 0.01" visible="false"></a-text>
+
+    <!-- M4c Task 7: Filters panel — cylindrical extension on the user's
+         right of the browse panel. Shares the panel transform + hub
+         (HUB at panel-local z=3.02), so the new BG arc abuts browse BG
+         seamlessly at θ=137.5. Auto-visible when browse opens (the
+         setSubpanelVisible traverse sets all descendants visible).
+         Browse ✕ cascades-close everything via the same traverse. No
+         dedicated open/close on the filters extension itself.
+
+         Columns extend rightward past the filters BG seam (at θ=137.5)
+         into the browse BG area, so Performer's right edge abuts the
+         browse close button (left at θ=148.75). The lane/header/search
+         cylinders are at smaller R than browse BG (R=3.02), so they
+         render in front of browse BG without z-fighting; the area
+         between rightmost browse tile (θ~147.5) and Performer column
+         is now filled by the Performer lane instead of empty BG.
+         Span: 3 cols × 16.73° + 4 even gaps × 1.64° = 56.75°.
+         Column θ centers: Performer 138.745 (abuts close, 1.64° gap),
+         Tag 120.375 (middle), Studio 102.005 (far right, 1.64° gap to
+         filters BG left edge).
+         Headers/search at y aligned with browse top strip (y=1.0). -->
+    <a-entity id="vrFiltersExtension">
+      <!-- BG cylinder — passive backdrop. No data-action so raycast
+           doesn't snag here when reaching for buttons behind. -->
+      <a-cylinder class="vr-panel-bg"
+                  radius="3.02" height="2.4"
+                  position="0 0 3.02"
+                  theta-start="92" theta-length="45.5"
+                  open-ended="true"
+                  material="shader: flat; side: double; color: #000; opacity: 0.95">
+      </a-cylinder>
+
+      <!-- Per-column lane backgrounds. Slightly lighter shade than the
+           main BG so each column "owns" its vertical strip visibly,
+           even when its list/values are empty. R=3.01 so the lane sits
+           just in front of the BG (R=3.02) without z-fighting. Centered
+           vertically in the area below the search bars and above the
+           value pickers (y=-0.015, height=1.55). -->
+      <a-cylinder radius="3.01" height="1.55" open-ended="true"
+                  position="0 -0.015 3.02"
+                  theta-start="130.38" theta-length="16.73"
+                  material="shader: flat; color: #181828; opacity: 1.0; side: double">
+      </a-cylinder>
+      <a-cylinder radius="3.01" height="1.55" open-ended="true"
+                  position="0 -0.015 3.02"
+                  theta-start="112.01" theta-length="16.73"
+                  material="shader: flat; color: #181828; opacity: 1.0; side: double">
+      </a-cylinder>
+      <a-cylinder radius="3.01" height="1.55" open-ended="true"
+                  position="0 -0.015 3.02"
+                  theta-start="93.64" theta-length="16.73"
+                  material="shader: flat; color: #181828; opacity: 1.0; side: double">
+      </a-cylinder>
+
+      <!-- Column headers (y=1.0, same as browse top strip). -->
+      <a-entity id="vrFiltersHeadersStrip" position="0 1.0 3.02">
+        <a-cylinder data-label="Performer" data-label-color="#fff" data-label-align="center"
+                    radius="2.97" height="0.16" open-ended="true"
+                    theta-start="130.38" theta-length="16.73"
+                    material="shader: flat; color: #1a365d; opacity: 0.95; side: double">
+        </a-cylinder>
+        <a-cylinder data-label="Tag" data-label-color="#fff" data-label-align="center"
+                    radius="2.97" height="0.16" open-ended="true"
+                    theta-start="112.01" theta-length="16.73"
+                    material="shader: flat; color: #1a365d; opacity: 0.95; side: double">
+        </a-cylinder>
+        <a-cylinder data-label="Studio" data-label-color="#fff" data-label-align="center"
+                    radius="2.97" height="0.16" open-ended="true"
+                    theta-start="93.64" theta-length="16.73"
+                    material="shader: flat; color: #1a365d; opacity: 0.95; side: double">
+        </a-cylinder>
+      </a-entity>
+
+      <!-- Per-column search bars (y=0.82, just below headers). -->
+      <a-entity id="vrFiltersSearchStrip" position="0 0.82 3.02">
+        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="performer"
+                    data-label="Search…" data-label-color="#888" data-label-align="left"
+                    radius="2.97" height="0.10" open-ended="true"
+                    theta-start="130.38" theta-length="16.73"
+                    material="shader: flat; color: #222; opacity: 0.9; side: double">
+        </a-cylinder>
+        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="tag"
+                    data-label="Search…" data-label-color="#888" data-label-align="left"
+                    radius="2.97" height="0.10" open-ended="true"
+                    theta-start="112.01" theta-length="16.73"
+                    material="shader: flat; color: #222; opacity: 0.9; side: double">
+        </a-cylinder>
+        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="studio"
+                    data-label="Search…" data-label-color="#888" data-label-align="left"
+                    radius="2.97" height="0.10" open-ended="true"
+                    theta-start="93.64" theta-length="16.73"
+                    material="shader: flat; color: #222; opacity: 0.9; side: double">
+        </a-cylinder>
+      </a-entity>
+
+      <!-- Per-column list roots (JS populates row cylinders). data-col-*
+           lets the renderer place each row at the column's theta. -->
+      <a-entity id="vrFiltersList-performer" data-col-theta="130.38" data-col-length="16.73" position="0 0 3.02"></a-entity>
+      <a-entity id="vrFiltersList-tag"       data-col-theta="112.01" data-col-length="16.73" position="0 0 3.02"></a-entity>
+      <a-entity id="vrFiltersList-studio"    data-col-theta="93.64"  data-col-length="16.73" position="0 0 3.02"></a-entity>
+
+      <!-- Bottom value-picker row (JS populates Favorites/Stars/O-Counter). -->
+      <a-entity id="vrFiltersValuesStrip" position="0 -0.85 3.02"></a-entity>
+
+      <!-- Active-filter chips strip — JS populates dynamically. Placed
+           below the value row, near the cylinder's bottom edge. -->
+      <a-entity id="vrFiltersChipsStrip" position="0 -1.05 3.02"></a-entity>
+    </a-entity>
 
   </a-entity>
 
@@ -1219,7 +1321,10 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function applyAllCurvedLabels() {
-      document.querySelectorAll('#vrBrowseTopStrip > a-cylinder').forEach(curveLabelInto);
+      // Any cylinder carrying data-label gets a curved per-character
+      // label. Catches the browse top strip + the new filters extension
+      // strips + any future dynamically-added curved button.
+      document.querySelectorAll('a-cylinder[data-label]').forEach(curveLabelInto);
     }
     // Apply once after scene is ready (so a-cylinder primitives have parsed
     // their attributes and we can read radius / theta-* from them).
@@ -1934,7 +2039,12 @@ a.chip:hover { background: #3a3a3a; }
           if (willShow) onBrowsePanelOpen();
         }
       } else if (action === 'browse-close') {
+        // Cascade closes the filters extension too via the
+        // setSubpanelVisible traverse (filters is a child of browse).
         setSubpanelVisible('vrBrowsePanel', false);
+      } else if (action === 'picker-search-focus') {
+        // Stub — Step 5 of Task 7 wires this to retarget the hidden
+        // <input> at the tapped column. No-op for now.
       } else if (action === 'toggle-debug-overlay') {
         // Not a sub-panel — no raycast targets, so direct setAttribute is fine.
         const dbg = document.getElementById('vrDebugOverlay');
