@@ -1406,10 +1406,32 @@ a.chip:hover { background: #3a3a3a; }
         }, debounceMs);
       });
 
-      // Enter dismisses Quest's keyboard but keeps the panel open.
-      si.addEventListener('keydown', function(ev) {
-        if (ev.key === 'Enter') si.blur();
-      });
+      // Quest's keyboard delivers chars via IME (keydown reports
+      // keyCode 229, no usable key name), so we cannot detect specific
+      // keys like Enter or its X dismiss button. Both leave state
+      // intact; vrAction's search-focus handlers clear the target on
+      // each tap so re-engaging the bar is always a fresh start.
+
+      // Helper for vrAction's search-focus handlers (Step 5): tapping
+      // a search bar clears the matching target so Quest's keyboard
+      // (which always pops empty regardless of input.value) starts fresh.
+      function clearSearchTarget(target) {
+        si.value = '';
+        let bg;
+        if (target === 'grid') {
+          bg = document.querySelector('a-cylinder.vr-search-bg[data-action="search-focus"]');
+        } else if (target.indexOf('picker-') === 0) {
+          const kind = target.slice(7);
+          bg = document.querySelector('a-cylinder.vr-search-bg[data-action="picker-search-focus"][data-picker-kind="' + kind + '"]');
+        }
+        if (bg) {
+          bg.setAttribute('data-label', 'Search…');
+          bg.setAttribute('data-label-color', '#888');
+          curveLabelInto(bg);
+        }
+      }
+      // Expose so vrAction can call it.
+      window._m4cClearSearchTarget = clearSearchTarget;
 
       // Browse panel closes → drop focus so the keyboard hides.
       const bp = document.getElementById('vrBrowsePanel');
@@ -2456,17 +2478,24 @@ a.chip:hover { background: #3a3a3a; }
         setSubpanelVisible('vrBrowsePanel', false);
       } else if (action === 'picker-search-focus') {
         // Step 5: retarget the hidden <input> at the tapped column.
-        // wireSearchInput's input handler reads m4cState.overlayTarget
-        // and dispatches updates to the matching pickerQuery + column.
+        // Tap-to-clear: wipe target's state slot + curved label + input
+        // before focusing, so Quest's always-empty keyboard pop matches
+        // a clean state. Existing filtered results refresh accordingly.
         const kind = el && el.dataset && el.dataset.pickerKind;
         if (!kind) return;
         m4cState.overlayTarget = 'picker-' + kind;
         m4cState.lastScrollFocus = 'list-' + kind;
-        const si = document.getElementById('vrSearchInput');
-        if (si) {
-          si.value = m4cState.pickerQuery[kind] || '';
-          si.focus();
+        const had = m4cState.pickerQuery[kind] !== '';
+        m4cState.pickerQuery[kind] = '';
+        if (typeof window._m4cClearSearchTarget === 'function') {
+          window._m4cClearSearchTarget('picker-' + kind);
         }
+        if (had) {
+          m4cState.listScrollY[kind] = 0;
+          renderColumnList(kind);
+        }
+        const si = document.getElementById('vrSearchInput');
+        if (si) si.focus();
       } else if (action === 'filters-clear') {
         // M4c Task 7: "Clear all" wipes every filter (incl. q + arrays),
         // resets in-VR search input/labels, re-renders chips + per-column
@@ -2504,15 +2533,18 @@ a.chip:hover { background: #3a3a3a; }
           dbg.setAttribute('visible', !(v === true || v === 'true'));
         }
       } else if (action === 'search-focus') {
-        // Retarget the hidden <input> at the grid search. Same input
-        // element as picker searches; m4cState.overlayTarget tells the
-        // input listener which state to update on type.
+        // Retarget the hidden <input> at the grid search. Tap-to-clear:
+        // wipe q + curved label + input value before focusing so the
+        // empty Quest keyboard pop matches a clean state.
         m4cState.overlayTarget = 'grid';
-        const si = document.getElementById('vrSearchInput');
-        if (si) {
-          si.value = m4cState.q || '';
-          si.focus();
+        const had = m4cState.q !== '';
+        m4cState.q = '';
+        if (typeof window._m4cClearSearchTarget === 'function') {
+          window._m4cClearSearchTarget('grid');
         }
+        if (had) fetchGrid(true);
+        const si = document.getElementById('vrSearchInput');
+        if (si) si.focus();
       } else if (action === 'cols-cycle') {
         m4cCols = (m4cCols >= 6) ? 3 : (m4cCols + 1);
         localStorage.setItem('m4c.cols', String(m4cCols));
