@@ -20,9 +20,11 @@ import (
 func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	searchQ := q.Get("q")
-	performer := q.Get("performer")
-	studio := q.Get("studio")
-	tag := q.Get("tag")
+	// Multi-value: in-VR picker allows AND-selection across multiple
+	// performers/studios/tags. The Stash GraphQL filters take string slices.
+	performers := q["performer"]
+	studios := q["studio"]
+	tags := q["tag"]
 	favorite := q.Get("favorite")
 	starsMin, _ := strconv.Atoi(q.Get("stars"))
 	ocountMin, _ := strconv.Atoi(q.Get("ocount"))
@@ -39,7 +41,7 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = favorite // favorite filter deferred — see plan note.
 
-	sceneFilter := buildGridFilter(performer, studio, tag, starsMin, ocountMin)
+	sceneFilter := buildGridFilter(performers, studios, tags, starsMin, ocountMin)
 	ids, total, err := fetchSceneIDsWithSize(r.Context(), h.libraryService.StashClient, sceneFilter, searchQ, page, perPage)
 	if err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: grid fetchSceneIDs")
@@ -91,8 +93,9 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildGridFilter composes a SceneFilterType from URL params. Each
-// individual filter is optional; when no params are set the function
-// returns nil so fetchSceneIDs runs without a sceneFilter.
+// kind is a slice (multi-select); empty slice means "no filter for that
+// kind". When everything is empty/zero the function returns nil so
+// fetchSceneIDs runs without a sceneFilter.
 //
 // Stars: Stash's rating100 uses 0-100; map starsMin (1..5) to a
 // strict-greater-than threshold of starsMin*20 - 1 so a filter of
@@ -100,27 +103,33 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 //
 // O-count: same trick — strict-greater-than (ocountMin - 1) is
 // equivalent to "at least ocountMin".
-func buildGridFilter(performer, studio, tag string, starsMin, ocountMin int) *gql.SceneFilterType {
-	if performer == "" && studio == "" && tag == "" && starsMin == 0 && ocountMin == 0 {
+//
+// MultiCriterionInput / HierarchicalMultiCriterionInput with multiple
+// IDs in Value behave as AND across the IDs (Stash's "Includes" modifier
+// requires all listed IDs on the scene), which matches the in-VR UX
+// expectation of "scenes with Alice AND Bob" / "scenes tagged POV AND
+// Outdoor".
+func buildGridFilter(performers, studios, tags []string, starsMin, ocountMin int) *gql.SceneFilterType {
+	if len(performers) == 0 && len(studios) == 0 && len(tags) == 0 && starsMin == 0 && ocountMin == 0 {
 		return nil
 	}
 	f := &gql.SceneFilterType{}
-	if performer != "" {
+	if len(performers) > 0 {
 		f.Performers = &gql.MultiCriterionInput{
-			Value:    []string{performer},
+			Value:    performers,
 			Modifier: gql.CriterionModifierIncludes,
 		}
 	}
-	if studio != "" {
+	if len(studios) > 0 {
 		f.Studios = &gql.HierarchicalMultiCriterionInput{
-			Value:    []string{studio},
+			Value:    studios,
 			Modifier: gql.CriterionModifierIncludes,
 			Depth:    util.Ptr(-1),
 		}
 	}
-	if tag != "" {
+	if len(tags) > 0 {
 		f.Tags = &gql.HierarchicalMultiCriterionInput{
-			Value:    []string{tag},
+			Value:    tags,
 			Modifier: gql.CriterionModifierIncludes,
 			Depth:    util.Ptr(-1),
 		}

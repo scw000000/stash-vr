@@ -1391,13 +1391,17 @@ a.chip:hover { background: #3a3a3a; }
     // M4c Task 4: in-VR browse grid state + tile rendering on a cylinder curve.
     const m4cState = {
       q: '',
-      filters: { performer: '', studio: '', tag: '', favorite: '', stars: 0, ocount: 0 },
+      // performer/studio/tag are arrays for multi-select; favorite/stars/
+      // ocount stay scalar. filterNames is parallel-indexed with the id
+      // arrays so we can show readable labels in the per-column "selected"
+      // sub-lists without re-fetching options.
+      filters: { performer: [], studio: [], tag: [], favorite: '', stars: 0, ocount: 0 },
+      filterNames: { performer: [], studio: [], tag: [] },
       cursor: '1',
       tiles: [],   // accumulated GridTile[]
       hasMore: true,
       loading: false,
       // M4c Task 7 additions:
-      filterNames:    { performer: '', studio: '', tag: '' },        // display names for chips
       cachedOptions:  {},                                            // kind → [{id,name}, ...] (Step 3)
       pickerQuery:    { performer: '', studio: '', tag: '' },        // per-column search text (Step 5)
       listScrollY:    { performer: 0, studio: 0, tag: 0 },           // per-column scroll (Step 6)
@@ -1407,9 +1411,11 @@ a.chip:hover { background: #3a3a3a; }
     function buildGridParams() {
       const p = new URLSearchParams();
       if (m4cState.q) p.set('q', m4cState.q);
-      if (m4cState.filters.performer) p.set('performer', m4cState.filters.performer);
-      if (m4cState.filters.studio)    p.set('studio',    m4cState.filters.studio);
-      if (m4cState.filters.tag)       p.set('tag',       m4cState.filters.tag);
+      // Multi-value: server reads q.URL.Query()["performer"] (etc.) which
+      // returns all values for that param. Each .append adds another.
+      m4cState.filters.performer.forEach(id => p.append('performer', id));
+      m4cState.filters.studio.forEach(id    => p.append('studio',    id));
+      m4cState.filters.tag.forEach(id       => p.append('tag',       id));
       if (m4cState.filters.favorite)  p.set('favorite',  m4cState.filters.favorite);
       if (m4cState.filters.stars > 0) p.set('stars',     String(m4cState.filters.stars));
       if (m4cState.filters.ocount > 0) p.set('ocount',   String(m4cState.filters.ocount));
@@ -1461,12 +1467,11 @@ a.chip:hover { background: #3a3a3a; }
     // y=-1.05). Each represents one active filter; tap a chip to clear that
     // filter. The chip strip is empty when no filters are active.
 
+    // Chips show only favorite/stars/ocount filters now (performer/studio/
+    // tag are visualized per-column in their respective lane via the
+    // selected sub-list, so duplicating them as chips is redundant).
     function chipLabel(kind) {
-      const fn = m4cState.filterNames;
       const f  = m4cState.filters;
-      if (kind === 'performer') return fn.performer ? 'Performer: ' + fn.performer : '';
-      if (kind === 'studio')    return fn.studio    ? 'Studio: '    + fn.studio    : '';
-      if (kind === 'tag')       return fn.tag       ? 'Tag: '       + fn.tag       : '';
       if (kind === 'favorite' && f.favorite === 'only') return 'Favorites: Only';
       if (kind === 'favorite' && f.favorite === 'not')  return 'Favorites: Not';
       if (kind === 'stars'    && f.stars > 0) return 'Stars: ' + (f.stars === 5 ? '5 only' : f.stars + '+');
@@ -1475,10 +1480,7 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function clearChip(kind) {
-      if (kind === 'performer' || kind === 'studio' || kind === 'tag') {
-        m4cState.filters[kind] = '';
-        m4cState.filterNames[kind] = '';
-      } else if (kind === 'favorite') {
+      if (kind === 'favorite') {
         m4cState.filters.favorite = '';
       } else if (kind === 'stars') {
         m4cState.filters.stars = 0;
@@ -1498,7 +1500,7 @@ a.chip:hover { background: #3a3a3a; }
       const root = document.getElementById('vrFiltersChipsStrip');
       if (!root) return;
       while (root.firstChild) root.removeChild(root.firstChild);
-      const kinds = ['performer', 'studio', 'tag', 'favorite', 'stars', 'ocount'];
+      const kinds = ['favorite', 'stars', 'ocount'];
       const items = kinds.map(k => ({ kind: k, label: chipLabel(k) })).filter(o => o.label);
       if (items.length === 0) {
         // Nothing to render; raycaster targets unchanged.
@@ -1528,9 +1530,15 @@ a.chip:hover { background: #3a3a3a; }
         chip.setAttribute('theta-length', widthDeg.toFixed(3));
         chip.setAttribute('material', 'shader: flat; color: #3776c2; opacity: 1.0; side: double');
         root.appendChild(chip);
-        // curveLabelInto reads radius/theta-* off the cylinder; defer one
-        // tick so A-Frame has parsed the attributes we just set.
-        requestAnimationFrame(() => curveLabelInto(chip));
+        // Place curved label directly to avoid the getAttribute round-trip
+        // that fails on freshly-created a-cylinder primitives.
+        placeCurvedString(chip, text, {
+          R: 2.97,
+          thetaStartDeg: thetaStart,
+          thetaLengthDeg: widthDeg,
+          color: '#fff',
+          y: 0,
+        }, 'curved-chip-char');
         // Click: clears this chip's filter.
         chip.addEventListener('click', () => clearChip(kind));
         cursor = thetaStart - GAP_DEG;
@@ -1541,6 +1549,199 @@ a.chip:hover { background: #3a3a3a; }
     }
     // Initial render (empty state — no chips until a filter is applied).
     renderActiveChips();
+
+    // ─── M4c Task 7 Step 3: per-column lists ──────────────────────────────
+    // Each column root (#vrFiltersList-{kind}) holds row cylinders. Rows
+    // share the column's theta range (data-col-theta / data-col-length)
+    // and stack vertically below the search bar. Tap a row → toggles that
+    // filter; chip appears at the bottom and grid refetches.
+
+    const LIST_ROW_H    = 0.10;    // row pitch (height + small gap)
+    const LIST_ROW_GEOM_H = 0.09;  // row cylinder height (leaves 0.01 gap)
+    const LIST_TOP_Y    = 0.70;    // y of first regular row's center (below search bar at y=0.82)
+    const LIST_REGULAR_BOTTOM_Y = -0.10;  // last regular row center (8 visible: 0.7 → -0.1 step 0.1)
+    const LIST_SELECTED_TOP_Y   = -0.25;  // first selected sub-list row center (gap 0.05 below regular)
+    const LIST_SELECTED_BOTTOM_Y = -0.75; // last selected row center (6 visible: -0.25 → -0.75 step 0.1)
+    const LIST_VISIBLE_REGULAR  = Math.floor((LIST_TOP_Y - LIST_REGULAR_BOTTOM_Y) / LIST_ROW_H) + 1; // 9
+    const LIST_VISIBLE_SELECTED = Math.floor((LIST_SELECTED_TOP_Y - LIST_SELECTED_BOTTOM_Y) / LIST_ROW_H) + 1; // 6
+
+    function ensureCachedOptions(kind) {
+      return new Promise(resolve => {
+        if (m4cState.cachedOptions[kind]) { resolve(m4cState.cachedOptions[kind]); return; }
+        fetch('/browse/filter-options/' + kind, { headers: { 'Accept': 'application/json' } })
+          .then(r => r.json())
+          .then(opts => { m4cState.cachedOptions[kind] = opts || []; resolve(m4cState.cachedOptions[kind]); })
+          .catch(err => { console.warn('stash-vr: filter options fetch failed', err); resolve([]); });
+      });
+    }
+
+    // Render `text` to a HTMLCanvas via the system font (Quest's Meta
+     // Browser includes CJK fallbacks, so this works for any unicode).
+    // Returns a Three.js CanvasTexture ready to bind to a material.
+    function renderTextToCanvas(text, opts) {
+      const canvas = document.createElement('canvas');
+      canvas.width = opts.canvasW || 1024;
+      canvas.height = opts.canvasH || 96;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const fontPx = opts.fontPx || 56;
+      ctx.font = fontPx + 'px sans-serif';
+      ctx.fillStyle = opts.color || '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Truncate with ellipsis if it doesn't fit.
+      let draw = text || '';
+      const maxW = canvas.width - 20;
+      if (ctx.measureText(draw).width > maxW) {
+        while (draw.length > 1 && ctx.measureText(draw + '…').width > maxW) {
+          draw = draw.slice(0, -1);
+        }
+        draw = draw + '…';
+      }
+      ctx.fillText(draw, canvas.width / 2, canvas.height / 2);
+      const tex = new AFRAME.THREE.CanvasTexture(canvas);
+      tex.minFilter = AFRAME.THREE.LinearFilter;
+      tex.magFilter = AFRAME.THREE.LinearFilter;
+      return tex;
+    }
+
+    // Attach a flat <a-plane> child carrying a canvas-texture label,
+    // positioned at the column's theta center on the row's R surface and
+    // rotated to face the cylinder axis. Replaces placeCurvedString for
+    // dynamic row labels so non-ASCII glyphs (Japanese/Korean/Chinese)
+    // render via the system font instead of A-Frame's CJK-less MSDF
+    // default. Per ~16° column arc the chord-vs-arc deviation is small
+    // enough that a flat plane is visually indistinguishable from
+    // per-character curving.
+    function attachRowLabel(parent, text, colTheta, colLen) {
+      const R = 2.97 - 0.005;
+      const centerDeg = colTheta + colLen / 2;
+      const centerRad = centerDeg * Math.PI / 180;
+      const px = R * Math.sin(centerRad);
+      const pz = R * Math.cos(centerRad);
+      const yaw = centerDeg - 180;
+      const chordW = 2 * R * Math.sin((colLen / 2) * Math.PI / 180);
+      const planeH = LIST_ROW_GEOM_H - 0.01;
+
+      const plane = document.createElement('a-plane');
+      plane.setAttribute('width', chordW.toFixed(3));
+      plane.setAttribute('height', planeH.toFixed(3));
+      plane.setAttribute('position', px.toFixed(3) + ' 0 ' + pz.toFixed(3));
+      plane.setAttribute('rotation', '0 ' + yaw.toFixed(2) + ' 0');
+      plane.setAttribute('material', 'shader: flat; transparent: true; opacity: 1; color: #fff');
+
+      // Aspect-ratio-matched canvas to keep glyphs un-stretched.
+      const canvasW = 1024;
+      const canvasH = Math.max(48, Math.round(canvasW * planeH / chordW));
+      const tex = renderTextToCanvas(text, { canvasW: canvasW, canvasH: canvasH });
+      plane.addEventListener('loaded', function() {
+        const mesh = plane.getObject3D('mesh');
+        if (mesh) {
+          mesh.material = new AFRAME.THREE.MeshBasicMaterial({
+            map: tex, transparent: true, side: AFRAME.THREE.DoubleSide,
+          });
+          mesh.material.needsUpdate = true;
+        }
+      });
+      parent.appendChild(plane);
+      return plane;
+    }
+
+    // Helper: build one row cylinder + canvas-texture label + click handler.
+    // Used by both the regular list and the selected sub-list.
+    function makeFilterRow(kind, opt, y, colTheta, colLen, isSelected) {
+      const row = document.createElement('a-cylinder');
+      row.classList.add('vr-btn');
+      row.dataset.optId = String(opt.id);
+      row.setAttribute('radius', '2.97');
+      row.setAttribute('height', LIST_ROW_GEOM_H.toString());
+      row.setAttribute('open-ended', 'true');
+      row.setAttribute('theta-start', colTheta.toString());
+      row.setAttribute('theta-length', colLen.toString());
+      row.setAttribute('position', '0 ' + y.toFixed(3) + ' 0');
+      row.setAttribute('material',
+        'shader: flat; color: ' + (isSelected ? '#3776c2' : '#222') + '; opacity: 1.0; side: double');
+      attachRowLabel(row, opt.name || '', colTheta, colLen);
+      row.addEventListener('click', function() {
+        m4cState.lastScrollFocus = 'list-' + kind;
+        applyFilterPick(kind, opt.id, opt.name);
+      });
+      return row;
+    }
+
+    function renderColumnList(kind) {
+      const root = document.getElementById('vrFiltersList-' + kind);
+      if (!root) return;
+      const colTheta = parseFloat(root.getAttribute('data-col-theta'));
+      const colLen   = parseFloat(root.getAttribute('data-col-length'));
+      if (!isFinite(colTheta) || !isFinite(colLen)) return;
+
+      ensureCachedOptions(kind).then(opts => {
+        if (!root.parentNode) return; // panel torn down
+        while (root.firstChild) root.removeChild(root.firstChild);
+
+        const q = (m4cState.pickerQuery[kind] || '').trim().toLowerCase();
+        const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
+        const scrollY = m4cState.listScrollY[kind] || 0;
+        const selectedIds = m4cState.filters[kind] || [];
+        const selectedNames = m4cState.filterNames[kind] || [];
+
+        // Regular options list — top of column, scrollable. Visible band
+        // is [LIST_TOP_Y, LIST_REGULAR_BOTTOM_Y]; rows outside are culled.
+        filtered.forEach((opt, i) => {
+          const y = LIST_TOP_Y - i * LIST_ROW_H + scrollY;
+          if (y > LIST_TOP_Y + LIST_ROW_H/2 || y < LIST_REGULAR_BOTTOM_Y - LIST_ROW_H/2) return;
+          const isSelected = selectedIds.indexOf(String(opt.id)) >= 0 || selectedIds.indexOf(opt.id) >= 0;
+          root.appendChild(makeFilterRow(kind, opt, y, colTheta, colLen, isSelected));
+        });
+
+        // Selected sub-list — bottom of column. One row per active filter
+        // for this kind, always blue, click toggles off (calls applyFilterPick
+        // which sees the id is present and removes it). Same dimensions as
+        // regular rows. Caps at LIST_VISIBLE_SELECTED to avoid spilling
+        // past the lane bottom; surplus selections live in state but aren't
+        // shown until user clears something.
+        selectedIds.slice(0, LIST_VISIBLE_SELECTED).forEach((id, i) => {
+          const name = selectedNames[i] || '';
+          const y = LIST_SELECTED_TOP_Y - i * LIST_ROW_H;
+          root.appendChild(makeFilterRow(kind, { id: id, name: name }, y, colTheta, colLen, true));
+        });
+
+        updateRaycasterTargets();
+      });
+    }
+
+    function applyFilterPick(kind, id, name) {
+      if (kind === 'performer' || kind === 'studio' || kind === 'tag') {
+        // Multi-select toggle: present → remove, absent → append.
+        const ids = m4cState.filters[kind];
+        const names = m4cState.filterNames[kind];
+        const idx = ids.indexOf(id);
+        if (idx >= 0) {
+          ids.splice(idx, 1);
+          names.splice(idx, 1);
+        } else {
+          ids.push(id);
+          names.push(name);
+        }
+        renderColumnList(kind);
+      } else if (kind === 'favorite') {
+        m4cState.filters.favorite = m4cState.filters.favorite === id ? '' : id;
+      } else if (kind === 'stars') {
+        const n = parseInt(id || '0', 10);
+        m4cState.filters.stars = m4cState.filters.stars === n ? 0 : n;
+      } else if (kind === 'ocount') {
+        const n = parseInt(id || '0', 10);
+        m4cState.filters.ocount = m4cState.filters.ocount === n ? 0 : n;
+      }
+      renderActiveChips();
+      fetchGrid(true);
+    }
+
+    // Initial population of all 3 columns happens lazily via
+    // onBrowsePanelOpen below (the column lists are useless until the
+    // panel is actually shown, and we don't want to fetch /browse/filter-
+    // options until then).
 
     // Tile rendering geometry. Computed at relayout time from m4cCols
     // and the panel's usable area. Constants here are the layout *parameters*;
@@ -2080,6 +2281,9 @@ a.chip:hover { background: #3a3a3a; }
         }
       });
       fetchGrid(true);
+      // M4c Task 7 Step 3: populate filter columns. ensureCachedOptions
+      // dedupes the network call so reopening the panel is free.
+      ['performer', 'tag', 'studio'].forEach(renderColumnList);
     }
 
     function vrAction(action) {
@@ -2138,11 +2342,12 @@ a.chip:hover { background: #3a3a3a; }
         // Stub — Step 5 of Task 7 wires this to retarget the hidden
         // <input> at the tapped column. No-op for now.
       } else if (action === 'filters-clear') {
-        // M4c Task 7 Step 2: "Clear all" wipes every filter (incl. q),
-        // resets in-VR search input/labels, re-renders chips, refetches.
+        // M4c Task 7: "Clear all" wipes every filter (incl. q + arrays),
+        // resets in-VR search input/labels, re-renders chips + per-column
+        // lists, refetches.
         m4cState.q = '';
-        m4cState.filters     = { performer: '', studio: '', tag: '', favorite: '', stars: 0, ocount: 0 };
-        m4cState.filterNames = { performer: '', studio: '', tag: '' };
+        m4cState.filters     = { performer: [], studio: [], tag: [], favorite: '', stars: 0, ocount: 0 };
+        m4cState.filterNames = { performer: [], studio: [], tag: [] };
         m4cState.pickerQuery = { performer: '', studio: '', tag: '' };
         const si = document.getElementById('vrSearchInput');
         if (si) si.value = '';
@@ -2158,6 +2363,7 @@ a.chip:hover { background: #3a3a3a; }
           curveLabelInto(bg);
         });
         renderActiveChips();
+        ['performer', 'tag', 'studio'].forEach(renderColumnList);
         fetchGrid(true);
       } else if (action === 'filter-chip-clear') {
         // The chip's own click handler already calls clearChip(kind);
