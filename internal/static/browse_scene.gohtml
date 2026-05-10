@@ -3844,35 +3844,38 @@ a.chip:hover { background: #3a3a3a; }
     // Delegated click handler for tile interactions. Tiles are created
     // dynamically by relayoutTiles, so a single delegate on vrBrowseTiles
     // catches every cover/badge tap without needing per-tile binding.
+    // Also expose swapToScene on window for CDP-based debugging.
+    window._svSwapToScene = swapToScene;
     (function wireTileClicks() {
       const tilesRoot = document.getElementById('vrBrowseTiles');
-      if (!tilesRoot) return;
+      if (!tilesRoot) {
+        console.warn('stash-vr: wireTileClicks no tilesRoot');
+        return;
+      }
+      console.warn('stash-vr: wireTileClicks attaching');
       tilesRoot.addEventListener('click', function(evt) {
-        let detail = evt.target;
-        while (detail && !(detail.classList && detail.classList.contains('vr-tile-detail'))) {
-          if (detail === tilesRoot) { detail = null; break; }
-          detail = detail.parentElement;
+        console.warn('stash-vr: tile-click handler fired target=' +
+          ((evt.target && evt.target.tagName) || '?') + '.' +
+          ((evt.target && evt.target.className) || ''));
+        const tileEl = evt.target && evt.target.closest && evt.target.closest('.vr-tile');
+        if (!tileEl) {
+          console.warn('stash-vr: tile-click no tileEl');
+          return;
         }
-        if (detail) {
-          const tileEl = detail.closest('.vr-tile');
-          if (tileEl && typeof window.openDetailPanel === 'function') {
+        const isDetail = evt.target.closest('.vr-tile-detail');
+        if (isDetail) {
+          if (typeof window.openDetailPanel === 'function') {
             window.openDetailPanel(tileEl.dataset.sceneId);
           }
           return;
         }
-        let cover = evt.target;
-        while (cover && !(cover.classList && cover.classList.contains('vr-tile-cover'))) {
-          if (cover === tilesRoot) { cover = null; break; }
-          cover = cover.parentElement;
+        const isCover = evt.target.closest('.vr-tile-cover');
+        if (!isCover) {
+          console.warn('stash-vr: tile-click neither cover nor detail');
+          return;
         }
-        if (cover) {
-          const tileEl = cover.closest('.vr-tile');
-          if (!tileEl) return;
-          // tileTitle was stamped on the tile entity at creation time
-          // (relayoutTiles), so swapToScene can read it for the
-          // optimistic title update before /meta returns.
-          swapToScene(tileEl);
-        }
+        console.warn('stash-vr: tile-click → swapToScene id=' + tileEl.dataset.sceneId);
+        swapToScene(tileEl);
       });
     })();
 
