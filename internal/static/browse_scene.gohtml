@@ -1354,26 +1354,56 @@ a.chip:hover { background: #3a3a3a; }
     (function wireSearchInput() {
       const si = document.getElementById('vrSearchInput');
       if (!si) return;
-      const bg = document.querySelector('.vr-search-bg');
       let timer = null;
 
-      function updateSearchLabel() {
+      // Find the curved cylinder that should mirror the typed text for
+      // whichever search input is currently active. Browse top-strip
+      // search-bg for grid; per-column picker-search-bg for picker
+      // queries. m4cState may not be initialized yet at module-load
+      // time, so default to 'grid'.
+      function activeBg() {
+        const target = (m4cState && m4cState.overlayTarget) || 'grid';
+        if (target === 'grid') {
+          return document.querySelector('a-cylinder.vr-search-bg[data-action="search-focus"]');
+        }
+        if (target.indexOf('picker-') === 0) {
+          const kind = target.slice(7);
+          return document.querySelector('a-cylinder.vr-search-bg[data-action="picker-search-focus"][data-picker-kind="' + kind + '"]');
+        }
+        return null;
+      }
+
+      function updateActiveSearchLabel(text) {
+        const bg = activeBg();
         if (!bg) return;
-        const v = si.value;
-        bg.setAttribute('data-label', v || 'Search…');
-        bg.setAttribute('data-label-color', v ? '#fff' : '#888');
+        bg.setAttribute('data-label', text || 'Search…');
+        bg.setAttribute('data-label-color', text ? '#fff' : '#888');
         curveLabelInto(bg);
       }
 
       si.addEventListener('input', function() {
-        updateSearchLabel();
+        updateActiveSearchLabel(si.value);
         if (timer) clearTimeout(timer);
+        const target = (m4cState && m4cState.overlayTarget) || 'grid';
+        // Picker search is local-only (filters cached options, no
+        // network), so a tighter debounce feels snappier. Grid search
+        // hits the backend each time so 250ms balances feel vs cost.
+        const debounceMs = (target === 'grid') ? 250 : 100;
         timer = setTimeout(function() {
-          const q = si.value.trim();
-          if (q === m4cState.q) return;
-          m4cState.q = q;
-          fetchGrid(true);
-        }, 250);
+          if (target === 'grid') {
+            const q = si.value.trim();
+            if (q === m4cState.q) return;
+            m4cState.q = q;
+            fetchGrid(true);
+          } else if (target.indexOf('picker-') === 0) {
+            const kind = target.slice(7);
+            const q = si.value;
+            if (q === m4cState.pickerQuery[kind]) return;
+            m4cState.pickerQuery[kind] = q;
+            m4cState.listScrollY[kind] = 0; // reset per-column scroll on filter change
+            renderColumnList(kind);
+          }
+        }, debounceMs);
       });
 
       // Enter dismisses Quest's keyboard but keeps the panel open.
@@ -1410,7 +1440,8 @@ a.chip:hover { background: #3a3a3a; }
       cachedOptions:  {},                                            // kind → [{id,name}, ...] (Step 3)
       pickerQuery:    { performer: '', studio: '', tag: '' },        // per-column search text (Step 5)
       listScrollY:    { performer: 0, studio: 0, tag: 0 },           // per-column scroll (Step 6)
-      lastScrollFocus: 'grid'                                         // 'grid' | 'list-<kind>' | 'none'
+      lastScrollFocus: 'grid',                                        // 'grid' | 'list-<kind>' | 'none'
+      overlayTarget:  'grid'                                          // 'grid' | 'picker-<kind>' (Step 5)
     };
 
     function buildGridParams() {
@@ -2371,7 +2402,7 @@ a.chip:hover { background: #3a3a3a; }
       ['performer', 'tag', 'studio'].forEach(renderColumnList);
     }
 
-    function vrAction(action) {
+    function vrAction(action, el) {
       if (action === 'playpause') {
         if (video.paused) {
           const p = video.play();
@@ -2424,8 +2455,18 @@ a.chip:hover { background: #3a3a3a; }
         // setSubpanelVisible traverse (filters is a child of browse).
         setSubpanelVisible('vrBrowsePanel', false);
       } else if (action === 'picker-search-focus') {
-        // Stub — Step 5 of Task 7 wires this to retarget the hidden
-        // <input> at the tapped column. No-op for now.
+        // Step 5: retarget the hidden <input> at the tapped column.
+        // wireSearchInput's input handler reads m4cState.overlayTarget
+        // and dispatches updates to the matching pickerQuery + column.
+        const kind = el && el.dataset && el.dataset.pickerKind;
+        if (!kind) return;
+        m4cState.overlayTarget = 'picker-' + kind;
+        m4cState.lastScrollFocus = 'list-' + kind;
+        const si = document.getElementById('vrSearchInput');
+        if (si) {
+          si.value = m4cState.pickerQuery[kind] || '';
+          si.focus();
+        }
       } else if (action === 'filters-clear') {
         // M4c Task 7: "Clear all" wipes every filter (incl. q + arrays),
         // resets in-VR search input/labels, re-renders chips + per-column
@@ -2463,12 +2504,15 @@ a.chip:hover { background: #3a3a3a; }
           dbg.setAttribute('visible', !(v === true || v === 'true'));
         }
       } else if (action === 'search-focus') {
-        // Focus the hidden <input>. Quest's Meta Browser auto-pops the
-        // system VR keyboard on input focus even though it refuses the
-        // WebXR DOM Overlay Module — the input is invisible, we mirror
-        // its value onto the curved search-bar label.
+        // Retarget the hidden <input> at the grid search. Same input
+        // element as picker searches; m4cState.overlayTarget tells the
+        // input listener which state to update on type.
+        m4cState.overlayTarget = 'grid';
         const si = document.getElementById('vrSearchInput');
-        if (si) si.focus();
+        if (si) {
+          si.value = m4cState.q || '';
+          si.focus();
+        }
       } else if (action === 'cols-cycle') {
         m4cCols = (m4cCols >= 6) ? 3 : (m4cCols + 1);
         localStorage.setItem('m4c.cols', String(m4cCols));
@@ -2494,7 +2538,7 @@ a.chip:hover { background: #3a3a3a; }
       btn.addEventListener('click', () => {
         const action = btn.dataset.action || btn.getAttribute('data-action');
         if (action) {
-          vrAction(action);
+          vrAction(action, btn);
           return;
         }
         const row = btn.dataset.pickRow;
