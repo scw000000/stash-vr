@@ -416,20 +416,20 @@ a.chip:hover { background: #3a3a3a; }
            main BG so each column "owns" its vertical strip visibly,
            even when its list/values are empty. R=3.01 so the lane sits
            just in front of the BG (R=3.02) without z-fighting. Centered
-           vertically in the area below the search bars and above the
-           value pickers (y=-0.015, height=1.55). -->
-      <a-cylinder radius="3.01" height="1.55" open-ended="true"
-                  position="0 -0.015 3.02"
+           vertically in the area below the value strip (y=0.58) and
+           extending to the cylinder bottom area (y=-1.0). -->
+      <a-cylinder radius="3.01" height="1.58" open-ended="true"
+                  position="0 -0.21 3.02"
                   theta-start="130.38" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
       </a-cylinder>
-      <a-cylinder radius="3.01" height="1.55" open-ended="true"
-                  position="0 -0.015 3.02"
+      <a-cylinder radius="3.01" height="1.58" open-ended="true"
+                  position="0 -0.21 3.02"
                   theta-start="112.01" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
       </a-cylinder>
-      <a-cylinder radius="3.01" height="1.55" open-ended="true"
-                  position="0 -0.015 3.02"
+      <a-cylinder radius="3.01" height="1.58" open-ended="true"
+                  position="0 -0.21 3.02"
                   theta-start="93.64" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
       </a-cylinder>
@@ -481,11 +481,16 @@ a.chip:hover { background: #3a3a3a; }
       <a-entity id="vrFiltersList-tag"       data-col-theta="112.01" data-col-length="16.73" position="0 0 3.02"></a-entity>
       <a-entity id="vrFiltersList-studio"    data-col-theta="93.64"  data-col-length="16.73" position="0 0 3.02"></a-entity>
 
-      <!-- Bottom value-picker row (JS populates Favorites/Stars/O-Counter). -->
-      <a-entity id="vrFiltersValuesStrip" position="0 -0.85 3.02"></a-entity>
+      <!-- Value-picker row (JS populates Favorites/Stars/O-Counter).
+           Positioned ABOVE the column lists (between search bars and
+           list area) so the per-column "selected" sub-lists at the
+           bottom of each column lane don't collide with it. -->
+      <a-entity id="vrFiltersValuesStrip" position="0 0.65 3.02"></a-entity>
 
-      <!-- Active-filter chips strip — JS populates dynamically. Placed
-           below the value row, near the cylinder's bottom edge. -->
+      <!-- Active-filter chips strip — kept as an empty wrapper for now;
+           Step 4 dropped chips entirely (per-column blue selections +
+           value-button color cover the same purpose). renderActiveChips
+           still iterates an empty kinds list and renders nothing here. -->
       <a-entity id="vrFiltersChipsStrip" position="0 -1.05 3.02"></a-entity>
     </a-entity>
 
@@ -1500,7 +1505,12 @@ a.chip:hover { background: #3a3a3a; }
       const root = document.getElementById('vrFiltersChipsStrip');
       if (!root) return;
       while (root.firstChild) root.removeChild(root.firstChild);
-      const kinds = ['favorite', 'stars', 'ocount'];
+      // Step 4 dropped chips entirely: per-column blue selections handle
+      // performer/studio/tag, and value-button color handles favorite/
+      // stars/ocount. renderActiveChips remains a no-op call site so other
+      // code paths (filters-clear, applyFilterPick) don't need conditional
+      // branches; if chip UX comes back later, just put kinds back here.
+      const kinds = [];
       const items = kinds.map(k => ({ kind: k, label: chipLabel(k) })).filter(o => o.label);
       if (items.length === 0) {
         // Nothing to render; raycaster targets unchanged.
@@ -1558,10 +1568,10 @@ a.chip:hover { background: #3a3a3a; }
 
     const LIST_ROW_H    = 0.10;    // row pitch (height + small gap)
     const LIST_ROW_GEOM_H = 0.09;  // row cylinder height (leaves 0.01 gap)
-    const LIST_TOP_Y    = 0.70;    // y of first regular row's center (below search bar at y=0.82)
-    const LIST_REGULAR_BOTTOM_Y = -0.10;  // last regular row center (8 visible: 0.7 → -0.1 step 0.1)
-    const LIST_SELECTED_TOP_Y   = -0.25;  // first selected sub-list row center (gap 0.05 below regular)
-    const LIST_SELECTED_BOTTOM_Y = -0.75; // last selected row center (6 visible: -0.25 → -0.75 step 0.1)
+    const LIST_TOP_Y    = 0.50;    // y of first regular row's center (below value strip at y=0.65)
+    const LIST_REGULAR_BOTTOM_Y = -0.30;  // last regular row center (9 visible: 0.5 → -0.3 step 0.1)
+    const LIST_SELECTED_TOP_Y   = -0.40;  // first selected sub-list row center (gap below regular)
+    const LIST_SELECTED_BOTTOM_Y = -0.95; // last selected row center (6 visible: -0.4 → -0.95 step 0.1)
     const LIST_VISIBLE_REGULAR  = Math.floor((LIST_TOP_Y - LIST_REGULAR_BOTTOM_Y) / LIST_ROW_H) + 1; // 9
     const LIST_VISIBLE_SELECTED = Math.floor((LIST_SELECTED_TOP_Y - LIST_SELECTED_BOTTOM_Y) / LIST_ROW_H) + 1; // 6
 
@@ -1727,16 +1737,91 @@ a.chip:hover { background: #3a3a3a; }
         renderColumnList(kind);
       } else if (kind === 'favorite') {
         m4cState.filters.favorite = m4cState.filters.favorite === id ? '' : id;
+        renderValuesRow();
       } else if (kind === 'stars') {
         const n = parseInt(id || '0', 10);
         m4cState.filters.stars = m4cState.filters.stars === n ? 0 : n;
+        renderValuesRow();
       } else if (kind === 'ocount') {
         const n = parseInt(id || '0', 10);
         m4cState.filters.ocount = m4cState.filters.ocount === n ? 0 : n;
+        renderValuesRow();
       }
       renderActiveChips();
       fetchGrid(true);
     }
+
+    // ─── M4c Task 7 Step 4: bottom value pickers ──────────────────────────
+    // Single horizontal row of 10 curved buttons in #vrFiltersValuesStrip
+    // (panel-local y=-0.85). Three visually-distinct groups by tint:
+    //   Favorites (gold) [Only] [Not]
+    //   Stars     (orange) [★5] [★4] [★3] [★2] [★1]
+    //   O-Counter (cyan)  [10+] [5+] [1+]
+    // Click toggles the value off if already selected, sets it otherwise.
+    // Filters arc 56.75°: 10×4° buttons + 11×1.523° equal gaps = 56.75°.
+    function renderValuesRow() {
+      const root = document.getElementById('vrFiltersValuesStrip');
+      if (!root) return;
+      while (root.firstChild) root.removeChild(root.firstChild);
+
+      const buttons = [
+        // Right-to-left in user view (highest A-Frame θ first).
+        { kind: 'favorite', value: 'only', label: 'Only', color: '#b58a2c' },
+        { kind: 'favorite', value: 'not',  label: 'Not',  color: '#b58a2c' },
+        { kind: 'stars',    value: '5',    label: '★5',   color: '#b56a2c' },
+        { kind: 'stars',    value: '4',    label: '★4',   color: '#b56a2c' },
+        { kind: 'stars',    value: '3',    label: '★3',   color: '#b56a2c' },
+        { kind: 'stars',    value: '2',    label: '★2',   color: '#b56a2c' },
+        { kind: 'stars',    value: '1',    label: '★1',   color: '#b56a2c' },
+        { kind: 'ocount',   value: '10',   label: '10+',  color: '#2c8eb5' },
+        { kind: 'ocount',   value: '5',    label: '5+',   color: '#2c8eb5' },
+        { kind: 'ocount',   value: '1',    label: '1+',   color: '#2c8eb5' },
+      ];
+      const ARC_RIGHT = 148.75;
+      const BUTTON_W  = 4.0;
+      const GAP       = 1.523;  // (56.75 - 10*4) / 11
+      let cursor = ARC_RIGHT;
+
+      buttons.forEach(btn => {
+        cursor -= GAP;
+        const thetaStart = cursor - BUTTON_W;
+        const isSelected = (
+          (btn.kind === 'favorite' && m4cState.filters.favorite === btn.value) ||
+          (btn.kind === 'stars'    && String(m4cState.filters.stars)  === btn.value) ||
+          (btn.kind === 'ocount'   && String(m4cState.filters.ocount) === btn.value)
+        );
+        const cyl = document.createElement('a-cylinder');
+        cyl.classList.add('vr-btn');
+        cyl.dataset.valueKind  = btn.kind;
+        cyl.dataset.valueValue = btn.value;
+        cyl.setAttribute('radius', '2.97');
+        cyl.setAttribute('height', '0.10');
+        cyl.setAttribute('open-ended', 'true');
+        cyl.setAttribute('theta-start',  thetaStart.toFixed(3));
+        cyl.setAttribute('theta-length', BUTTON_W.toString());
+        cyl.setAttribute('material',
+          'shader: flat; color: ' + (isSelected ? '#3776c2' : btn.color) +
+          '; opacity: 1.0; side: double');
+        root.appendChild(cyl);
+        // Curved per-character label (ASCII + ★ both in default Roboto).
+        placeCurvedString(cyl, btn.label, {
+          R: 2.97,
+          thetaStartDeg: thetaStart,
+          thetaLengthDeg: BUTTON_W,
+          color: '#fff',
+          y: 0,
+        }, 'curved-value-char');
+        cyl.addEventListener('click', function() {
+          m4cState.lastScrollFocus = 'none';
+          applyFilterPick(btn.kind, btn.value);
+        });
+        cursor = thetaStart;
+      });
+      updateRaycasterTargets();
+    }
+    // Initial render so the buttons are present even before browse opens
+    // (matches the chips-strip pattern; buttons reflect current state).
+    renderValuesRow();
 
     // Initial population of all 3 columns happens lazily via
     // onBrowsePanelOpen below (the column lists are useless until the
@@ -2364,6 +2449,7 @@ a.chip:hover { background: #3a3a3a; }
         });
         renderActiveChips();
         ['performer', 'tag', 'studio'].forEach(renderColumnList);
+        renderValuesRow();
         fetchGrid(true);
       } else if (action === 'filter-chip-clear') {
         // The chip's own click handler already calls clearChip(kind);
