@@ -1143,7 +1143,33 @@ a.chip:hover { background: #3a3a3a; }
     }
     function setPanelVisible(visible) {
       const root = document.getElementById('vrControlsRoot');
-      if (root) root.setAttribute('visible', visible ? 'true' : 'false');
+      if (root) {
+        // Summon = position the panel cluster in front of wherever the
+        // user is currently looking, matching SKYBOX/HereSphere behavior.
+        // Otherwise the panel stays at world origin and is invisible to
+        // a user who has turned their head while watching the scene
+        // (post-swap, post-recenter, or after natural exploration).
+        // Children (vrControls, vrFormatPicker, etc.) keep their fixed
+        // local offsets; only the root's transform tracks the camera.
+        if (visible && scene.camera && root.object3D) {
+          const cam = scene.camera;
+          const camPos = new AFRAME.THREE.Vector3();
+          cam.getWorldPosition(camPos);
+          const camDir = new AFRAME.THREE.Vector3();
+          cam.getWorldDirection(camDir);
+          // Project to horizontal plane so the panel doesn't tilt with
+          // headset pitch — children carry their own pitch.
+          camDir.y = 0;
+          if (camDir.lengthSq() < 1e-6) camDir.set(0, 0, -1);
+          camDir.normalize();
+          // Yaw such that root's local -Z (where children sit) points
+          // along camDir (the user's gaze).
+          const yaw = Math.atan2(-camDir.x, -camDir.z);
+          root.object3D.position.set(camPos.x, 0, camPos.z);
+          root.object3D.rotation.set(0, yaw, 0);
+        }
+        root.setAttribute('visible', visible ? 'true' : 'false');
+      }
       setLaserActive(document.getElementById('vrLaserRight'), visible);
       setLaserActive(document.getElementById('vrLaserLeft'),  visible);
     }
