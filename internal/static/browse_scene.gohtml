@@ -418,17 +418,20 @@ a.chip:hover { background: #3a3a3a; }
            just in front of the BG (R=3.02) without z-fighting. Centered
            vertically in the area below the value strip (y=0.58) and
            extending to the cylinder bottom area (y=-1.0). -->
-      <a-cylinder radius="3.01" height="1.58" open-ended="true"
+      <a-cylinder data-col-kind="performer"
+                  radius="3.01" height="1.58" open-ended="true"
                   position="0 -0.21 3.02"
                   theta-start="130.38" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
       </a-cylinder>
-      <a-cylinder radius="3.01" height="1.58" open-ended="true"
+      <a-cylinder data-col-kind="tag"
+                  radius="3.01" height="1.58" open-ended="true"
                   position="0 -0.21 3.02"
                   theta-start="112.01" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
       </a-cylinder>
-      <a-cylinder radius="3.01" height="1.58" open-ended="true"
+      <a-cylinder data-col-kind="studio"
+                  radius="3.01" height="1.58" open-ended="true"
                   position="0 -0.21 3.02"
                   theta-start="93.64" theta-length="16.73"
                   material="shader: flat; color: #181828; opacity: 1.0; side: double">
@@ -436,17 +439,20 @@ a.chip:hover { background: #3a3a3a; }
 
       <!-- Column headers (y=1.0, same as browse top strip). -->
       <a-entity id="vrFiltersHeadersStrip" position="0 1.0 3.02">
-        <a-cylinder data-label="Performer" data-label-color="#fff" data-label-align="center"
+        <a-cylinder data-col-kind="performer"
+                    data-label="Performer" data-label-color="#fff" data-label-align="center"
                     radius="2.97" height="0.16" open-ended="true"
                     theta-start="130.38" theta-length="16.73"
                     material="shader: flat; color: #1a365d; opacity: 0.95; side: double">
         </a-cylinder>
-        <a-cylinder data-label="Tag" data-label-color="#fff" data-label-align="center"
+        <a-cylinder data-col-kind="tag"
+                    data-label="Tag" data-label-color="#fff" data-label-align="center"
                     radius="2.97" height="0.16" open-ended="true"
                     theta-start="112.01" theta-length="16.73"
                     material="shader: flat; color: #1a365d; opacity: 0.95; side: double">
         </a-cylinder>
-        <a-cylinder data-label="Studio" data-label-color="#fff" data-label-align="center"
+        <a-cylinder data-col-kind="studio"
+                    data-label="Studio" data-label-color="#fff" data-label-align="center"
                     radius="2.97" height="0.16" open-ended="true"
                     theta-start="93.64" theta-length="16.73"
                     material="shader: flat; color: #1a365d; opacity: 0.95; side: double">
@@ -455,19 +461,19 @@ a.chip:hover { background: #3a3a3a; }
 
       <!-- Per-column search bars (y=0.82, just below headers). -->
       <a-entity id="vrFiltersSearchStrip" position="0 0.82 3.02">
-        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="performer"
+        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="performer" data-col-kind="performer"
                     data-label="Search…" data-label-color="#888" data-label-align="left"
                     radius="2.97" height="0.10" open-ended="true"
                     theta-start="130.38" theta-length="16.73"
                     material="shader: flat; color: #222; opacity: 0.9; side: double">
         </a-cylinder>
-        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="tag"
+        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="tag" data-col-kind="tag"
                     data-label="Search…" data-label-color="#888" data-label-align="left"
                     radius="2.97" height="0.10" open-ended="true"
                     theta-start="112.01" theta-length="16.73"
                     material="shader: flat; color: #222; opacity: 0.9; side: double">
         </a-cylinder>
-        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="studio"
+        <a-cylinder class="vr-search-bg vr-btn" data-action="picker-search-focus" data-picker-kind="studio" data-col-kind="studio"
                     data-label="Search…" data-label-color="#888" data-label-align="left"
                     radius="2.97" height="0.10" open-ended="true"
                     theta-start="93.64" theta-length="16.73"
@@ -2795,8 +2801,17 @@ a.chip:hover { background: #3a3a3a; }
       let onBrowsePanel = false;
       let columnKind = null;
       while (target) {
-        if (target.id && target.id.indexOf('vrFiltersList-') === 0 && !columnKind) {
-          columnKind = target.id.substring('vrFiltersList-'.length);
+        // Column attribution. The list-row entities live under
+        // #vrFiltersList-{kind}, but the lane bg / header / search-bar
+        // cylinders carry data-col-kind directly so the laser still
+        // routes to a column even when it lands in a row gap or below
+        // the last filled row (where the lane bg is the closest hit).
+        if (!columnKind) {
+          if (target.id && target.id.indexOf('vrFiltersList-') === 0) {
+            columnKind = target.id.substring('vrFiltersList-'.length);
+          } else if (target.dataset && target.dataset.colKind) {
+            columnKind = target.dataset.colKind;
+          }
         }
         if (target.id === 'vrBrowsePanel') { onBrowsePanel = true; break; }
         target = target.parentElement;
