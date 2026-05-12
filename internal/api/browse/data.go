@@ -56,36 +56,36 @@ type Card struct {
 
 // PageData is what browse.gohtml expects.
 type PageData struct {
-	Sidebar SidebarData
-	Header  string // e.g. "All scenes — newest first"
-	SubHead string // e.g. "Page 3 / 27" or "23 scenes"
-	BackURL string // empty on /browse, "/browse" on entity-filtered routes
-	Cards   []Card
-	PrevURL string
-	NextURL string
-	PageNum int
-	PageMax int
-	ErrMessage string
+	Sidebar     SidebarData
+	Header      string // e.g. "All scenes — newest first"
+	SubHead     string // e.g. "Page 3 / 27" or "23 scenes"
+	BackURL     string // empty on /browse, "/browse" on entity-filtered routes
+	Cards       []Card
+	PrevURL     string
+	NextURL     string
+	PageNum     int
+	PageMax     int
+	ErrMessage  string
 	SearchQuery string
 }
 
 // SceneDetailData drives browse_scene.gohtml.
 type SceneDetailData struct {
-	ID           string
-	Title        string
-	ThumbnailURL string
-	BackURL      string // from Referer, fallback "/browse"
-	Performers   []EntityRef
-	Studio       *EntityRef // nil if the scene has no studio
-	Date         string // YYYY-MM-DD or empty
-	Duration     string
-	Rating1to5   int    // 0 = unrated; 1..5 set
-	IsFavorite   bool
-	Tags         []EntityRef // chip-renderable tags, excluding favorite tag and ancestor-injected tags
-	Captions     []CaptionRef
-	SceneMarkers []SceneMarker
-	DurationSec  float64 // duration in seconds; 0 if unknown
-	AllTagNames  []string // for the <datalist> autocomplete
+	ID              string
+	Title           string
+	ThumbnailURL    string
+	BackURL         string // from Referer, fallback "/browse"
+	Performers      []EntityRef
+	Studio          *EntityRef // nil if the scene has no studio
+	Date            string     // YYYY-MM-DD or empty
+	Duration        string
+	Rating1to5      int // 0 = unrated; 1..5 set
+	IsFavorite      bool
+	Tags            []EntityRef // chip-renderable tags, excluding favorite tag and ancestor-injected tags
+	Captions        []CaptionRef
+	SceneMarkers    []SceneMarker
+	DurationSec     float64  // duration in seconds; 0 if unknown
+	AllTagNames     []string // for the <datalist> autocomplete
 	OCounter        int
 	Organized       bool
 	DirectStreamURL string
@@ -118,6 +118,22 @@ type GridResponse struct {
 type FilterOption struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+type FilterIndexScene struct {
+	ID           string   `json:"id"`
+	PerformerIDs []string `json:"performerIds"`
+	StudioIDs    []string `json:"studioIds,omitempty"`
+	TagIDs       []string `json:"tagIds,omitempty"`
+	Rating100    int      `json:"rating100"`
+	OCount       int      `json:"oCount"`
+}
+
+type FilterIndexResponse struct {
+	Performers []FilterOption     `json:"performers"`
+	Studios    []FilterOption     `json:"studios"`
+	Tags       []FilterOption     `json:"tags"`
+	Scenes     []FilterIndexScene `json:"scenes"`
 }
 
 // SceneState is the JSON returned by every mutation POST. The client

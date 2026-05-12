@@ -75,6 +75,19 @@ query FindScenes($scene_ids: [Int!]){
     }
 }
 
+query FindScenesForFacetIndex {
+    findScenes(filter: {per_page: -1}) {
+        scenes {
+            id
+            rating100
+            o_counter
+            studio { id }
+            performers { id }
+            tags { id sort_name }
+        }
+    }
+}
+
 query FindSceneMarkers($scene_id: ID!){
     findSceneMarkers(scene_marker_filter: {scenes: {value: [$scene_id] modifier: EQUALS}}){
         scene_markers {

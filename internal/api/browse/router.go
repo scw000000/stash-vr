@@ -17,6 +17,7 @@ func Router(libraryService *library.Service) http.Handler {
 
 	r.Get("/", h.indexHandler)
 	r.Get("/grid", h.gridJSONHandler)
+	r.Get("/filter-index", h.filterIndexHandler)
 	r.Get("/filter-options/{kind}", h.filterOptionsHandler)
 	r.Get("/perf/{id}", h.entityHandler("perf"))
 	r.Get("/studio/{id}", h.entityHandler("studio"))
