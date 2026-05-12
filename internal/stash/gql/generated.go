@@ -319,9 +319,10 @@ func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultType) GetStudios() [
 
 // FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio includes the requested fields of the GraphQL type Studio.
 type FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio struct {
-	Id          string `json:"id"`
-	Name        string `json:"name"`
-	Scene_count int    `json:"scene_count"`
+	Id            string                                                                                   `json:"id"`
+	Name          string                                                                                   `json:"name"`
+	Scene_count   int                                                                                      `json:"scene_count"`
+	Parent_studio *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudioParent_studioStudio `json:"parent_studio"`
 }
 
 // GetId returns FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio.Id, and is useful for accessing the field via an interface.
@@ -337,6 +338,21 @@ func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio) G
 // GetScene_count returns FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio.Scene_count, and is useful for accessing the field via an interface.
 func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio) GetScene_count() int {
 	return v.Scene_count
+}
+
+// GetParent_studio returns FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio.Parent_studio, and is useful for accessing the field via an interface.
+func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudio) GetParent_studio() *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudioParent_studioStudio {
+	return v.Parent_studio
+}
+
+// FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudioParent_studioStudio includes the requested fields of the GraphQL type Studio.
+type FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudioParent_studioStudio struct {
+	Id string `json:"id"`
+}
+
+// GetId returns FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudioParent_studioStudio.Id, and is useful for accessing the field via an interface.
+func (v *FindAllStudiosWithCountFindStudiosFindStudiosResultTypeStudiosStudioParent_studioStudio) GetId() string {
+	return v.Id
 }
 
 // FindAllStudiosWithCountResponse is returned by FindAllStudiosWithCount on success.
@@ -4587,6 +4603,9 @@ query FindAllStudiosWithCount {
 			id
 			name
 			scene_count
+			parent_studio {
+				id
+			}
 		}
 	}
 }

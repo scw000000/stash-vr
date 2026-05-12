@@ -83,7 +83,10 @@ query FindScenesForFacetIndex {
             o_counter
             studio { id }
             performers { id }
-            tags { id sort_name }
+            tags {
+                id
+                sort_name
+            }
         }
     }
 }
@@ -132,6 +135,9 @@ query FindAllStudiosWithCount{
         studios {
             id, name
             scene_count
+            parent_studio {
+                id
+            }
         }
     }
 }

@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
+	"stash-vr/internal/config"
+	"stash-vr/internal/prefix"
 	"stash-vr/internal/stash/gql"
 )
 
@@ -21,7 +25,15 @@ type facetSceneSeed struct {
 	OCount       int
 }
 
-type loadFilterIndexSidebarFunc func(context.Context, graphql.Client, string, string) (SidebarData, error)
+type filterIndexCatalog struct {
+	sidebar             SidebarData
+	selectableStudioIDs map[string]struct{}
+	selectableTagIDs    map[string]struct{}
+	studioParentsByID   map[string]string
+	tagParentsByID      map[string][]string
+}
+
+type loadFilterIndexCatalogFunc func(context.Context, graphql.Client) (filterIndexCatalog, error)
 type loadFilterIndexScenesFunc func(context.Context, graphql.Client) (*gql.FindScenesForFacetIndexResponse, error)
 
 type filterIndexLoadError struct {
@@ -37,7 +49,13 @@ func (e *filterIndexLoadError) Unwrap() error {
 	return e.err
 }
 
-func buildFilterIndexPayload(performers, studios, tags []Entity, scenes []facetSceneSeed, selectableTagIDs map[string]struct{}) FilterIndexResponse {
+func buildFilterIndexPayload(
+	performers, studios, tags []Entity,
+	scenes []facetSceneSeed,
+	selectableStudioIDs, selectableTagIDs map[string]struct{},
+	studioParentsByID map[string]string,
+	tagParentsByID map[string][]string,
+) FilterIndexResponse {
 	out := FilterIndexResponse{
 		Performers: make([]FilterOption, 0, len(performers)),
 		Studios:    make([]FilterOption, 0, len(studios)),
@@ -63,16 +81,10 @@ func buildFilterIndexPayload(performers, studios, tags []Entity, scenes []facetS
 			OCount:       scene.OCount,
 		}
 		if scene.StudioID != "" {
-			item.StudioIDs = []string{scene.StudioID}
+			item.StudioIDs = expandedStudioIDs(scene.StudioID, selectableStudioIDs, studioParentsByID)
 		}
 		if len(scene.TagIDs) > 0 {
-			item.TagIDs = make([]string, 0, len(scene.TagIDs))
-			for _, tagID := range scene.TagIDs {
-				if _, ok := selectableTagIDs[tagID]; !ok {
-					continue
-				}
-				item.TagIDs = append(item.TagIDs, tagID)
-			}
+			item.TagIDs = expandedTagIDs(scene.TagIDs, selectableTagIDs, tagParentsByID)
 			if len(item.TagIDs) == 0 {
 				item.TagIDs = nil
 			}
@@ -83,23 +95,178 @@ func buildFilterIndexPayload(performers, studios, tags []Entity, scenes []facetS
 	return out
 }
 
-func loadFilterIndexData(ctx context.Context, client graphql.Client) (SidebarData, *gql.FindScenesForFacetIndexResponse, error) {
-	return loadFilterIndexDataWithFns(ctx, client, LoadSidebar, gql.FindScenesForFacetIndex)
+func appendUniqueIDs(dst []string, seen map[string]struct{}, ids ...string) []string {
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		dst = append(dst, id)
+	}
+	return dst
 }
 
-func loadFilterIndexDataWithFns(ctx context.Context, client graphql.Client, sidebarLoader loadFilterIndexSidebarFunc, scenesLoader loadFilterIndexScenesFunc) (SidebarData, *gql.FindScenesForFacetIndexResponse, error) {
+func expandedStudioIDs(sceneStudioID string, selectableStudioIDs map[string]struct{}, studioParentsByID map[string]string) []string {
+	if sceneStudioID == "" {
+		return nil
+	}
+	out := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	for id := sceneStudioID; id != ""; id = studioParentsByID[id] {
+		if _, loop := seen[id]; loop {
+			break
+		}
+		if _, ok := selectableStudioIDs[id]; ok {
+			out = appendUniqueIDs(out, seen, id)
+			continue
+		}
+		seen[id] = struct{}{}
+	}
+	return out
+}
+
+func expandedTagIDs(sceneTagIDs []string, selectableTagIDs map[string]struct{}, tagParentsByID map[string][]string) []string {
+	out := make([]string, 0, len(sceneTagIDs))
+	seen := make(map[string]struct{}, len(sceneTagIDs))
+	queue := append([]string(nil), sceneTagIDs...)
+	for len(queue) > 0 {
+		tagID := queue[0]
+		queue = queue[1:]
+		if tagID == "" {
+			continue
+		}
+		if _, ok := seen[tagID]; ok {
+			continue
+		}
+		seen[tagID] = struct{}{}
+		if _, ok := selectableTagIDs[tagID]; ok {
+			out = append(out, tagID)
+		}
+		queue = append(queue, tagParentsByID[tagID]...)
+	}
+	return out
+}
+
+func buildSelectableIDSet(entries []Entity) map[string]struct{} {
+	out := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		out[entry.ID] = struct{}{}
+	}
+	return out
+}
+
+func loadFilterIndexCatalog(ctx context.Context, client graphql.Client) (filterIndexCatalog, error) {
 	var (
-		sidebar SidebarData
+		performers        []Entity
+		studios           []Entity
+		tags              []Entity
+		studioParentsByID = map[string]string{}
+		tagParentsByID    = map[string][]string{}
+	)
+
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		data, err := fetchPerformers(groupCtx, client)
+		if err != nil {
+			return err
+		}
+		performers = data
+		return nil
+	})
+	g.Go(func() error {
+		data, err := fetchStudiosDetailed(groupCtx, client)
+		if err != nil {
+			return err
+		}
+		out := make([]Entity, 0, len(data))
+		for _, studio := range data {
+			if studio.ParentID != "" {
+				studioParentsByID[studio.ID] = studio.ParentID
+			}
+			out = append(out, studio.Entity)
+		}
+		studios = out
+		return nil
+	})
+	g.Go(func() error {
+		data, err := fetchTagsDetailed(groupCtx, client)
+		if err != nil {
+			return err
+		}
+		out := make([]Entity, 0, len(data))
+		for _, tag := range data {
+			if tag.SortName == config.Application().ExcludeSortName {
+				continue
+			}
+			if strings.HasPrefix(tag.SortName, prefix.SvrAncestor) {
+				continue
+			}
+			out = append(out, tag.Entity)
+		}
+		tags = out
+		return nil
+	})
+	g.Go(func() error {
+		resp, err := gql.FindAllTags(groupCtx, client)
+		if err != nil {
+			return fmt.Errorf("FindAllTags: %w", err)
+		}
+		for _, tag := range resp.FindTags.Tags {
+			if tag == nil || len(tag.Parents) == 0 {
+				continue
+			}
+			parentIDs := make([]string, 0, len(tag.Parents))
+			for _, parent := range tag.Parents {
+				if parent == nil {
+					continue
+				}
+				parentIDs = append(parentIDs, parent.Id)
+			}
+			if len(parentIDs) > 0 {
+				tagParentsByID[tag.Id] = parentIDs
+			}
+		}
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return filterIndexCatalog{}, err
+	}
+
+	sidebar := SidebarData{
+		Performers: performers,
+		Studios:    studios,
+		Tags:       tags,
+		ActiveTab:  "perf",
+	}
+	return filterIndexCatalog{
+		sidebar:             sidebar,
+		selectableStudioIDs: buildSelectableIDSet(studios),
+		selectableTagIDs:    buildSelectableIDSet(tags),
+		studioParentsByID:   studioParentsByID,
+		tagParentsByID:      tagParentsByID,
+	}, nil
+}
+
+func loadFilterIndexData(ctx context.Context, client graphql.Client) (filterIndexCatalog, *gql.FindScenesForFacetIndexResponse, error) {
+	return loadFilterIndexDataWithFns(ctx, client, loadFilterIndexCatalog, gql.FindScenesForFacetIndex)
+}
+
+func loadFilterIndexDataWithFns(ctx context.Context, client graphql.Client, catalogLoader loadFilterIndexCatalogFunc, scenesLoader loadFilterIndexScenesFunc) (filterIndexCatalog, *gql.FindScenesForFacetIndexResponse, error) {
+	var (
+		catalog filterIndexCatalog
 		resp    *gql.FindScenesForFacetIndexResponse
 	)
 
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		data, err := sidebarLoader(groupCtx, client, "", "")
+		data, err := catalogLoader(groupCtx, client)
 		if err != nil {
-			return &filterIndexLoadError{source: "sidebar", err: err}
+			return &filterIndexLoadError{source: "catalog", err: err}
 		}
-		sidebar = data
+		catalog = data
 		return nil
 	})
 	g.Go(func() error {
@@ -112,20 +279,20 @@ func loadFilterIndexDataWithFns(ctx context.Context, client graphql.Client, side
 	})
 
 	if err := g.Wait(); err != nil {
-		return SidebarData{}, nil, err
+		return filterIndexCatalog{}, nil, err
 	}
-	return sidebar, resp, nil
+	return catalog, resp, nil
 }
 
 func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request) {
-	sidebar, resp, err := loadFilterIndexData(r.Context(), h.libraryService.StashClient)
+	catalog, resp, err := loadFilterIndexData(r.Context(), h.libraryService.StashClient)
 	if err != nil {
 		var loadErr *filterIndexLoadError
 		if errors.As(err, &loadErr) {
 			switch loadErr.source {
-			case "sidebar":
-				log.Ctx(r.Context()).Err(loadErr.err).Msg("browse: filter-index load sidebar")
-				http.Error(w, "load sidebar failed", http.StatusInternalServerError)
+			case "catalog":
+				log.Ctx(r.Context()).Err(loadErr.err).Msg("browse: filter-index load catalog")
+				http.Error(w, "load filter catalog failed", http.StatusInternalServerError)
 				return
 			case "scenes":
 				log.Ctx(r.Context()).Err(loadErr.err).Msg("browse: filter-index fetch scenes")
@@ -136,11 +303,6 @@ func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request)
 		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index load data")
 		http.Error(w, "load filter index failed", http.StatusInternalServerError)
 		return
-	}
-
-	selectableTagIDs := make(map[string]struct{}, len(sidebar.Tags))
-	for _, tag := range sidebar.Tags {
-		selectableTagIDs[tag.ID] = struct{}{}
 	}
 
 	scenes := make([]facetSceneSeed, 0, len(resp.FindScenes.Scenes))
@@ -182,7 +344,16 @@ func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(buildFilterIndexPayload(sidebar.Performers, sidebar.Studios, sidebar.Tags, scenes, selectableTagIDs)); err != nil {
+	if err := json.NewEncoder(w).Encode(buildFilterIndexPayload(
+		catalog.sidebar.Performers,
+		catalog.sidebar.Studios,
+		catalog.sidebar.Tags,
+		scenes,
+		catalog.selectableStudioIDs,
+		catalog.selectableTagIDs,
+		catalog.studioParentsByID,
+		catalog.tagParentsByID,
+	)); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: encode filter-index")
 	}
 }

@@ -12,13 +12,16 @@ import (
 
 func TestBuildFilterIndexPayload(t *testing.T) {
 	tests := []struct {
-		name             string
-		performers       []Entity
-		studios          []Entity
-		tags             []Entity
-		scenes           []facetSceneSeed
-		selectableTagIDs map[string]struct{}
-		want             FilterIndexResponse
+		name                string
+		performers          []Entity
+		studios             []Entity
+		tags                []Entity
+		scenes              []facetSceneSeed
+		selectableStudioIDs map[string]struct{}
+		selectableTagIDs    map[string]struct{}
+		studioParentsByID   map[string]string
+		tagParentsByID      map[string][]string
+		want                FilterIndexResponse
 	}{
 		{
 			name: "preserves catalog order and filters non-selectable scene tags",
@@ -43,6 +46,10 @@ func TestBuildFilterIndexPayload(t *testing.T) {
 					Rating100:    80,
 					OCount:       3,
 				},
+			},
+			selectableStudioIDs: map[string]struct{}{
+				"studio-1": {},
+				"studio-2": {},
 			},
 			selectableTagIDs: map[string]struct{}{
 				"tag-1": {},
@@ -100,6 +107,9 @@ func TestBuildFilterIndexPayload(t *testing.T) {
 					OCount:       1,
 				},
 			},
+			selectableStudioIDs: map[string]struct{}{
+				"studio-1": {},
+			},
 			selectableTagIDs: map[string]struct{}{
 				"tag-1": {},
 			},
@@ -130,11 +140,91 @@ func TestBuildFilterIndexPayload(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "expands selectable studio and tag ancestors into scene memberships",
+			performers: []Entity{
+				{ID: "perf-1", Name: "Alpha"},
+			},
+			studios: []Entity{
+				{ID: "studio-grand", Name: "Grand Studio"},
+				{ID: "studio-parent", Name: "Parent Studio"},
+				{ID: "studio-child", Name: "Child Studio"},
+			},
+			tags: []Entity{
+				{ID: "tag-grand", Name: "Grand Tag"},
+				{ID: "tag-parent", Name: "Parent Tag"},
+				{ID: "tag-child", Name: "Child Tag"},
+			},
+			scenes: []facetSceneSeed{
+				{
+					ID:           "scene-1",
+					PerformerIDs: []string{"perf-1"},
+					StudioID:     "studio-child",
+					TagIDs:       []string{"tag-child", "tag-hidden"},
+					Rating100:    60,
+					OCount:       2,
+				},
+			},
+			selectableStudioIDs: map[string]struct{}{
+				"studio-grand":  {},
+				"studio-parent": {},
+				"studio-child":  {},
+			},
+			selectableTagIDs: map[string]struct{}{
+				"tag-grand":  {},
+				"tag-parent": {},
+				"tag-child":  {},
+			},
+			studioParentsByID: map[string]string{
+				"studio-child":  "studio-parent",
+				"studio-parent": "studio-grand",
+				"studio-grand":  "studio-hidden-root",
+			},
+			tagParentsByID: map[string][]string{
+				"tag-child":  {"tag-parent", "tag-hidden-root"},
+				"tag-parent": {"tag-grand"},
+				"tag-hidden": {"tag-parent"},
+			},
+			want: FilterIndexResponse{
+				Performers: []FilterOption{
+					{ID: "perf-1", Name: "Alpha"},
+				},
+				Studios: []FilterOption{
+					{ID: "studio-grand", Name: "Grand Studio"},
+					{ID: "studio-parent", Name: "Parent Studio"},
+					{ID: "studio-child", Name: "Child Studio"},
+				},
+				Tags: []FilterOption{
+					{ID: "tag-grand", Name: "Grand Tag"},
+					{ID: "tag-parent", Name: "Parent Tag"},
+					{ID: "tag-child", Name: "Child Tag"},
+				},
+				Scenes: []FilterIndexScene{
+					{
+						ID:           "scene-1",
+						PerformerIDs: []string{"perf-1"},
+						StudioIDs:    []string{"studio-child", "studio-parent", "studio-grand"},
+						TagIDs:       []string{"tag-child", "tag-parent", "tag-grand"},
+						Rating100:    60,
+						OCount:       2,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildFilterIndexPayload(tt.performers, tt.studios, tt.tags, tt.scenes, tt.selectableTagIDs)
+			got := buildFilterIndexPayload(
+				tt.performers,
+				tt.studios,
+				tt.tags,
+				tt.scenes,
+				tt.selectableStudioIDs,
+				tt.selectableTagIDs,
+				tt.studioParentsByID,
+				tt.tagParentsByID,
+			)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("buildFilterIndexPayload() = %#v, want %#v", got, tt.want)
 			}
@@ -146,10 +236,10 @@ func TestLoadFilterIndexDataRunsCatalogAndSceneFetchConcurrently(t *testing.T) {
 	started := make(chan string, 2)
 	release := make(chan struct{})
 
-	sidebarLoader := func(context.Context, graphql.Client, string, string) (SidebarData, error) {
-		started <- "sidebar"
+	catalogLoader := func(context.Context, graphql.Client) (filterIndexCatalog, error) {
+		started <- "catalog"
 		<-release
-		return SidebarData{}, nil
+		return filterIndexCatalog{}, nil
 	}
 	sceneLoader := func(context.Context, graphql.Client) (*gql.FindScenesForFacetIndexResponse, error) {
 		started <- "scenes"
@@ -159,7 +249,7 @@ func TestLoadFilterIndexDataRunsCatalogAndSceneFetchConcurrently(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, _, err := loadFilterIndexDataWithFns(context.Background(), nil, sidebarLoader, sceneLoader)
+		_, _, err := loadFilterIndexDataWithFns(context.Background(), nil, catalogLoader, sceneLoader)
 		done <- err
 	}()
 
