@@ -1688,6 +1688,8 @@ a.chip:hover { background: #3a3a3a; }
         browseState.filters.ocount = 0;
       }
       renderActiveChips();
+      renderValuesRow();
+      rerenderAllFacetColumns();
       fetchGrid(true);
     }
 
@@ -1947,19 +1949,83 @@ a.chip:hover { background: #3a3a3a; }
       return [];
     }
 
-    function renderColumnOptions(root, kind, colTheta, colLen, opts) {
+    function rerenderAllFacetColumns() {
+      ['performer', 'tag', 'studio'].forEach(renderColumnList);
+    }
+
+    function sceneMatchesActiveFacetFilters(scene) {
+      scene = scene || {};
+      const performerIDs = (scene.performerIds || scene.performerIDs || []).map(String);
+      const studioIDs = (scene.studioIds || scene.studioIDs || []).map(String);
+      const tagIDs = (scene.tagIds || scene.tagIDs || []).map(String);
+      const selectedPerformers = (browseState.filters.performer || []).map(String);
+      const selectedStudios = (browseState.filters.studio || []).map(String);
+      const selectedTags = (browseState.filters.tag || []).map(String);
+
+      if (!selectedPerformers.every(id => performerIDs.indexOf(id) >= 0)) return false;
+      if (!selectedStudios.every(id => studioIDs.indexOf(id) >= 0)) return false;
+      if (!selectedTags.every(id => tagIDs.indexOf(id) >= 0)) return false;
+
+      const starsMin = parseInt(browseState.filters.stars || '0', 10) || 0;
+      const ocountMin = parseInt(browseState.filters.ocount || '0', 10) || 0;
+      const rating100 = parseInt(scene.rating100 || 0, 10) || 0;
+      const oCount = parseInt(scene.oCount || 0, 10) || 0;
+      if (starsMin > 0 && rating100 <= starsMin * 20 - 1) return false;
+      if (ocountMin > 0 && oCount <= ocountMin - 1) return false;
+
+      // Favorite intentionally does not participate here: the facet index
+      // omits favorite state, so favorite only narrows the fetched grid.
+      return true;
+    }
+
+    function visibleFacetIDSet(kind) {
+      if (!browseState.facetIndex || !Array.isArray(browseState.facetIndex.scenes)) {
+        return new Set();
+      }
+      const key = kind === 'performer' ? 'performerIds'
+        : kind === 'studio' ? 'studioIds'
+        : kind === 'tag' ? 'tagIds'
+        : null;
+      const out = new Set();
+      if (!key) return out;
+      browseState.facetIndex.scenes.forEach(scene => {
+        if (!sceneMatchesActiveFacetFilters(scene)) return;
+        const ids = scene[key] || [];
+        ids.forEach(id => out.add(String(id)));
+      });
+      return out;
+    }
+
+    function narrowedCatalog(kind) {
+      const visible = visibleFacetIDSet(kind);
+      return facetIndexOptionsForKind(kind).filter(opt => visible.has(String(opt.id)));
+    }
+
+    function regularListOptions(kind, opts) {
       const q = (browseState.pickerQuery[kind] || '').trim().toLowerCase();
-      const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
+      const selectedIDs = new Set((browseState.filters[kind] || []).map(String));
+      return (opts || []).filter(opt => {
+        const id = String(opt.id);
+        if (selectedIDs.has(id)) return false;
+        if (!q) return true;
+        return (opt.name || '').toLowerCase().includes(q);
+      });
+    }
+
+    function renderColumnOptions(root, kind, colTheta, colLen, opts) {
       const selectedIds = browseState.filters[kind] || [];
       const selectedNames = browseState.filterNames[kind] || [];
+      const selectedIdStrings = selectedIds.map(String);
+      const regularOpts = regularListOptions(kind, opts);
 
       // Skip rebuild when only the scroll position changed — the scroll
       // path uses updateColumnScroll which only translates the content
       // container and toggles per-row visibility. Hash everything that
       // affects which rows exist or how they look (NOT scrollY).
       const hash = JSON.stringify([
-        filtered.map(o => o.id),
-        selectedIds.map(String),
+        regularOpts.map(o => String(o.id)),
+        selectedIdStrings,
+        selectedNames,
       ]);
       if (_columnStateHash[kind] === hash) {
         updateColumnScroll(kind);
@@ -1992,9 +2058,8 @@ a.chip:hover { background: #3a3a3a; }
       const content = document.createElement('a-entity');
       content.id = 'vrFiltersListContent-' + kind;
       content.setAttribute('position', '0 ' + (LIST_TOP_Y + initialScrollY) + ' 0');
-      filtered.forEach((opt, i) => {
-        const isSelected = selectedIds.indexOf(String(opt.id)) >= 0 || selectedIds.indexOf(opt.id) >= 0;
-        const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, colTheta, colLen, isSelected);
+      regularOpts.forEach((opt, i) => {
+        const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, colTheta, colLen, false);
         row.dataset.rowIdx = String(i);
         const worldY = LIST_TOP_Y + initialScrollY - i * LIST_ROW_H;
         if (worldY > visTop || worldY < visBottom) {
@@ -2056,7 +2121,7 @@ a.chip:hover { background: #3a3a3a; }
         renderColumnMessage(root, colTheta, colLen, 'Loading…');
         return;
       }
-      renderColumnOptions(root, kind, colTheta, colLen, facetIndexOptionsForKind(kind));
+      renderColumnOptions(root, kind, colTheta, colLen, narrowedCatalog(kind));
     }
 
     // Per-frame scroll application. Translates the content container
@@ -2085,10 +2150,13 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function maxListScrollY(kind) {
-      const opts = currentColumnOptions(kind);
-      const q = (browseState.pickerQuery[kind] || '').trim().toLowerCase();
-      const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
-      const overflow = filtered.length - LIST_VISIBLE_REGULAR;
+      let opts = [];
+      if (browseState.facetIndexStatus === 'ready') {
+        opts = narrowedCatalog(kind);
+      } else if (browseState.facetIndexStatus === 'failed') {
+        opts = browseState.cachedOptions[kind] || [];
+      }
+      const overflow = regularListOptions(kind, opts).length - LIST_VISIBLE_REGULAR;
       return Math.max(0, overflow * LIST_ROW_H);
     }
     function applyListScroll(kind, stickY, dt) {
@@ -2108,15 +2176,16 @@ a.chip:hover { background: #3a3a3a; }
         // Multi-select toggle: present → remove, absent → append.
         const ids = browseState.filters[kind];
         const names = browseState.filterNames[kind];
-        const idx = ids.indexOf(id);
+        const normID = String(id);
+        const idx = ids.findIndex(existingID => String(existingID) === normID);
         if (idx >= 0) {
           ids.splice(idx, 1);
           names.splice(idx, 1);
         } else {
-          ids.push(id);
+          ids.push(normID);
           names.push(name);
         }
-        renderColumnList(kind);
+        rerenderAllFacetColumns();
       } else if (kind === 'favorite') {
         browseState.filters.favorite = browseState.filters.favorite === id ? '' : id;
         renderValuesRow();
@@ -2124,10 +2193,12 @@ a.chip:hover { background: #3a3a3a; }
         const n = parseInt(id || '0', 10);
         browseState.filters.stars = browseState.filters.stars === n ? 0 : n;
         renderValuesRow();
+        rerenderAllFacetColumns();
       } else if (kind === 'ocount') {
         const n = parseInt(id || '0', 10);
         browseState.filters.ocount = browseState.filters.ocount === n ? 0 : n;
         renderValuesRow();
+        rerenderAllFacetColumns();
       }
       renderActiveChips();
       fetchGrid(true);
@@ -2862,8 +2933,8 @@ a.chip:hover { background: #3a3a3a; }
         renderActiveChips();
         ['performer', 'tag', 'studio'].forEach(kind => {
           browseState.listScrollY[kind] = 0;
-          renderColumnList(kind);
         });
+        rerenderAllFacetColumns();
         renderValuesRow();
         fetchGrid(true);
       } else if (action === 'filter-chip-clear') {
