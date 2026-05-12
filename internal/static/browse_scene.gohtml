@@ -223,57 +223,69 @@ a.chip:hover { background: #3a3a3a; }
     Each preset button has data-pick-row and data-pick-value attrs that
     the JS tap handler reads to update state.
   -->
-  <a-entity id="vrFormatPicker" position="0 1.0 -2.5" rotation="-15 0 0" visible="false">
-    <a-plane class="vr-panel-bg" width="2.4" height="1.2" color="#000" material="opacity:0.7"></a-plane>
-    <a-text value="Format" align="left" color="#fff" width="3.5" position="-1.1 0.5 0.01"></a-text>
+  <a-entity id="vrFormatPicker" position="0 0.96 -2.5" rotation="-15 0 0" visible="false">
+    <a-cylinder class="vr-panel-bg"
+                radius="3.02"
+                height="1.22"
+                position="0 0 3.02"
+                theta-start="137.5"
+                theta-length="85"
+                open-ended="true"
+                material="shader: flat; side: double; color: #000; opacity: 0.95">
+    </a-cylinder>
+    <a-text class="vr-format-proj" data-curve-lift="0.10"
+            value="Format" align="left" color="#fff" width="3.5" position="-1.1 0.5 0.01"></a-text>
 
     <!-- Row 1: Type -->
-    <a-text value="Type"   align="right" color="#aaa" width="2" position="-0.85 0.28 0.01"></a-text>
-    <a-entity class="vr-btn picker-btn" data-pick-row="type" data-pick-value="Normal"  position="-0.55 0.28 0.01"
+    <a-text class="vr-format-proj" data-curve-lift="0.10"
+            value="Type"   align="right" color="#aaa" width="2" position="-0.85 0.28 0.01"></a-text>
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="type" data-pick-value="Normal"  position="-0.55 0.28 0.01"
               geometry="primitive:plane;width:0.45;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="Normal"  align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn picker-btn" data-pick-row="type" data-pick-value="FishEye" position="0.0 0.28 0.01"
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="type" data-pick-value="FishEye" position="0.0 0.28 0.01"
               geometry="primitive:plane;width:0.45;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="FishEye" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
 
     <!-- Row 2: Degree -->
-    <a-text value="Degree" align="right" color="#aaa" width="2" position="-0.85 0.04 0.01"></a-text>
-    <a-entity class="vr-btn picker-btn" data-pick-row="degree" data-pick-value="Cinema" position="-0.55 0.04 0.01"
+    <a-text class="vr-format-proj" data-curve-lift="0.10"
+            value="Degree" align="right" color="#aaa" width="2" position="-0.85 0.04 0.01"></a-text>
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="degree" data-pick-value="Cinema" position="-0.55 0.04 0.01"
               geometry="primitive:plane;width:0.30;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="Cinema" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn picker-btn" data-pick-row="degree" data-pick-value="180"    position="-0.18 0.04 0.01"
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="degree" data-pick-value="180"    position="-0.18 0.04 0.01"
               geometry="primitive:plane;width:0.30;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="180" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn picker-btn" data-pick-row="degree" data-pick-value="200"    position="0.19 0.04 0.01"
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="degree" data-pick-value="200"    position="0.19 0.04 0.01"
               geometry="primitive:plane;width:0.30;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="200" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn picker-btn" data-pick-row="degree" data-pick-value="360"    position="0.56 0.04 0.01"
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="degree" data-pick-value="360"    position="0.56 0.04 0.01"
               geometry="primitive:plane;width:0.30;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="360" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
 
     <!-- Row 3: Stereo -->
-    <a-text value="Stereo" align="right" color="#aaa" width="2" position="-0.85 -0.20 0.01"></a-text>
-    <a-entity class="vr-btn picker-btn" data-pick-row="stereo" data-pick-value="2D"  position="-0.55 -0.20 0.01"
+    <a-text class="vr-format-proj" data-curve-lift="0.10"
+            value="Stereo" align="right" color="#aaa" width="2" position="-0.85 -0.20 0.01"></a-text>
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="stereo" data-pick-value="2D"  position="-0.55 -0.20 0.01"
               geometry="primitive:plane;width:0.30;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="2D" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn picker-btn" data-pick-row="stereo" data-pick-value="SBS" position="-0.18 -0.20 0.01"
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="stereo" data-pick-value="SBS" position="-0.18 -0.20 0.01"
               geometry="primitive:plane;width:0.30;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="SBS" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn picker-btn" data-pick-row="stereo" data-pick-value="TB"  position="0.19 -0.20 0.01"
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="stereo" data-pick-value="TB"  position="0.19 -0.20 0.01"
               geometry="primitive:plane;width:0.30;height:0.18" material="color:#2c5282;opacity:0.95">
       <a-text value="TB" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
 
     <!-- Auto -->
-    <a-entity class="vr-btn picker-btn" data-pick-row="auto" data-pick-value="auto" position="0.0 -0.46 0.01"
+    <a-entity class="vr-btn picker-btn vr-format-proj" data-curve-lift="0.06" data-pick-row="auto" data-pick-value="auto" position="0.0 -0.46 0.01"
               geometry="primitive:plane;width:0.80;height:0.16" material="color:#3776c2;opacity:0.95">
       <a-text value="Auto (re-detect)" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
@@ -1417,9 +1429,8 @@ a.chip:hover { background: #3a3a3a; }
     }
     updateColsLabel();
 
-    const PLAYBACK_CURVE_HUB_Z = 3.02;
-    function curvePlaybackElement(elId, radius, zLift) {
-      const el = document.getElementById(elId);
+    const PANEL_CURVE_HUB_Z = 3.02;
+    function curvePanelElement(el, radius, zLift, hubZ) {
       if (!el) return;
       const pos = el.getAttribute('position');
       if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
@@ -1429,7 +1440,7 @@ a.chip:hover { background: #3a3a3a; }
       el.dataset.flatX = String(flatX);
       const theta = flatX / radius;
       const curvedX = radius * Math.sin(theta);
-      const curvedZ = PLAYBACK_CURVE_HUB_Z - radius * Math.cos(theta) + (zLift || 0);
+      const curvedZ = (hubZ || PANEL_CURVE_HUB_Z) - radius * Math.cos(theta) + (zLift || 0);
       el.setAttribute('position', { x: curvedX, y: pos.y, z: curvedZ });
       el.setAttribute('rotation', { x: rot.x || 0, y: (-theta * 180 / Math.PI), z: rot.z || 0 });
     }
@@ -1454,13 +1465,24 @@ a.chip:hover { background: #3a3a3a; }
         ['vrHelpBtn',      2.97, 0.06],
         ['vrExitBtn',      2.97, 0.06]
       ].forEach(function(args) {
-        curvePlaybackElement(args[0], args[1], args[2]);
+        curvePanelElement(document.getElementById(args[0]), args[1], args[2], PANEL_CURVE_HUB_Z);
+      });
+    }
+
+    function projectFormatPicker() {
+      document.querySelectorAll('#vrFormatPicker > .vr-format-proj').forEach(function(el) {
+        const zLift = parseFloat(el.getAttribute('data-curve-lift') || '0.06');
+        curvePanelElement(el, 2.97, zLift, PANEL_CURVE_HUB_Z);
       });
     }
     if (scene.hasLoaded) {
       projectPlaybackPanel();
+      projectFormatPicker();
     } else {
-      scene.addEventListener('loaded', projectPlaybackPanel);
+      scene.addEventListener('loaded', function() {
+        projectPlaybackPanel();
+        projectFormatPicker();
+      });
     }
 
     // M4c Task 6: live search via hidden <input>. Quest's keyboard
