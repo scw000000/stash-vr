@@ -109,9 +109,18 @@ a.chip:hover { background: #3a3a3a; }
        default; trigger summons. -->
   <a-entity id="vrControlsRoot" visible="false">
 
-  <!-- In-VR playback controls. Positioned below eye-line, tilted toward user. -->
-  <a-entity id="vrControls" position="0 0.4 -1.5" rotation="-30 0 0">
-    <a-plane class="vr-panel-bg" width="3.2" height="0.7" color="#000" material="opacity:0.65"></a-plane>
+  <!-- In-VR playback controls. Shares the browse panel's cylinder sweep so
+       the playback shell visually continues from the grid with no hard seam. -->
+  <a-entity id="vrControls" position="0 0 -2.5" rotation="-15 0 0">
+    <a-cylinder class="vr-panel-bg"
+                radius="3.02"
+                height="0.72"
+                position="0 0 3.02"
+                theta-start="137.5"
+                theta-length="85"
+                open-ended="true"
+                material="shader: flat; side: double; color: #000; opacity: 0.95">
+    </a-cylinder>
 
     <!-- Row 1 (top): title left, time right, tiny DBG button at far
          right (toggles the M4c diagnostic overlay; default off). -->
@@ -119,7 +128,7 @@ a.chip:hover { background: #3a3a3a; }
             position="-1.4 0.30 0.01" wrap-count="36"></a-text>
     <a-text id="vrTime" value="0:00 / 0:00" align="right" color="#fff" width="3.0"
             position="1.30 0.30 0.01"></a-text>
-    <a-entity class="vr-btn" data-action="toggle-debug-overlay" position="1.50 0.30 0.01"
+    <a-entity class="vr-btn" id="vrDebugBtn" data-action="toggle-debug-overlay" position="1.50 0.30 0.01"
               geometry="primitive:plane;width:0.18;height:0.10"
               material="color:#444;opacity:0.85">
       <a-text value="DBG" align="center" color="#ff0" width="2.5" position="0 0 0.005"></a-text>
@@ -144,7 +153,7 @@ a.chip:hover { background: #3a3a3a; }
 
     <!-- Row 3 (bottom): volume widget on the left, then 7 buttons. -->
     <!-- Volume icon (mute toggle) -->
-    <a-entity class="vr-btn" data-action="mute" position="-1.40 -0.20 0.01"
+    <a-entity class="vr-btn" id="vrMuteBtn" data-action="mute" position="-1.40 -0.20 0.01"
               geometry="primitive:plane;width:0.18;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-image id="vrMuteIconOn"  width="0.14" height="0.14" position="0 0 0.005"></a-image>
@@ -168,13 +177,13 @@ a.chip:hover { background: #3a3a3a; }
               visible="{{if .Captions}}true{{else}}false{{end}}">
       <a-text value="CC" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="playpause" position="-0.25 -0.20 0.01"
+    <a-entity class="vr-btn" id="vrPlayPauseBtn" data-action="playpause" position="-0.25 -0.20 0.01"
               geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-image id="vrPlayIcon"  width="0.14" height="0.14" position="0 0 0.005"></a-image>
       <a-image id="vrPauseIcon" width="0.14" height="0.14" position="0 0 0.005" visible="false"></a-image>
     </a-entity>
-    <a-entity class="vr-btn" data-action="speed" position="0.05 -0.20 0.01"
+    <a-entity class="vr-btn" id="vrSpeedBtn" data-action="speed" position="0.05 -0.20 0.01"
               geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text id="vrSpeedLabel" value="1.0x" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
@@ -184,22 +193,22 @@ a.chip:hover { background: #3a3a3a; }
               material="color:#2c5282;opacity:0.95">
       <a-image id="vrLoopIcon" width="0.14" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
-    <a-entity class="vr-btn" data-action="browse" position="0.65 -0.20 0.01"
+    <a-entity class="vr-btn" id="vrBrowseBtn" data-action="browse" position="0.65 -0.20 0.01"
               geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text value="Browse" align="center" color="#fff" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="format" position="0.95 -0.20 0.01"
+    <a-entity class="vr-btn" id="vrFormatBtn" data-action="format" position="0.95 -0.20 0.01"
               geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-image id="vrFormatIcon" width="0.16" height="0.14" position="0 0 0.005"></a-image>
     </a-entity>
-    <a-entity class="vr-btn" data-action="help" position="1.25 -0.20 0.01"
+    <a-entity class="vr-btn" id="vrHelpBtn" data-action="help" position="1.25 -0.20 0.01"
               geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#2c5282;opacity:0.95">
       <a-text value="?" align="center" color="#fff" width="3.5" position="0 0 0.005"></a-text>
     </a-entity>
-    <a-entity class="vr-btn" data-action="exit" position="1.55 -0.20 0.01"
+    <a-entity class="vr-btn" id="vrExitBtn" data-action="exit" position="1.55 -0.20 0.01"
               geometry="primitive:plane;width:0.26;height:0.20"
               material="color:#a01010;opacity:0.95">
       <a-image id="vrExitIcon" width="0.14" height="0.14" position="0 0 0.005"></a-image>
@@ -214,7 +223,7 @@ a.chip:hover { background: #3a3a3a; }
     Each preset button has data-pick-row and data-pick-value attrs that
     the JS tap handler reads to update state.
   -->
-  <a-entity id="vrFormatPicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
+  <a-entity id="vrFormatPicker" position="0 1.0 -2.5" rotation="-15 0 0" visible="false">
     <a-plane class="vr-panel-bg" width="2.4" height="1.2" color="#000" material="opacity:0.7"></a-plane>
     <a-text value="Format" align="left" color="#fff" width="3.5" position="-1.1 0.5 0.01"></a-text>
 
@@ -271,7 +280,7 @@ a.chip:hover { background: #3a3a3a; }
   </a-entity>
 
   <!-- M3c help cheatsheet. Hidden by default; toggled by the "?" button. -->
-  <a-entity id="vrHelpPanel" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
+  <a-entity id="vrHelpPanel" position="0 1.0 -2.5" rotation="-15 0 0" visible="false">
     <a-plane class="vr-panel-bg" width="2.4" height="1.5" color="#000" material="opacity:0.75"></a-plane>
     <a-text value="Controls" align="left" color="#fff" width="3.5" position="-1.1 0.65 0.01"></a-text>
 
@@ -301,7 +310,7 @@ a.chip:hover { background: #3a3a3a; }
   <!-- Subtitle language picker. Hidden by default; CC button toggles. JS at
        picker-render time populates the buttons row and resizes the
        background plane to fit. -->
-  <a-entity id="vrSubtitlePicker" position="0 1.4 -1.5" rotation="-15 0 0" visible="false">
+  <a-entity id="vrSubtitlePicker" position="0 1.0 -2.5" rotation="-15 0 0" visible="false">
     <a-plane id="vrSubtitlePickerBg" class="vr-panel-bg" width="2.0" height="0.4" color="#000" material="opacity:0.7"></a-plane>
     <a-text id="vrSubtitlePickerTitle" value="Subtitles" align="left" color="#fff" width="3" position="-0.85 0.13 0.01"></a-text>
     <a-entity id="vrSubtitlePickerButtons" position="0 0 0.01"></a-entity>
@@ -1397,6 +1406,52 @@ a.chip:hover { background: #3a3a3a; }
       curveLabelInto(el);
     }
     updateColsLabel();
+
+    const PLAYBACK_CURVE_HUB_Z = 3.02;
+    function curvePlaybackElement(elId, radius, zLift) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const pos = el.getAttribute('position');
+      if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
+      const rot = el.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+      const flatX = parseFloat(el.dataset.flatX || pos.x);
+      if (!isFinite(flatX) || !isFinite(radius) || radius <= 0) return;
+      el.dataset.flatX = String(flatX);
+      const theta = flatX / radius;
+      const curvedX = radius * Math.sin(theta);
+      const curvedZ = PLAYBACK_CURVE_HUB_Z - radius * Math.cos(theta) + (zLift || 0);
+      el.setAttribute('position', { x: curvedX, y: pos.y, z: curvedZ });
+      el.setAttribute('rotation', { x: rot.x || 0, y: (-theta * 180 / Math.PI), z: rot.z || 0 });
+    }
+
+    function projectPlaybackPanel() {
+      // Small controls ride the same cylinder surface as the browse panel.
+      // The scrub bar stays slightly more forward because its 2.8m span is
+      // intentionally flatter for easier seeking.
+      [
+        ['vrTitle',        2.97, 0.10],
+        ['vrTime',         2.97, 0.10],
+        ['vrDebugBtn',     2.97, 0.06],
+        ['vrScrubBar',     2.97, 0.40],
+        ['vrMuteBtn',      2.97, 0.06],
+        ['vrVolumeSlider', 2.97, 0.06],
+        ['vrCCBtn',        2.97, 0.06],
+        ['vrPlayPauseBtn', 2.97, 0.06],
+        ['vrSpeedBtn',     2.97, 0.06],
+        ['vrLoopBtn',      2.97, 0.06],
+        ['vrBrowseBtn',    2.97, 0.06],
+        ['vrFormatBtn',    2.97, 0.06],
+        ['vrHelpBtn',      2.97, 0.06],
+        ['vrExitBtn',      2.97, 0.06]
+      ].forEach(function(args) {
+        curvePlaybackElement(args[0], args[1], args[2]);
+      });
+    }
+    if (scene.hasLoaded) {
+      projectPlaybackPanel();
+    } else {
+      scene.addEventListener('loaded', projectPlaybackPanel);
+    }
 
     // M4c Task 6: live search via hidden <input>. Quest's keyboard
     // delivers chars to the input even though the input itself isn't
