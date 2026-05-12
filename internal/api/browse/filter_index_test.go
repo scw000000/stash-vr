@@ -1,8 +1,13 @@
 package browse
 
 import (
+	"context"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/Khan/genqlient/graphql"
+	"stash-vr/internal/stash/gql"
 )
 
 func TestBuildFilterIndexPayload(t *testing.T) {
@@ -134,5 +139,51 @@ func TestBuildFilterIndexPayload(t *testing.T) {
 				t.Fatalf("buildFilterIndexPayload() = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadFilterIndexDataRunsCatalogAndSceneFetchConcurrently(t *testing.T) {
+	started := make(chan string, 2)
+	release := make(chan struct{})
+
+	sidebarLoader := func(context.Context, graphql.Client, string, string) (SidebarData, error) {
+		started <- "sidebar"
+		<-release
+		return SidebarData{}, nil
+	}
+	sceneLoader := func(context.Context, graphql.Client) (*gql.FindScenesForFacetIndexResponse, error) {
+		started <- "scenes"
+		<-release
+		return &gql.FindScenesForFacetIndexResponse{}, nil
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := loadFilterIndexDataWithFns(context.Background(), nil, sidebarLoader, sceneLoader)
+		done <- err
+	}()
+
+	seen := map[string]bool{}
+	timeout := time.NewTimer(500 * time.Millisecond)
+	defer timeout.Stop()
+
+	for len(seen) < 2 {
+		select {
+		case name := <-started:
+			seen[name] = true
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for concurrent starts; saw %v", seen)
+		}
+	}
+
+	close(release)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("loadFilterIndexDataWithFns() error = %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for concurrent loaders to finish")
 	}
 }

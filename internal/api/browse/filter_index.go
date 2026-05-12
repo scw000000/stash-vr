@@ -1,10 +1,14 @@
 package browse
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
+	"github.com/Khan/genqlient/graphql"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 	"stash-vr/internal/stash/gql"
 )
 
@@ -15,6 +19,22 @@ type facetSceneSeed struct {
 	TagIDs       []string
 	Rating100    int
 	OCount       int
+}
+
+type loadFilterIndexSidebarFunc func(context.Context, graphql.Client, string, string) (SidebarData, error)
+type loadFilterIndexScenesFunc func(context.Context, graphql.Client) (*gql.FindScenesForFacetIndexResponse, error)
+
+type filterIndexLoadError struct {
+	source string
+	err    error
+}
+
+func (e *filterIndexLoadError) Error() string {
+	return e.err.Error()
+}
+
+func (e *filterIndexLoadError) Unwrap() error {
+	return e.err
 }
 
 func buildFilterIndexPayload(performers, studios, tags []Entity, scenes []facetSceneSeed, selectableTagIDs map[string]struct{}) FilterIndexResponse {
@@ -63,35 +83,63 @@ func buildFilterIndexPayload(performers, studios, tags []Entity, scenes []facetS
 	return out
 }
 
+func loadFilterIndexData(ctx context.Context, client graphql.Client) (SidebarData, *gql.FindScenesForFacetIndexResponse, error) {
+	return loadFilterIndexDataWithFns(ctx, client, LoadSidebar, gql.FindScenesForFacetIndex)
+}
+
+func loadFilterIndexDataWithFns(ctx context.Context, client graphql.Client, sidebarLoader loadFilterIndexSidebarFunc, scenesLoader loadFilterIndexScenesFunc) (SidebarData, *gql.FindScenesForFacetIndexResponse, error) {
+	var (
+		sidebar SidebarData
+		resp    *gql.FindScenesForFacetIndexResponse
+	)
+
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		data, err := sidebarLoader(groupCtx, client, "", "")
+		if err != nil {
+			return &filterIndexLoadError{source: "sidebar", err: err}
+		}
+		sidebar = data
+		return nil
+	})
+	g.Go(func() error {
+		data, err := scenesLoader(groupCtx, client)
+		if err != nil {
+			return &filterIndexLoadError{source: "scenes", err: err}
+		}
+		resp = data
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return SidebarData{}, nil, err
+	}
+	return sidebar, resp, nil
+}
+
 func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request) {
-	performers, err := fetchPerformers(r.Context(), h.libraryService.StashClient)
+	sidebar, resp, err := loadFilterIndexData(r.Context(), h.libraryService.StashClient)
 	if err != nil {
-		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index fetch performers")
-		http.Error(w, "fetch performers failed", http.StatusInternalServerError)
-		return
-	}
-	studios, err := fetchStudios(r.Context(), h.libraryService.StashClient)
-	if err != nil {
-		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index fetch studios")
-		http.Error(w, "fetch studios failed", http.StatusInternalServerError)
-		return
-	}
-	tags, err := fetchTags(r.Context(), h.libraryService.StashClient)
-	if err != nil {
-		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index fetch tags")
-		http.Error(w, "fetch tags failed", http.StatusInternalServerError)
-		return
-	}
-
-	resp, err := gql.FindScenesForFacetIndex(r.Context(), h.libraryService.StashClient)
-	if err != nil {
-		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index fetch scenes")
-		http.Error(w, "fetch scenes failed", http.StatusInternalServerError)
+		var loadErr *filterIndexLoadError
+		if errors.As(err, &loadErr) {
+			switch loadErr.source {
+			case "sidebar":
+				log.Ctx(r.Context()).Err(loadErr.err).Msg("browse: filter-index load sidebar")
+				http.Error(w, "load sidebar failed", http.StatusInternalServerError)
+				return
+			case "scenes":
+				log.Ctx(r.Context()).Err(loadErr.err).Msg("browse: filter-index fetch scenes")
+				http.Error(w, "fetch scenes failed", http.StatusInternalServerError)
+				return
+			}
+		}
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index load data")
+		http.Error(w, "load filter index failed", http.StatusInternalServerError)
 		return
 	}
 
-	selectableTagIDs := make(map[string]struct{}, len(tags))
-	for _, tag := range tags {
+	selectableTagIDs := make(map[string]struct{}, len(sidebar.Tags))
+	for _, tag := range sidebar.Tags {
 		selectableTagIDs[tag.ID] = struct{}{}
 	}
 
@@ -134,7 +182,7 @@ func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(buildFilterIndexPayload(performers, studios, tags, scenes, selectableTagIDs)); err != nil {
+	if err := json.NewEncoder(w).Encode(buildFilterIndexPayload(sidebar.Performers, sidebar.Studios, sidebar.Tags, scenes, selectableTagIDs)); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: encode filter-index")
 	}
 }
