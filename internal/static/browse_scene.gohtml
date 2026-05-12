@@ -1598,6 +1598,9 @@ a.chip:hover { background: #3a3a3a; }
       loading: false,
       // M4c Task 7 additions:
       cachedOptions:  {},                                            // kind → [{id,name}, ...] (Step 3)
+      facetIndex: null,
+      facetIndexStatus: 'idle',                                      // 'idle' | 'loading' | 'ready' | 'failed'
+      facetIndexPromise: null,
       pickerQuery:    { performer: '', studio: '', tag: '' },        // per-column search text (Step 5)
       listScrollY:    { performer: 0, studio: 0, tag: 0 },           // per-column scroll (Step 6)
       lastScrollFocus: 'grid',                                        // 'grid' | 'list-<kind>' | 'none'
@@ -1774,6 +1777,41 @@ a.chip:hover { background: #3a3a3a; }
       });
     }
 
+    function ensureFacetIndex() {
+      if (browseState.facetIndexStatus === 'ready') {
+        return Promise.resolve(browseState.facetIndex);
+      }
+      if (browseState.facetIndexStatus === 'failed') {
+        return Promise.resolve(null);
+      }
+      if (browseState.facetIndexPromise) {
+        return browseState.facetIndexPromise;
+      }
+      browseState.facetIndexStatus = 'loading';
+      browseState.facetIndexPromise = fetch('/browse/filter-index', {
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(r => {
+          if (!r.ok) throw new Error('filter-index ' + r.status);
+          return r.json();
+        })
+        .then(json => {
+          browseState.facetIndex = json || null;
+          browseState.facetIndexStatus = 'ready';
+          return browseState.facetIndex;
+        })
+        .catch(err => {
+          browseState.facetIndex = null;
+          browseState.facetIndexStatus = 'failed';
+          console.warn('stash-vr: filter index fetch failed', err);
+          return null;
+        })
+        .finally(function() {
+          browseState.facetIndexPromise = null;
+        });
+      return browseState.facetIndexPromise;
+    }
+
     // Render `text` to a HTMLCanvas via the system font (Quest's Meta
      // Browser includes CJK fallbacks, so this works for any unicode).
     // Returns a Three.js CanvasTexture ready to bind to a material.
@@ -1868,6 +1906,115 @@ a.chip:hover { background: #3a3a3a; }
       return row;
     }
 
+    function renderColumnMessage(root, colTheta, colLen, text) {
+      while (root.firstChild) root.removeChild(root.firstChild);
+      const row = document.createElement('a-cylinder');
+      row.setAttribute('radius', '2.97');
+      row.setAttribute('height', LIST_ROW_GEOM_H.toString());
+      row.setAttribute('open-ended', 'true');
+      row.setAttribute('theta-start', colTheta.toString());
+      row.setAttribute('theta-length', colLen.toString());
+      row.setAttribute('position', '0 ' + LIST_TOP_Y.toFixed(3) + ' 0');
+      row.setAttribute('material', 'shader: flat; color: #333; opacity: 1.0; side: double');
+      attachRowLabel(row, text, colTheta, colLen);
+      root.appendChild(row);
+      updateRaycasterTargets();
+    }
+
+    function facetIndexOptionsForKind(kind) {
+      if (!browseState.facetIndex) return [];
+      if (kind === 'performer') return browseState.facetIndex.performers || [];
+      if (kind === 'studio') return browseState.facetIndex.studios || [];
+      if (kind === 'tag') return browseState.facetIndex.tags || [];
+      return [];
+    }
+
+    function currentColumnOptions(kind) {
+      if (browseState.facetIndexStatus === 'ready') return facetIndexOptionsForKind(kind);
+      if (browseState.facetIndexStatus === 'failed') return browseState.cachedOptions[kind] || [];
+      return [];
+    }
+
+    function renderColumnOptions(root, kind, colTheta, colLen, opts) {
+      const q = (browseState.pickerQuery[kind] || '').trim().toLowerCase();
+      const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
+      const selectedIds = browseState.filters[kind] || [];
+      const selectedNames = browseState.filterNames[kind] || [];
+
+      // Skip rebuild when only the scroll position changed — the scroll
+      // path uses updateColumnScroll which only translates the content
+      // container and toggles per-row visibility. Hash everything that
+      // affects which rows exist or how they look (NOT scrollY).
+      const hash = JSON.stringify([
+        filtered.map(o => o.id),
+        selectedIds.map(String),
+      ]);
+      if (_columnStateHash[kind] === hash) {
+        updateColumnScroll(kind);
+        return;
+      }
+      _columnStateHash[kind] = hash;
+
+      while (root.firstChild) root.removeChild(root.firstChild);
+
+      // Regular-list content container. Rows are positioned at fixed
+      // local y = -i * LIST_ROW_H (row 0 at container origin). The
+      // container's own y position carries the scroll offset, which lets
+      // applyListScroll just nudge container.object3D.position.y per
+      // frame for buttery-smooth scrolling — no DOM churn, no canvas-
+      // texture rebuilds. Row visibility is toggled in updateColumnScroll
+      // so rows scrolled outside [LIST_TOP_Y, LIST_REGULAR_BOTTOM_Y]
+      // disappear instead of poking out above headers / below the lane.
+      //
+      // Important: A-Frame entity components init asynchronously via a
+      // MutationObserver microtask after appendChild, so object3D doesn't
+      // exist synchronously. The initial position + per-row visibility
+      // therefore go through setAttribute so the component lifecycle
+      // applies them on init. updateColumnScroll's direct object3D
+      // mutations only kick in from later scroll frames, by which point
+      // the entities are fully initialized.
+      const initialScrollY = browseState.listScrollY[kind] || 0;
+      const half = LIST_ROW_H / 2;
+      const visTop = LIST_TOP_Y + half;
+      const visBottom = LIST_REGULAR_BOTTOM_Y - half;
+      const content = document.createElement('a-entity');
+      content.id = 'vrFiltersListContent-' + kind;
+      content.setAttribute('position', '0 ' + (LIST_TOP_Y + initialScrollY) + ' 0');
+      filtered.forEach((opt, i) => {
+        const isSelected = selectedIds.indexOf(String(opt.id)) >= 0 || selectedIds.indexOf(opt.id) >= 0;
+        const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, colTheta, colLen, isSelected);
+        row.dataset.rowIdx = String(i);
+        const worldY = LIST_TOP_Y + initialScrollY - i * LIST_ROW_H;
+        if (worldY > visTop || worldY < visBottom) {
+          row.setAttribute('visible', false);
+        }
+        content.appendChild(row);
+      });
+      root.appendChild(content);
+
+      // Selected sub-list — sits BELOW the lane bg so it never overlaps
+      // the regular list area. Renders all selected entries (no visible
+      // cap); the user explicitly OK'd letting chips overflow past the
+      // lane boundary. Static container, no scroll handoff.
+      if (selectedIds.length) {
+        const sel = document.createElement('a-entity');
+        sel.id = 'vrFiltersSelected-' + kind;
+        sel.setAttribute('position', '0 0 0');
+        selectedIds.forEach((id, i) => {
+          const name = selectedNames[i] || '';
+          const y = LIST_SELECTED_TOP_Y - i * LIST_ROW_H;
+          sel.appendChild(makeFilterRow(kind, { id: id, name: name }, y, colTheta, colLen, true));
+        });
+        root.appendChild(sel);
+      }
+
+      // Initial position + visibility were baked into setAttribute calls
+      // above so they apply via the component init lifecycle. Skip the
+      // synchronous updateColumnScroll here — object3D doesn't exist yet
+      // and the call would be a no-op (the !object3D guard would bail).
+      updateRaycasterTargets();
+    }
+
     // Cached state-hash per column so renderColumnList skips rebuilding
     // the row DOM when only scrollY changed (the scroll path mutates
     // object3D.position directly via updateColumnScroll instead).
@@ -1880,87 +2027,24 @@ a.chip:hover { background: #3a3a3a; }
       const colLen   = parseFloat(root.getAttribute('data-col-length'));
       if (!isFinite(colTheta) || !isFinite(colLen)) return;
 
-      ensureCachedOptions(kind).then(opts => {
-        if (!root.parentNode) return; // panel torn down
-
-        const q = (browseState.pickerQuery[kind] || '').trim().toLowerCase();
-        const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
-        const selectedIds = browseState.filters[kind] || [];
-        const selectedNames = browseState.filterNames[kind] || [];
-
-        // Skip rebuild when only the scroll position changed — the scroll
-        // path uses updateColumnScroll which only translates the content
-        // container and toggles per-row visibility. Hash everything that
-        // affects which rows exist or how they look (NOT scrollY).
-        const hash = JSON.stringify([
-          filtered.map(o => o.id),
-          selectedIds.map(String),
-        ]);
-        if (_columnStateHash[kind] === hash) {
-          updateColumnScroll(kind);
-          return;
-        }
-        _columnStateHash[kind] = hash;
-
-        while (root.firstChild) root.removeChild(root.firstChild);
-
-        // Regular-list content container. Rows are positioned at fixed
-        // local y = -i * LIST_ROW_H (row 0 at container origin). The
-        // container's own y position carries the scroll offset, which lets
-        // applyListScroll just nudge container.object3D.position.y per
-        // frame for buttery-smooth scrolling — no DOM churn, no canvas-
-        // texture rebuilds. Row visibility is toggled in updateColumnScroll
-        // so rows scrolled outside [LIST_TOP_Y, LIST_REGULAR_BOTTOM_Y]
-        // disappear instead of poking out above headers / below the lane.
-        //
-        // Important: A-Frame entity components init asynchronously via a
-        // MutationObserver microtask after appendChild, so object3D doesn't
-        // exist synchronously. The initial position + per-row visibility
-        // therefore go through setAttribute so the component lifecycle
-        // applies them on init. updateColumnScroll's direct object3D
-        // mutations only kick in from later scroll frames, by which point
-        // the entities are fully initialized.
-        const initialScrollY = browseState.listScrollY[kind] || 0;
-        const half = LIST_ROW_H / 2;
-        const visTop = LIST_TOP_Y + half;
-        const visBottom = LIST_REGULAR_BOTTOM_Y - half;
-        const content = document.createElement('a-entity');
-        content.id = 'vrFiltersListContent-' + kind;
-        content.setAttribute('position', '0 ' + (LIST_TOP_Y + initialScrollY) + ' 0');
-        filtered.forEach((opt, i) => {
-          const isSelected = selectedIds.indexOf(String(opt.id)) >= 0 || selectedIds.indexOf(opt.id) >= 0;
-          const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, colTheta, colLen, isSelected);
-          row.dataset.rowIdx = String(i);
-          const worldY = LIST_TOP_Y + initialScrollY - i * LIST_ROW_H;
-          if (worldY > visTop || worldY < visBottom) {
-            row.setAttribute('visible', false);
-          }
-          content.appendChild(row);
+      if (browseState.facetIndexStatus === 'loading') {
+        _columnStateHash[kind] = null;
+        renderColumnMessage(root, colTheta, colLen, 'Loading…');
+        return;
+      }
+      if (browseState.facetIndexStatus === 'failed') {
+        ensureCachedOptions(kind).then(opts => {
+          if (!root.parentNode) return; // panel torn down
+          renderColumnOptions(root, kind, colTheta, colLen, opts || []);
         });
-        root.appendChild(content);
-
-        // Selected sub-list — sits BELOW the lane bg so it never overlaps
-        // the regular list area. Renders all selected entries (no visible
-        // cap); the user explicitly OK'd letting chips overflow past the
-        // lane boundary. Static container, no scroll handoff.
-        if (selectedIds.length) {
-          const sel = document.createElement('a-entity');
-          sel.id = 'vrFiltersSelected-' + kind;
-          sel.setAttribute('position', '0 0 0');
-          selectedIds.forEach((id, i) => {
-            const name = selectedNames[i] || '';
-            const y = LIST_SELECTED_TOP_Y - i * LIST_ROW_H;
-            sel.appendChild(makeFilterRow(kind, { id: id, name: name }, y, colTheta, colLen, true));
-          });
-          root.appendChild(sel);
-        }
-
-        // Initial position + visibility were baked into setAttribute calls
-        // above so they apply via the component init lifecycle. Skip the
-        // synchronous updateColumnScroll here — object3D doesn't exist yet
-        // and the call would be a no-op (the !object3D guard would bail).
-        updateRaycasterTargets();
-      });
+        return;
+      }
+      if (browseState.facetIndexStatus !== 'ready') {
+        _columnStateHash[kind] = null;
+        renderColumnMessage(root, colTheta, colLen, 'Loading…');
+        return;
+      }
+      renderColumnOptions(root, kind, colTheta, colLen, facetIndexOptionsForKind(kind));
     }
 
     // Per-frame scroll application. Translates the content container
@@ -1989,7 +2073,7 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function maxListScrollY(kind) {
-      const opts = browseState.cachedOptions[kind] || [];
+      const opts = currentColumnOptions(kind);
       const q = (browseState.pickerQuery[kind] || '').trim().toLowerCase();
       const filtered = q ? opts.filter(o => (o.name || '').toLowerCase().includes(q)) : opts;
       const overflow = filtered.length - LIST_VISIBLE_REGULAR;
@@ -2664,8 +2748,9 @@ a.chip:hover { background: #3a3a3a; }
         }
       });
       fetchGrid(true);
-      // M4c Task 7 Step 3: populate filter columns. ensureCachedOptions
-      // dedupes the network call so reopening the panel is free.
+      ensureFacetIndex().finally(function() {
+        ['performer', 'tag', 'studio'].forEach(renderColumnList);
+      });
       ['performer', 'tag', 'studio'].forEach(renderColumnList);
     }
 
