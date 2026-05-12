@@ -586,9 +586,14 @@ a.chip:hover { background: #3a3a3a; }
     // it only checks layers. So a panel with visible=false (e.g. the
     // format picker) still has its descendant .vr-btn meshes intercept
     // the laser ray, blocking it from reaching the visible browse panel
-    // behind. Patch intersectObjects to filter out any hit whose object
-    // (or any ancestor) has visible=false. This affects A-Frame's laser
-    // line truncation and the `intersections` array all consumers read.
+    // behind. Also, the browse-tile covers are visually clipped to the
+    // browse panel's band, but their underlying cylinder geometry still
+    // exists above/below that band. Patch intersectObjects to filter out:
+    //   1) any hit whose object (or any ancestor) has visible=false
+    //   2) any browse-grid hit whose intersection point is outside the
+    //      visible tile band
+    // This keeps the laser line, hover, and click behavior aligned with
+    // what the user can actually see.
     (function patchRaycasterVisibility() {
       const TR = AFRAME.THREE.Raycaster.prototype;
       if (TR._svPatched) return;
@@ -601,7 +606,12 @@ a.chip:hover { background: #3a3a3a; }
         const hits = orig.call(this, objects, recursive, target);
         // Sorted by distance already; filter in place to preserve order.
         for (let i = hits.length - 1; i >= 0; i--) {
-          if (!isFullyVisible(hits[i].object)) hits.splice(i, 1);
+          const hitEl = hits[i].object && hits[i].object.el;
+          const browseHit = !!(hitEl && hitEl.closest && hitEl.closest('#vrBrowseTiles'));
+          if (!isFullyVisible(hits[i].object) ||
+              (browseHit && !isBrowseGridIntersectionWithinBand(hits[i]))) {
+            hits.splice(i, 1);
+          }
         }
         return hits;
       };
@@ -2384,6 +2394,15 @@ a.chip:hover { background: #3a3a3a; }
       }
     }
 
+    function isBrowseGridIntersectionWithinBand(intersection) {
+      if (!intersection || !intersection.point) return true;
+      const panelEl = document.getElementById('vrBrowsePanel');
+      if (!panelEl || !panelEl.object3D) return true;
+      const local = panelEl.object3D.worldToLocal(intersection.point.clone());
+      const eps = 0.0001;
+      return local.y <= TILE_AREA_TOP_Y + eps && local.y >= TILE_AREA_BOTTOM_Y - eps;
+    }
+
     function relayoutTiles() {
       const root = document.getElementById('vrBrowseTiles');
       if (!root) return;
@@ -3950,6 +3969,7 @@ a.chip:hover { background: #3a3a3a; }
       tilesRoot.addEventListener('click', function(evt) {
         const tileEl = evt.target && evt.target.closest && evt.target.closest('.vr-tile');
         if (!tileEl) return;
+        if (!isBrowseGridIntersectionWithinBand(evt.detail && evt.detail.intersection)) return;
         if (evt.target.closest('.vr-tile-detail')) {
           if (typeof window.openDetailPanel === 'function') {
             window.openDetailPanel(tileEl.dataset.sceneId);
