@@ -1598,6 +1598,7 @@ a.chip:hover { background: #3a3a3a; }
       loading: false,
       // M4c Task 7 additions:
       cachedOptions:  {},                                            // kind → [{id,name}, ...] (Step 3)
+      cachedOptionsPromise: {},                                      // kind → Promise<[ {id,name}, ... ]> while fetch is in flight
       facetIndex: null,
       facetIndexStatus: 'idle',                                      // 'idle' | 'loading' | 'ready' | 'failed'
       facetIndexPromise: null,
@@ -1768,13 +1769,24 @@ a.chip:hover { background: #3a3a3a; }
     const LIST_VISIBLE_REGULAR  = Math.floor((LIST_TOP_Y - LIST_REGULAR_BOTTOM_Y) / LIST_ROW_H) + 1; // 15
 
     function ensureCachedOptions(kind) {
-      return new Promise(resolve => {
-        if (browseState.cachedOptions[kind]) { resolve(browseState.cachedOptions[kind]); return; }
-        fetch('/browse/filter-options/' + kind, { headers: { 'Accept': 'application/json' } })
-          .then(r => r.json())
-          .then(opts => { browseState.cachedOptions[kind] = opts || []; resolve(browseState.cachedOptions[kind]); })
-          .catch(err => { console.warn('stash-vr: filter options fetch failed', err); resolve([]); });
-      });
+      if (browseState.cachedOptions[kind]) return Promise.resolve(browseState.cachedOptions[kind]);
+      if (browseState.cachedOptionsPromise[kind]) return browseState.cachedOptionsPromise[kind];
+      browseState.cachedOptionsPromise[kind] = fetch('/browse/filter-options/' + kind, {
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(r => r.json())
+        .then(opts => {
+          browseState.cachedOptions[kind] = opts || [];
+          return browseState.cachedOptions[kind];
+        })
+        .catch(err => {
+          console.warn('stash-vr: filter options fetch failed', err);
+          return [];
+        })
+        .finally(function() {
+          browseState.cachedOptionsPromise[kind] = null;
+        });
+      return browseState.cachedOptionsPromise[kind];
     }
 
     function ensureFacetIndex() {
