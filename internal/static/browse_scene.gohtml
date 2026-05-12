@@ -1950,7 +1950,10 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function rerenderAllFacetColumns() {
-      ['performer', 'tag', 'studio'].forEach(renderColumnList);
+      ['performer', 'tag', 'studio'].forEach(function(kind) {
+        browseState.listScrollY[kind] = 0;
+        renderColumnList(kind);
+      });
     }
 
     function sceneMatchesActiveFacetFilters(scene) {
