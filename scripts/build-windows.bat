@@ -22,7 +22,8 @@ echo Usage: build-windows.bat [--output PATH] [--skip-dirty]
 exit /b 2
 :args_done
 
-pushd "%~dp0.." || exit /b 1
+if not defined REPO_ROOT for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+pushd "%REPO_ROOT%" || exit /b 1
 
 set "GO_BIN="
 where go >nul 2>&1
@@ -42,7 +43,7 @@ set "PATH=%GO_BIN%;%PATH%"
 :have_go
 
 set "SHA="
-for /f "usebackq delims=" %%i in (`git rev-parse --short HEAD 2^>nul`) do set "SHA=%%i"
+for /f %%i in ('cmd /c "cd /d ""%REPO_ROOT%"" && git rev-parse --short HEAD"') do set "SHA=%%i"
 if not defined SHA (
     echo ERROR: git rev-parse --short HEAD failed.
     popd
@@ -50,13 +51,13 @@ if not defined SHA (
 )
 
 set "BRANCH="
-for /f "usebackq delims=" %%i in (`git rev-parse --abbrev-ref HEAD 2^>nul`) do set "BRANCH=%%i"
+for /f %%i in ('cmd /c "cd /d ""%REPO_ROOT%"" && git rev-parse --abbrev-ref HEAD"') do set "BRANCH=%%i"
 if not defined BRANCH set "BRANCH=dev"
 if /i "!BRANCH!"=="HEAD" set "BRANCH=dev"
 
 if not defined SKIP_DIRTY (
     set "DIRTY="
-    for /f "usebackq delims=" %%i in (`git status --porcelain`) do set "DIRTY=1"
+    for /f %%i in ('cmd /c "cd /d ""%REPO_ROOT%"" && git status --porcelain"') do set "DIRTY=1"
     if defined DIRTY set "SHA=!SHA!-dirty"
 )
 

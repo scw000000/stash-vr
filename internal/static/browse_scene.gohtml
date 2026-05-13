@@ -111,7 +111,7 @@ a.chip:hover { background: #3a3a3a; }
 
   <!-- In-VR playback controls. Shares the browse panel's cylinder sweep so
        the playback shell visually continues from the grid with no hard seam. -->
-  <a-entity id="vrControls" position="0 0 -2.5" rotation="-15 0 0">
+  <a-entity id="vrControls" position="0 -0.107 -2.096" rotation="-15 0 0">
     <a-cylinder class="vr-panel-bg"
                 radius="3.02"
                 height="0.72"
@@ -124,31 +124,38 @@ a.chip:hover { background: #3a3a3a; }
 
     <!-- Row 1 (top): title left, time right, tiny DBG button at far
          right (toggles the M4c diagnostic overlay; default off). -->
-    <a-text id="vrTitle" value="{{.Title}}" align="left" color="#fff" width="3.0"
-            position="-1.4 0.30 0.01" wrap-count="36"></a-text>
-    <a-text id="vrTime" value="0:00 / 0:00" align="right" color="#fff" width="3.0"
-            position="1.30 0.30 0.01"></a-text>
-    <a-entity class="vr-btn" id="vrDebugBtn" data-action="toggle-debug-overlay" position="1.50 0.30 0.01"
+    <a-entity id="vrTitle" position="0 0.28 3.02" data-full-value="{{.Title}}" data-display-value=""></a-entity>
+    <a-entity id="vrTime" position="0 0.28 3.02" data-display-value="0:00 / 0:00"></a-entity>
+    <a-entity class="vr-btn" id="vrDebugBtn" data-action="toggle-debug-overlay" position="1.50 0.28 0.01"
               geometry="primitive:plane;width:0.18;height:0.10"
               material="color:#444;opacity:0.85">
       <a-text value="DBG" align="center" color="#ff0" width="2.5" position="0 0 0.005"></a-text>
     </a-entity>
 
-    <!-- Row 2: scrub bar (drag thumb to seek; click bar to seek; click marker dot to jump). -->
-    <a-entity id="vrScrubBar" position="0 0.05 0.01">
-      <!-- Transparent hit plane: matches thumb height so clicks register
-           anywhere within the thumb's vertical span, not only the thin bar. -->
-      <a-plane class="vr-scrub-bg vr-btn" data-action="scrub-bg" width="2.8" height="0.10"
-               material="opacity:0;transparent:true" position="0 0 0.0001"></a-plane>
-      <!-- Visual bar: thin grey line, no slider class so raycast passes through. -->
-      <a-plane width="2.8" height="0.04" color="#444" material="opacity:0.95"
-               position="0 0 0.0002"></a-plane>
-      <a-plane id="vrScrubFill" width="0.001" height="0.04" color="#3776c2"
-               material="opacity:0.95" position="-1.4 0 0.001"></a-plane>
+    <!-- Row 2: scrub bar (drag thumb to seek; click bar to seek; click marker dot to jump).
+         All four cylinders share the panel hub axis so they form concentric arcs
+         lying on the panel surface; projectPlaybackPanel rewrites their positions
+         from the shared constants at scene load. -->
+    <a-entity id="vrScrubBar" position="0 0.04 0.01">
+      <a-cylinder id="vrScrubTint" radius="3.02" height="0.10" position="0 0 3.011"
+                  theta-start="152.39" theta-length="55.22" open-ended="true"
+                  material="shader: flat; side: front; color: #fff; opacity: 0.18; transparent: true; depthWrite: false"></a-cylinder>
+      <a-cylinder id="vrScrubRail" radius="3.02" height="0.04" position="0 0 3.012"
+                  theta-start="152.39" theta-length="55.22" open-ended="true"
+                  material="shader: flat; side: double; color: #444; opacity: 0.95"></a-cylinder>
+      <a-cylinder id="vrScrubFill" radius="3.02" height="0.04" position="0 0 3.013"
+                  theta-start="207.46" theta-length="0.15" open-ended="true"
+                  material="shader: flat; side: front; color: #3776c2; opacity: 0.55; transparent: true; depthWrite: false"></a-cylinder>
+      <!-- Curved hit cylinder follows the rail's arc so the laser intersects it
+           wherever the user aims at the visible rail. A flat plane would tilt
+           up off the rail in world Y because of vrControls' -15° X rotation. -->
+      <a-cylinder class="vr-scrub-bg vr-btn" data-action="scrub-bg" radius="3.02" height="0.10"
+                  position="0 0 3.014" theta-start="152.39" theta-length="55.22" open-ended="true"
+                  material="opacity:0;transparent:true;shader:flat;depthWrite:false;side:double"></a-cylinder>
       <a-entity id="vrScrubMarkers"></a-entity>
       <a-entity id="vrScrubThumb" class="vr-btn vr-scrub" data-action="scrub"
                 geometry="primitive:plane;width:0.05;height:0.10"
-                material="color:#fff" position="-1.4 0 0.005"></a-entity>
+                material="color:#fff" position="-1.4 0 0.38"></a-entity>
     </a-entity>
 
     <!-- Row 3 (bottom): volume widget on the left, then 7 buttons. -->
@@ -223,7 +230,7 @@ a.chip:hover { background: #3a3a3a; }
     Each preset button has data-pick-row and data-pick-value attrs that
     the JS tap handler reads to update state.
   -->
-  <a-entity id="vrFormatPicker" position="0 0.96 -2.5" rotation="-15 0 0" visible="false">
+  <a-entity id="vrFormatPicker" position="0 0.830 -2.347" rotation="-15 0 0" visible="false">
     <a-cylinder class="vr-panel-bg"
                 radius="3.02"
                 height="1.22"
@@ -1244,6 +1251,26 @@ a.chip:hover { background: #3a3a3a; }
     const SPEEDS = [0.5, 1.0, 1.25, 1.5, 2.0];
     let speedIdx = 1; // start at 1.0x
 
+    const PLAYBACK_TITLE_MAX_CHARS = 31;
+    const PLAYBACK_TEXT_RADIUS = 3.02;
+    const PLAYBACK_TITLE_THETA_START = 173.0;
+    const PLAYBACK_TITLE_THETA_LENGTH = 31.0;
+    const PLAYBACK_TIME_THETA_START = 154.5;
+    const PLAYBACK_TIME_THETA_LENGTH = 18.0;
+    const PLAYBACK_SCRUB_Y = 0.04;
+    const PLAYBACK_SCRUB_ROOT_Z = 0.01;
+    const SCRUB_VISUAL_RADIUS = 3.02;
+    // SCRUB_VISUAL_LIFT is the WORLD-Z gap (toward the user) between the rail
+    // surface and the shell surface. Small enough that the rail still reads
+    // as painted on the panel, big enough that the shell — which writes depth
+    // and is rendered first in three.js's transparent-pass back-to-front sort
+    // — doesn't occlude the rail. 2 mm puts the rail clearly in front while
+    // matching the shell's curvature visually.
+    const SCRUB_VISUAL_LIFT = 0.005;
+    const SCRUB_FILL_MIN_DEG = 0.15;
+    const SCRUB_THUMB_Z = 0.03;
+    const SCRUB_MARKER_Z = 0.028;
+
     function updateMuteIcon() {
       const on = document.getElementById('vrMuteIconOn');
       const off = document.getElementById('vrMuteIconOff');
@@ -1261,6 +1288,56 @@ a.chip:hover { background: #3a3a3a; }
       const v = SPEEDS[speedIdx];
       // Show "1.0x" not "1x"; show "1.25x" not "1.2500x".
       el.setAttribute('text', 'value', (Number.isInteger(v) ? v.toFixed(1) : v.toString()) + 'x');
+    }
+
+    function formatPlaybackTitle(raw) {
+      const text = String(raw || '').replace(/\s+/g, ' ').trim();
+      if (!text) return '';
+      if (text.length <= PLAYBACK_TITLE_MAX_CHARS) return text;
+      return text.slice(0, PLAYBACK_TITLE_MAX_CHARS - 1) + '…';
+    }
+
+    function setPlaybackTitle(raw) {
+      const el = document.getElementById('vrTitle');
+      if (!el) return;
+      const text = String(raw || '');
+      el.dataset.fullValue = text;
+      el.dataset.displayValue = formatPlaybackTitle(text);
+      renderPlaybackTitle();
+    }
+
+    function setPlaybackTime(text) {
+      const el = document.getElementById('vrTime');
+      if (!el) return;
+      el.dataset.displayValue = String(text || '');
+      renderPlaybackTime();
+    }
+
+    function renderPlaybackTitle() {
+      const el = document.getElementById('vrTitle');
+      if (!el) return;
+      const text = el.dataset.displayValue || formatPlaybackTitle(el.dataset.fullValue || '');
+      el.dataset.displayValue = text;
+      placeCurvedString(el, text, {
+        R: PLAYBACK_TEXT_RADIUS,
+        thetaStartDeg: PLAYBACK_TITLE_THETA_START,
+        thetaLengthDeg: PLAYBACK_TITLE_THETA_LENGTH,
+        color: '#fff',
+        y: 0,
+      }, 'playback-title-char');
+    }
+
+    function renderPlaybackTime() {
+      const el = document.getElementById('vrTime');
+      if (!el) return;
+      const text = String(el.dataset.displayValue || '0:00 / 0:00');
+      placeCurvedString(el, text, {
+        R: PLAYBACK_TEXT_RADIUS,
+        thetaStartDeg: PLAYBACK_TIME_THETA_START,
+        thetaLengthDeg: PLAYBACK_TIME_THETA_LENGTH,
+        color: '#fff',
+        y: 0,
+      }, 'playback-time-char');
     }
 
     // <a-entity visible="false"> sets object3D.visible only on that entity,
@@ -1446,27 +1523,67 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function projectPlaybackPanel() {
-      // Small controls ride the same cylinder surface as the browse panel.
-      // The scrub bar stays slightly more forward because its 2.8m span is
-      // intentionally flatter for easier seeking.
+      // Small controls ride just a hair in front of the playback shell.
+      // Keep title/time flat in local space; curving those a-text nodes
+      // made the panel header read broken in-headset.
       [
-        ['vrTitle',        2.97, 0.10],
-        ['vrTime',         2.97, 0.10],
-        ['vrDebugBtn',     2.97, 0.06],
-        ['vrScrubBar',     2.97, 0.40],
-        ['vrMuteBtn',      2.97, 0.06],
-        ['vrVolumeSlider', 2.97, 0.06],
-        ['vrCCBtn',        2.97, 0.06],
-        ['vrPlayPauseBtn', 2.97, 0.06],
-        ['vrSpeedBtn',     2.97, 0.06],
-        ['vrLoopBtn',      2.97, 0.06],
-        ['vrBrowseBtn',    2.97, 0.06],
-        ['vrFormatBtn',    2.97, 0.06],
-        ['vrHelpBtn',      2.97, 0.06],
-        ['vrExitBtn',      2.97, 0.06]
+        ['vrDebugBtn',     3.02, 0.015],
+        ['vrMuteBtn',      3.02, 0.015],
+        ['vrVolumeSlider', 3.02, 0.015],
+        ['vrCCBtn',        3.02, 0.015],
+        ['vrPlayPauseBtn', 3.02, 0.015],
+        ['vrSpeedBtn',     3.02, 0.015],
+        ['vrLoopBtn',      3.02, 0.015],
+        ['vrBrowseBtn',    3.02, 0.015],
+        ['vrFormatBtn',    3.02, 0.015],
+        ['vrHelpBtn',      3.02, 0.015],
+        ['vrExitBtn',      3.02, 0.015]
       ].forEach(function(args) {
         curvePanelElement(document.getElementById(args[0]), args[1], args[2], PANEL_CURVE_HUB_Z);
       });
+      const scrubBar = document.getElementById('vrScrubBar');
+      if (scrubBar) {
+        scrubBar.setAttribute('position', { x: 0, y: PLAYBACK_SCRUB_Y, z: PLAYBACK_SCRUB_ROOT_Z });
+        scrubBar.setAttribute('rotation', { x: 0, y: 0, z: 0 });
+      }
+      // Concentric layer stack on the panel hub. The rail cylinder's axis must
+      // sit in front of the shell hub by enough to keep its SURFACE in front
+      // in WORLD Z, not just vrControls-local Z. vrControls' -15° X rotation
+      // tilts +Y back into -world_z, so the scrubBar's +0.04 Y offset alone
+      // pushes the rail surface ~10 mm BEHIND the shell — the shell then
+      // depth-occludes the whole rail and the user sees only the fill/thumb,
+      // which is exactly the symptom reported on the headset.
+      //
+      // SCRUB_VISUAL_LIFT is the desired WORLD-Z gap between rail surface and
+      // shell surface (rail in front of shell). The vrControls-local axis Z
+      // is solved for: surface_z_world = origin_z + Y·sin(-15°) + (Z-R)·cos(-15°),
+      // so Z = (LIFT + Y·sin(15°))/cos(15°) + R + scrubBar-local correction.
+      const PANEL_PITCH_RAD = 15 * Math.PI / 180;
+      const yWorldShift = PLAYBACK_SCRUB_Y * Math.sin(PANEL_PITCH_RAD);
+      const localZForwardPerWorldZ = 1 / Math.cos(PANEL_PITCH_RAD);
+      const vrControlsAxisZ = PANEL_CURVE_HUB_Z
+        + (SCRUB_VISUAL_LIFT + yWorldShift) * localZForwardPerWorldZ;
+      const axisZ = vrControlsAxisZ - PLAYBACK_SCRUB_ROOT_Z;
+      const layers = [
+        ['vrScrubTint', axisZ - 0.001],
+        ['vrScrubRail', axisZ],
+        ['vrScrubFill', axisZ + 0.001],
+      ];
+      layers.forEach(function(args) {
+        const el = document.getElementById(args[0]);
+        if (!el) return;
+        el.setAttribute('radius', SCRUB_VISUAL_RADIUS);
+        el.setAttribute('position', { x: 0, y: 0, z: args[1] });
+        el.setAttribute('theta-start', SCRUB_ARC_START_DEG.toFixed(3));
+        el.setAttribute('theta-length', SCRUB_ARC_LENGTH_DEG.toFixed(3));
+      });
+      const scrubHit = document.querySelector('#vrScrubBar .vr-scrub-bg');
+      if (scrubHit) {
+        scrubHit.setAttribute('radius', SCRUB_VISUAL_RADIUS);
+        scrubHit.setAttribute('position', { x: 0, y: 0, z: axisZ + 0.002 });
+        scrubHit.setAttribute('theta-start', SCRUB_ARC_START_DEG.toFixed(3));
+        scrubHit.setAttribute('theta-length', SCRUB_ARC_LENGTH_DEG.toFixed(3));
+      }
     }
 
     function projectFormatPicker() {
@@ -1478,10 +1595,14 @@ a.chip:hover { background: #3a3a3a; }
     if (scene.hasLoaded) {
       projectPlaybackPanel();
       projectFormatPicker();
+      setPlaybackTitle(document.getElementById('vrTitle')?.dataset?.fullValue || '');
+      renderPlaybackTime();
     } else {
       scene.addEventListener('loaded', function() {
         projectPlaybackPanel();
         projectFormatPicker();
+        setPlaybackTitle(document.getElementById('vrTitle')?.dataset?.fullValue || '');
+        renderPlaybackTime();
       });
     }
 
@@ -3350,7 +3471,7 @@ a.chip:hover { background: #3a3a3a; }
       if (!el) return;
       const cur = formatTime(video.currentTime || 0);
       const dur = formatTime(video.duration || 0);
-      el.setAttribute('text', 'value', cur + ' / ' + dur);
+      setPlaybackTime(cur + ' / ' + dur);
     }
 
     // M4c Task 8: array kept as a stable reference but mutated in place
@@ -3545,6 +3666,10 @@ a.chip:hover { background: #3a3a3a; }
     // -1.4..+1.4 in panel-local space.
     const SCRUB_BAR_W = 2.8;
     const SCRUB_BAR_LEFT = -1.4;
+    const SCRUB_ARC_HALF_DEG = Math.asin((SCRUB_BAR_W / 2) / SCRUB_VISUAL_RADIUS) * 180 / Math.PI;
+    const SCRUB_ARC_START_DEG = 180 - SCRUB_ARC_HALF_DEG;
+    const SCRUB_ARC_LENGTH_DEG = SCRUB_ARC_HALF_DEG * 2;
+    const SCRUB_ARC_END_DEG = SCRUB_ARC_START_DEG + SCRUB_ARC_LENGTH_DEG;
 
     // null when the scene has no markers (server emits JSON null). Coerce to
     // [] so .length / forEach are always safe.
@@ -3559,22 +3684,34 @@ a.chip:hover { background: #3a3a3a; }
       return SCRUB_BAR_LEFT + (secs / sceneDurationSec) * SCRUB_BAR_W;
     }
 
+    function projectScrubChild(el, flatX, zLift) {
+      if (!el) return;
+      // curvePanelElement caches its first input in el.dataset.flatX and
+      // re-uses that on every subsequent call (so a curved element can be
+      // re-projected without re-flattening). For the thumb and marker dots
+      // — which we want to move every frame — that cache pins them to their
+      // initial X forever. Overwrite the cache so the new flatX wins.
+      el.dataset.flatX = String(flatX);
+      el.setAttribute('position', { x: flatX, y: 0, z: zLift || 0.005 });
+      curvePanelElement(el, SCRUB_VISUAL_RADIUS, zLift || 0.005, PANEL_CURVE_HUB_Z);
+    }
+
     function tickScrubBar() {
       const dur = isFinite(video.duration) && video.duration > 0
         ? video.duration
         : sceneDurationSec;
       if (!dur) return;
       const t = Math.max(0, Math.min(dur, video.currentTime || 0));
-      const fillW = Math.max(0.001, (t / dur) * SCRUB_BAR_W);
+      const ratio = t / dur;
       const fill = document.getElementById('vrScrubFill');
       const thumb = document.getElementById('vrScrubThumb');
       if (fill) {
-        fill.setAttribute('width', fillW);
-        // Plane is centered on its position; shift x so the left edge stays at SCRUB_BAR_LEFT.
-        fill.setAttribute('position', { x: SCRUB_BAR_LEFT + fillW / 2, y: 0, z: 0.001 });
+        const fillTheta = Math.max(SCRUB_FILL_MIN_DEG, ratio * SCRUB_ARC_LENGTH_DEG);
+        fill.setAttribute('theta-start', (SCRUB_ARC_END_DEG - fillTheta).toFixed(3));
+        fill.setAttribute('theta-length', fillTheta.toFixed(3));
       }
       if (thumb) {
-        thumb.setAttribute('position', { x: SCRUB_BAR_LEFT + (t / dur) * SCRUB_BAR_W, y: 0, z: 0.005 });
+        projectScrubChild(thumb, SCRUB_BAR_LEFT + ratio * SCRUB_BAR_W, SCRUB_THUMB_Z);
       }
     }
 
@@ -3665,7 +3802,8 @@ a.chip:hover { background: #3a3a3a; }
         dot.setAttribute('data-marker-title', m.title || '');
         dot.setAttribute('geometry', 'primitive:circle;radius:0.03');
         dot.setAttribute('material', 'color:#f7b500;opacity:0.95');
-        dot.setAttribute('position', x.toFixed(3) + ' 0 0.003');
+        dot.setAttribute('position', x.toFixed(3) + ' 0 ' + SCRUB_MARKER_Z.toFixed(3));
+        projectScrubChild(dot, x, SCRUB_MARKER_Z);
         root.appendChild(dot);
         bindScrubElement(dot);
         bindMarkerTooltip(dot);
@@ -3697,8 +3835,7 @@ a.chip:hover { background: #3a3a3a; }
       // Title — applied here in addition to the optimistic tile-snapshot
       // update in swapToScene; the server-side title may differ from the
       // tile's text (truncation, decoration, etc.).
-      const titleEl = document.getElementById('vrTitle');
-      if (titleEl && meta.title) titleEl.setAttribute('value', meta.title);
+      if (meta.title) setPlaybackTitle(meta.title);
 
       // Duration — used by tickScrubBar / tForMarkerX as a fallback while
       // video.duration is still NaN. Once the new video reports duration,
@@ -4138,9 +4275,8 @@ a.chip:hover { background: #3a3a3a; }
         // Optimistic title update from the tile snapshot. refreshSceneMeta
         // overwrites this with the canonical server title if it succeeded.
         try {
-          const titleEl = document.getElementById('vrTitle');
           const newTitle = (tileEl && tileEl.dataset && tileEl.dataset.tileTitle) || '';
-          if (titleEl && newTitle) titleEl.setAttribute('value', newTitle);
+          if (newTitle) setPlaybackTitle(newTitle);
         } catch (e) { console.warn('stash-vr: title update', e); }
 
         swapInFlight = false;
