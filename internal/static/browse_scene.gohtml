@@ -80,7 +80,7 @@ a.chip:hover { background: #3a3a3a; }
 <input id="vrSearchInput" type="text" autocomplete="off" inputmode="search"
        style="position:fixed; top:-1000px; left:-1000px; opacity:0; width:1px; height:1px; pointer-events:none;" />
 
-<a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" background="color: #111" webxr="optionalFeatures: layers" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
+<a-scene id="vrScene" embedded style="display:none" vr-mode-ui="enabled: true" loading-screen="enabled: false" renderer="alpha: true" webxr="optionalFeatures: layers" data-stereo="{{.Projection.Stereo}}" data-geometry="{{.Projection.Geometry}}" data-fov="{{.Projection.FOV}}">
   <a-entity camera position="0 1.6 0"></a-entity>
   <!--
     All four render entities are always emitted. JS toggles visibility
@@ -545,18 +545,6 @@ a.chip:hover { background: #3a3a3a; }
              position="0 0 -0.01"></a-plane>
     <a-text id="vrDebugOverlayText" value="DEBUG OVERLAY READY" align="center" color="#ffff00"
             width="2.5" wrap-count="30" position="0 0 0"></a-text>
-  </a-entity>
-
-  <!-- M5 Phase 0 diagnostic overlay. Declared in-scene up front (instead
-       of created dynamically) because the existing debug/subtitle/fade
-       surfaces in this scene all use stable A-Frame entities and reparent
-       their object3D at runtime when needed. Hidden by default; JS fills
-       in the probe values on enter-vr. -->
-  <a-entity id="m5DiagOverlay" position="0 0 -1.35" visible="false">
-    <a-plane width="2.2" height="0.42" color="#000" material="shader: flat; opacity: 0.72"
-             position="0 0 -0.01"></a-plane>
-    <a-text id="m5DiagOverlayText" value="M5 Phase 0&#10;(awaiting session)" align="left" color="#00ff00"
-            width="2.2" wrap-count="34" position="-1.0 0.12 0"></a-text>
   </a-entity>
 
   <!-- Laser controllers for raycast-clicking the panel buttons. -->
@@ -3949,34 +3937,38 @@ a.chip:hover { background: #3a3a3a; }
     }
     pickerState.initial = { type: pickerState.type, degree: pickerState.degree, stereo: pickerState.stereo };
 
+    // Pure derivation of the active geometry entity id from the
+    // pickerState — no side effects. Used both at startup (to seed
+    // scene.dataset.activeGeom for the M5 layer manager) and inside
+    // applyPickerState. Distinct from scene.dataset.geometry, which
+    // holds Stash's Projection.Geometry string ('equirectangular' /
+    // 'fisheye' / ''), not a DOM entity id.
+    function pickerStateToActiveId(state) {
+      if (state.degree === 'Cinema') return 'vrFlat';
+      if (state.type === 'FishEye')  return 'vrFisheye';
+      if (state.degree === '360')    return 'vrSphere360';
+      return 'vrSphere180';
+    }
+    scene.dataset.activeGeom = pickerStateToActiveId(pickerState);
+
     // Apply current pickerState: update data attrs, toggle entity
     // visibility, reset boundVR flags so applyAll rebinds, then
     // recompute the per-row highlights and disabled state.
     function applyPickerState() {
       const isFishEye = pickerState.type === 'FishEye';
-      const isCinema  = pickerState.degree === 'Cinema';
-      const isNormal  = pickerState.type === 'Normal';
 
-      // Cinema forces stereo=2D regardless of the user's Stereo pick.
-      const effectiveStereo = isCinema ? '2D' : pickerState.stereo;
-      const stereoData = effectiveStereo === 'SBS' ? 'sbs' :
-                         effectiveStereo === 'TB'  ? 'tb'  : '';
+      const stereoData = pickerState.stereo === 'SBS' ? 'sbs' :
+                         pickerState.stereo === 'TB'  ? 'tb'  : '';
       scene.dataset.stereo = stereoData;
 
-      // Decide which render entity is active.
-      let activeId = 'vrFlat';
-      if (!isCinema) {
-        if (isFishEye) {
-          activeId = 'vrFisheye';
-          const fovEl = document.getElementById('vrFisheye');
-          if (fovEl) fovEl.dataset.fov = (pickerState.degree === '200' ? '200' : '180');
-          if (fovEl) fovEl.dataset.cant = '0'; // user-picked fisheye is plain fisheye
-        } else if (isNormal && pickerState.degree === '360') {
-          activeId = 'vrSphere360';
-        } else if (isNormal && pickerState.degree === '180') {
-          activeId = 'vrSphere180';
-        }
+      const activeId = pickerStateToActiveId(pickerState);
+      if (isFishEye) {
+        const fovEl = document.getElementById('vrFisheye');
+        if (fovEl) fovEl.dataset.fov = (pickerState.degree === '200' ? '200' : '180');
+        if (fovEl) fovEl.dataset.cant = '0'; // user-picked fisheye is plain fisheye
       }
+      scene.dataset.activeGeom = activeId;
+
       ['vrSphere180', 'vrSphere360', 'vrFisheye', 'vrFlat'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -3991,6 +3983,11 @@ a.chip:hover { background: #3a3a3a; }
 
       updatePickerHighlights();
       updatePickerDisabled();
+
+      // Notify the XR media-layer manager so it can swap to the
+      // matching cached layer. No-op until the manager has activated
+      // after enter-vr (or if WebXR Layers aren't supported).
+      if (window.syncMediaLayer) window.syncMediaLayer();
     }
 
     function updatePickerHighlights() {
@@ -4375,227 +4372,195 @@ a.chip:hover { background: #3a3a3a; }
       scene.setAttribute('panel-tickers', '');
     }
 
+
     // ============================================================
-    // M5 Phase 0 diagnostic — see specs/m5 §4.1.
-    // Always-on (no URL flag); shows runtime probe values as a
-    // camera-attached <a-text> overlay so the user can read them
-    // without devtools. Tasks 2A/2B/2C diverge based on what this
-    // reports. Removed in Task 7 once Phase 1 ships.
+    // XR media-layer manager. Owns the WebXR Layers media layer
+    // bound to <video> for sphere180 / sphere360 / cinema modes.
+    // Active when:
+    //   - XRMediaBinding is defined globally
+    //   - The session has 'layers' in enabledFeatures
+    //   - renderState.layers is populated (Three.js's WebXRManager
+    //     creates the projection layer asynchronously after A-Frame's
+    //     enter-vr event, so we poll for up to 2s)
+    //
+    // When active, hides the corresponding geometry entity so the
+    // video isn't double-rendered. Fisheye has no native layer type
+    // and keeps its shader path; the manager goes idle for that mode.
+    //
+    // Quest 3's compositor leaks allocations across destroy + create
+    // cycles (toggle lag accumulates after ~7 swaps even at normal
+    // pace). To avoid that, layers are cached per (geomId, stereo)
+    // combo and reused; only updateRenderState swaps which one is
+    // active. At most ~6 layers held simultaneously (3 stereos × 2
+    // sphere modes + 1 cinema), all sharing the same <video>.
+    //
+    // Exposes window.syncMediaLayer so applyPickerState can notify
+    // the manager when geometry / stereo changes.
     // ============================================================
-    (function m5Phase0Diagnostic() {
-      const diagRoot = document.getElementById('m5DiagOverlay');
-      const diagText = document.getElementById('m5DiagOverlayText');
-      if (!diagRoot || !diagText) return;
+    (function () {
+      let activeMediaLayer = null;
+      let suppressedGeomId = null;
+      let mediaBinding     = null;
+      let refSpace         = null;
+      let supported        = false;
+      const layerCache = new Map(); // 'geomId:stereo' -> XRLayer
 
-      // Sample at t=0, 0.25s, 0.5s, 1s, 2s, 4s after enter-vr. A-Frame's
-      // enter-vr can fire before Three.js's WebXRManager populates
-      // renderState.layers / baseLayer, so a single read at enter-vr time
-      // can show neither layer set. The last snapshot is the steady state.
-      const SAMPLE_DELAYS_MS = [0, 250, 500, 1000, 2000, 4000];
-      let sampleTimers = [];
+      function getXRSession() {
+        const xr = scene.renderer && scene.renderer.xr;
+        if (!xr) return null;
+        try { return xr.getSession() || null; } catch (_) { return null; }
+      }
 
-      function attachToCamera() {
-        if (!diagRoot.object3D || !scene.camera) return;
-        if (diagRoot.object3D.parent !== scene.camera) {
-          if (diagRoot.object3D.parent) diagRoot.object3D.parent.remove(diagRoot.object3D);
-          scene.camera.add(diagRoot.object3D);
-          diagRoot.object3D.position.set(0, 0, -1.35);
+      function buildOrGetLayer() {
+        if (!mediaBinding || !refSpace) return null;
+        const stereo = scene.dataset.stereo || '';
+        const geomId = scene.dataset.activeGeom || 'vrFlat';
+        if (geomId === 'vrFisheye') return null;
+        const key = geomId + ':' + (stereo || 'mono');
+        const cached = layerCache.get(key);
+        if (cached) return cached;
+        const layout = stereo === 'sbs' ? 'stereo-left-right' :
+                       stereo === 'tb'  ? 'stereo-top-bottom' :
+                       'mono';
+        let layer = null;
+        if (geomId === 'vrSphere180') {
+          layer = mediaBinding.createEquirectLayer(video, {
+            space: refSpace,
+            layout: layout,
+            centralHorizontalAngle: Math.PI,
+            upperVerticalAngle: Math.PI / 2,
+            lowerVerticalAngle: -Math.PI / 2,
+            radius: 0
+          });
+        } else if (geomId === 'vrSphere360') {
+          layer = mediaBinding.createEquirectLayer(video, {
+            space: refSpace,
+            layout: layout,
+            centralHorizontalAngle: 2 * Math.PI,
+            upperVerticalAngle: Math.PI / 2,
+            lowerVerticalAngle: -Math.PI / 2,
+            radius: 0
+          });
+        } else if (geomId === 'vrFlat') {
+          layer = mediaBinding.createQuadLayer(video, {
+            space: refSpace,
+            layout: layout,
+            width: 4.0,
+            height: 2.25,
+            transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
+          });
         }
+        if (layer) layerCache.set(key, layer);
+        return layer;
       }
 
-      function snapshot(label) {
-        const lines = ['M5 Phase 0 [' + label + ']'];
-        let xrSession = null;
-        try {
-          xrSession = scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession();
-        } catch (_) {}
-        if (!xrSession) {
-          lines.push('NO SESSION');
-        } else {
-          const ef = xrSession.enabledFeatures
-            ? Array.from(xrSession.enabledFeatures)
-            : [];
-          lines.push('features: ' + (ef.length ? ef.join(',') : '(none)'));
-          const layersArr = xrSession.renderState && xrSession.renderState.layers;
-          lines.push('layers count: ' + (layersArr ? layersArr.length : '0'));
-          const baseLayer = xrSession.renderState && xrSession.renderState.baseLayer;
-          lines.push('baseLayer: ' + (baseLayer ? 'yes' : 'no'));
-        }
-        lines.push('XRMediaBinding: ' + (typeof XRMediaBinding !== 'undefined' ? 'yes' : 'no'));
-        const rev = (typeof AFRAME !== 'undefined' && AFRAME.THREE && AFRAME.THREE.REVISION)
-          ? AFRAME.THREE.REVISION
-          : '?';
-        lines.push('THREE: r' + rev);
-        diagText.setAttribute('text', 'value', lines.join('\n'));
-      }
-
-      function clearTimers() {
-        sampleTimers.forEach(function(id) { clearTimeout(id); });
-        sampleTimers = [];
-      }
-
-      scene.addEventListener('enter-vr', function() {
-        attachToCamera();
-        diagRoot.setAttribute('visible', 'true');
-        clearTimers();
-        SAMPLE_DELAYS_MS.forEach(function(ms) {
-          sampleTimers.push(setTimeout(function() {
-            snapshot(ms === 0 ? 't=0' : 't=' + (ms / 1000) + 's');
-          }, ms));
+      // Destroy ALL cached layers + restore the previously-suppressed
+      // entity. Only called on exit-vr — during a session we never
+      // destroy, we just swap which cached layer is in renderState.
+      function teardown() {
+        layerCache.forEach(function(layer) {
+          try { layer.destroy(); } catch (_) {}
         });
-      });
+        layerCache.clear();
+        activeMediaLayer = null;
+        if (suppressedGeomId) {
+          const el = document.getElementById(suppressedGeomId);
+          if (el) el.setAttribute('visible', 'true');
+          suppressedGeomId = null;
+        }
+      }
+
+      function syncLayer() {
+        if (!supported) return;
+        const xrSession = getXRSession();
+        if (!xrSession) return;
+        const newLayer = buildOrGetLayer();
+        const existing = Array.from((xrSession.renderState && xrSession.renderState.layers) || []);
+        // A "media layer" is any layer we've ever cached. Drop them
+        // all from the renderState; we'll re-add only the one we
+        // want active (or none for fisheye). This works because
+        // updateRenderState replaces the layers array wholesale.
+        const mediaSet = new Set(layerCache.values());
+        const nonMedia = existing.filter(function(l) { return !mediaSet.has(l); });
+        const merged = newLayer ? [newLayer].concat(nonMedia) : nonMedia;
+        try {
+          xrSession.updateRenderState({ layers: merged });
+        } catch (err) {
+          console.warn('media-layer: updateRenderState failed', err);
+          return;
+        }
+        activeMediaLayer = newLayer;
+        if (newLayer) {
+          const geomId = scene.dataset.activeGeom || 'vrFlat';
+          const el = document.getElementById(geomId);
+          if (el) {
+            el.setAttribute('visible', 'false');
+            suppressedGeomId = geomId;
+          }
+        } else {
+          suppressedGeomId = null;
+        }
+      }
+      window.syncMediaLayer = syncLayer;
+
+      // Unified poll for: session attached, 'layers' feature granted,
+      // and renderState.layers populated. A-Frame's enter-vr can fire
+      // before Three.js's WebXRManager finishes setting up the session
+      // OR populating the projection layer, so we poll for up to 2s
+      // rather than read-once and silently bail.
+      function activateOnceReady() {
+        if (typeof XRMediaBinding === 'undefined') {
+          console.log('media-layer: XRMediaBinding unavailable; staying on VideoTexture path');
+          return;
+        }
+        const deadline = Date.now() + 2000;
+        function tick() {
+          const session = getXRSession();
+          if (!session) {
+            if (Date.now() < deadline) { requestAnimationFrame(tick); return; }
+            console.log('media-layer: no session by deadline; staying on VideoTexture path');
+            return;
+          }
+          const ef = session.enabledFeatures ? Array.from(session.enabledFeatures) : [];
+          if (!ef.includes('layers')) {
+            console.log('media-layer: layers feature not granted; staying on VideoTexture path');
+            return;
+          }
+          const layersArr = session.renderState && session.renderState.layers;
+          if (!layersArr || !layersArr.length) {
+            if (Date.now() < deadline) { requestAnimationFrame(tick); return; }
+            console.log('media-layer: renderState.layers stayed empty after 2s; staying on VideoTexture path');
+            return;
+          }
+          try {
+            const xr = scene.renderer.xr;
+            mediaBinding = new XRMediaBinding(session);
+            refSpace = xr.getReferenceSpace();
+            supported = true;
+            // The projection layer carries the HUD; make its clear
+            // color transparent so the media layer behind it shows
+            // through anywhere the HUD doesn't draw. Requires
+            // <a-scene renderer="alpha: true"> so the layer has an
+            // alpha buffer.
+            try { scene.renderer.setClearColor(0x000000, 0); } catch (_) {}
+            syncLayer();
+            console.log('media-layer: active');
+          } catch (err) {
+            console.warn('media-layer: setup failed', err);
+            mediaBinding = null;
+            refSpace = null;
+            supported = false;
+          }
+        }
+        tick();
+      }
+      scene.addEventListener('enter-vr', activateOnceReady);
 
       scene.addEventListener('exit-vr', function() {
-        clearTimers();
-        diagRoot.setAttribute('visible', 'false');
-      });
-    })();
-
-    // ============================================================
-    // SPIKE: WebXR Media Layers — see followups.md "V flash" entry.
-    // Activated via ?spike-layers=1. Replaces the VideoTexture render
-    // path for the current projection with an XRMediaBinding layer
-    // (the compositor handles video frames directly, bypassing the
-    // texImage2D upload that VideoTexture uses today). Goal: discover
-    // whether 8K video plays smoothly via this path.
-    // Falls back silently to the current path on any failure.
-    // ============================================================
-    (function spikeWebXRLayers() {
-      const spikeFlag = new URLSearchParams(location.search).get('spike-layers');
-      if (!spikeFlag) return;
-      const forceMode = (spikeFlag === 'force');
-
-      function tintMuteButton(color) {
-        // The mute button is the only entity with data-action="mute" in
-        // vrControls. Find it and overwrite its material color so the
-        // user can see spike state when they summon the panel.
-        const btn = document.querySelector('[data-action="mute"]');
-        if (btn) btn.setAttribute('material', 'color: ' + color + '; opacity: 0.95');
-      }
-      function spikeStatus(state, reason) {
-        // state in {'active', 'failed', 'idle'}; reason is a short string.
-        scene.dataset.spikeLayers = state + (reason ? ':' + reason : '');
-        if (state === 'active') {
-          tintMuteButton('#00cc00');
-          console.log('stash-vr spike: ACTIVE — ' + (reason || ''));
-        } else if (state === 'failed') {
-          tintMuteButton('#cc0000');
-          console.warn('stash-vr spike: FAILED — ' + (reason || ''));
-        }
-      }
-
-      let mediaLayer = null;
-      let geometryHidden = null; // entity we hid so we can restore on exit-vr
-
-      function teardownSpike() {
-        if (geometryHidden) {
-          geometryHidden.setAttribute('visible', 'true');
-          geometryHidden = null;
-        }
-        if (mediaLayer) {
-          // Layers are auto-cleaned when the session ends, but null our ref
-          // so a subsequent enter-vr can rebuild fresh.
-          mediaLayer = null;
-        }
-        // Reset the mute button tint so re-entering VR starts in the
-        // unset state.
-        tintMuteButton('#2c5282');
-        delete scene.dataset.spikeLayers;
-      }
-      scene.addEventListener('exit-vr', teardownSpike);
-
-      scene.addEventListener('enter-vr', function() {
-        try {
-          if (typeof XRMediaBinding === 'undefined') {
-            spikeStatus('failed', 'no-XRMediaBinding');
-            return;
-          }
-          const xr = scene.renderer && scene.renderer.xr;
-          if (!xr) { spikeStatus('failed', 'no-xr-renderer'); return; }
-          const xrSession = xr.getSession();
-          if (!xrSession) { spikeStatus('failed', 'no-session'); return; }
-          const refSpace = xr.getReferenceSpace();
-          if (!refSpace) { spikeStatus('failed', 'no-refspace'); return; }
-
-          const stereo = scene.dataset.stereo || '';
-          const geom = scene.dataset.geometry || '';
-          const fovDeg = parseFloat(scene.dataset.fov || '0') || 0;
-
-          // Map stash-vr stereo flag -> WebXR layout string.
-          const layout = stereo === 'sbs' ? 'stereo-left-right' :
-                         stereo === 'tb'  ? 'stereo-top-bottom' :
-                         'mono';
-
-          const mediaBinding = new XRMediaBinding(xrSession);
-
-          if (geom === 'fisheye') {
-            spikeStatus('failed', 'fisheye');
-            return;
-          }
-
-          if (geom === 'equirectangular') {
-            // VR180 -> π central, VR360 -> 2π central. theta clamped to ±π/2.
-            const isFull360 = (fovDeg >= 360);
-            mediaLayer = mediaBinding.createEquirectLayer(video, {
-              space: refSpace,
-              layout: layout,
-              centralHorizontalAngle: isFull360 ? 2 * Math.PI : Math.PI,
-              upperVerticalAngle: Math.PI / 2,
-              lowerVerticalAngle: -Math.PI / 2,
-              radius: 0
-            });
-            // Hide whichever sphere is currently the active geometry so the
-            // video isn't double-rendered.
-            geometryHidden = isFull360 ? document.getElementById('vrSphere360')
-                                       : document.getElementById('vrSphere180');
-          } else {
-            // No geometry tag => cinema/flat. Use a quad layer roughly where
-            // vrFlat sits today (4x2.25m at 0,1.6,-3).
-            mediaLayer = mediaBinding.createQuadLayer(video, {
-              space: refSpace,
-              layout: layout,
-              width: 4.0,    // full width in meters, matches vrFlat's plane
-              height: 2.25,  // full height in meters
-              transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
-            });
-            geometryHidden = document.getElementById('vrFlat');
-          }
-
-          // Insert the media layer BEHIND the existing layer set (so the HUD
-          // projection layer stays in front). renderState.layers is the
-          // current list; if A-Frame is still on the legacy baseLayer (no
-          // 'layers' feature granted), updateRenderState({layers}) would
-          // strand it — bail in that case.
-          const existingLayers = (xrSession.renderState && xrSession.renderState.layers) || null;
-          const onLegacyBaseLayer = !existingLayers || !existingLayers.length;
-
-          if (onLegacyBaseLayer && !forceMode) {
-            spikeStatus('failed', 'legacy-baselayer (try ?spike-layers=force to override)');
-            mediaLayer = null;
-            return;
-          }
-
-          // On legacy baseLayer with force mode: replace baseLayer entirely with our
-          // media layer. A-Frame's HUD will not render (the projection layer it was
-          // drawing into is gone), but the media layer presents independently via
-          // the compositor. User sees only the video — sufficient to test whether
-          // the Layers path eliminates the V flash artifact.
-          const newLayers = onLegacyBaseLayer
-            ? [mediaLayer]
-            : [mediaLayer].concat(existingLayers);
-
-          xrSession.updateRenderState({ layers: newLayers });
-
-          if (geometryHidden) geometryHidden.setAttribute('visible', 'false');
-
-          spikeStatus('active', (geom || 'cinema') + '/' + layout + (onLegacyBaseLayer ? '/force' : ''));
-        } catch (err) {
-          const msg = (err && err.message ? err.message : String(err)).substring(0, 60);
-          // Run teardown first (it resets the tint), then set the failed
-          // status so the red indicator survives until exit-vr.
-          teardownSpike();
-          spikeStatus('failed', 'thrown:' + msg);
-        }
+        teardown();
+        mediaBinding = null;
+        refSpace = null;
+        supported = false;
       });
     })();
   })();
