@@ -547,6 +547,18 @@ a.chip:hover { background: #3a3a3a; }
             width="2.5" wrap-count="30" position="0 0 0"></a-text>
   </a-entity>
 
+  <!-- M5 Phase 0 diagnostic overlay. Declared in-scene up front (instead
+       of created dynamically) because the existing debug/subtitle/fade
+       surfaces in this scene all use stable A-Frame entities and reparent
+       their object3D at runtime when needed. Hidden by default; JS fills
+       in the probe values on enter-vr. -->
+  <a-entity id="m5DiagOverlay" position="0 1.0 -1.5" visible="false">
+    <a-plane width="2.2" height="0.42" color="#000" material="shader: flat; opacity: 0.72"
+             position="0 0 -0.01"></a-plane>
+    <a-text id="m5DiagOverlayText" value="M5 Phase 0&#10;(awaiting session)" align="left" color="#00ff00"
+            width="2.2" wrap-count="34" position="-1.0 0.12 0"></a-text>
+  </a-entity>
+
   <!-- Laser controllers for raycast-clicking the panel buttons. -->
   <!-- Initial visible attribute would be overridden by tracked-controls'
        autoHide=true on every tick once a controller connects, so we don't
@@ -4371,26 +4383,21 @@ a.chip:hover { background: #3a3a3a; }
     // reports. Removed in Task 7 once Phase 1 ships.
     // ============================================================
     (function m5Phase0Diagnostic() {
-      let diagText = null;
-      function ensureOverlay() {
-        if (diagText) return diagText;
-        diagText = document.createElement('a-text');
-        diagText.setAttribute('id', 'm5DiagOverlay');
-        diagText.setAttribute('value', 'M5 Phase 0\n(awaiting session)');
-        diagText.setAttribute('color', '#0f0');
-        diagText.setAttribute('align', 'left');
-        diagText.setAttribute('width', '2');
-        diagText.setAttribute('position', '-0.6 0.3 -1.5');
-        diagText.setAttribute('visible', 'false');
-        // Attach to the camera entity so the panel follows head pose.
-        const cam = scene.querySelector('[camera]') || scene;
-        cam.appendChild(diagText);
-        return diagText;
+      const diagRoot = document.getElementById('m5DiagOverlay');
+      const diagText = document.getElementById('m5DiagOverlayText');
+      if (!diagRoot || !diagText) return;
+
+      function attachToCamera() {
+        if (!diagRoot.object3D || !scene.camera) return;
+        if (diagRoot.object3D.parent !== scene.camera) {
+          if (diagRoot.object3D.parent) diagRoot.object3D.parent.remove(diagRoot.object3D);
+          scene.camera.add(diagRoot.object3D);
+          diagRoot.object3D.position.set(-0.6, 0.3, -1.5);
+        }
       }
-      scene.addEventListener('loaded', ensureOverlay);
 
       scene.addEventListener('enter-vr', function() {
-        const overlay = ensureOverlay();
+        attachToCamera();
         const lines = ['M5 Phase 0'];
         let xrSession = null;
         try {
@@ -4413,12 +4420,12 @@ a.chip:hover { background: #3a3a3a; }
           ? AFRAME.THREE.REVISION
           : '?';
         lines.push('THREE: r' + rev);
-        overlay.setAttribute('text', 'value', lines.join('\n'));
-        overlay.setAttribute('visible', 'true');
+        diagText.setAttribute('text', 'value', lines.join('\n'));
+        diagRoot.setAttribute('visible', 'true');
       });
 
       scene.addEventListener('exit-vr', function() {
-        if (diagText) diagText.setAttribute('visible', 'false');
+        diagRoot.setAttribute('visible', 'false');
       });
     })();
 
