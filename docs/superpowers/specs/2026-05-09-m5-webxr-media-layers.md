@@ -112,6 +112,20 @@ The spike sets `webxr="optionalFeatures: layers"` on `<a-scene>` but `session.re
 
 Phase 0 ends with a one-paragraph result note appended to this spec.
 
+### 4.1.1 Phase 0 result
+
+Run on commit `c58998d` (+ uncommitted refresh-on-interval refinement to the diagnostic) on Quest 3 / Meta Browser on 2026-05-19:
+
+- `session.enabledFeatures`: `local, viewer, layers, web-xr, local-floor` (`'layers'` present)
+- `renderState.layers.length`: `0` at A-Frame's `enter-vr` event; settles to `1` by t≈1–4s
+- `renderState.baseLayer`: `no` (both at t=0 and at settled state)
+- `XRMediaBinding`: `yes`
+- `AFRAME.THREE.REVISION`: `r173`
+
+**Outcome:** None of A / B / C. Three.js's `WebXRManager` *does* auto-create an `XRProjectionLayer` when `'layers'` is granted (no `baseLayer` is ever set; `renderState.layers` reaches length 1 once setup completes). The spike's `legacy-baselayer` bail kept firing because it read `renderState.layers` synchronously at A-Frame's `enter-vr` event, which fires *before* Three.js has populated the projection layer. A single read at that instant shows `layers:0 + baseLayer:no` — neither type set — and the spike's `!existingLayers.length` check incorrectly classified that as legacy mode.
+
+**Path forward:** Skip Task 2A/2B/2C. Proceed directly to **Task 3** (production layer manager). The only adjustment vs. the plan as written: the manager's `enter-vr` handler must defer its `renderState.layers` read until Three.js has populated the projection layer — either via a `requestAnimationFrame` poll (wait until `renderState.layers.length >= 1` or a short timeout elapses), or by hooking `renderer.xr`'s own `sessionstart` event. The same deferral pattern should replace the spike's bail condition during Task 3's refactor.
+
 ### 4.2 Phase 1 — Production layer integration (assumes Phase 0 finds a tractable fix)
 
 Files modified:
