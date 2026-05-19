@@ -552,7 +552,7 @@ a.chip:hover { background: #3a3a3a; }
        surfaces in this scene all use stable A-Frame entities and reparent
        their object3D at runtime when needed. Hidden by default; JS fills
        in the probe values on enter-vr. -->
-  <a-entity id="m5DiagOverlay" position="0 1.0 -1.5" visible="false">
+  <a-entity id="m5DiagOverlay" position="0 0 -1.35" visible="false">
     <a-plane width="2.2" height="0.42" color="#000" material="shader: flat; opacity: 0.72"
              position="0 0 -0.01"></a-plane>
     <a-text id="m5DiagOverlayText" value="M5 Phase 0&#10;(awaiting session)" align="left" color="#00ff00"
@@ -4392,7 +4392,7 @@ a.chip:hover { background: #3a3a3a; }
         if (diagRoot.object3D.parent !== scene.camera) {
           if (diagRoot.object3D.parent) diagRoot.object3D.parent.remove(diagRoot.object3D);
           scene.camera.add(diagRoot.object3D);
-          diagRoot.object3D.position.set(-0.6, 0.3, -1.5);
+          diagRoot.object3D.position.set(0, 0, -1.35);
         }
       }
 
