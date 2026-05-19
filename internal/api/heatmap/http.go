@@ -34,7 +34,7 @@ func CoverHandler(libraryService *library.Service) http.HandlerFunc {
 			}
 			return
 		}
-		err = jpeg.Encode(w, cover, nil)
+		err = jpeg.Encode(w, cover, &jpeg.Options{Quality: 92})
 		if err != nil {
 			log.Ctx(ctx).Err(err).Msg("cover: write")
 			return

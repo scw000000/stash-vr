@@ -566,8 +566,11 @@ a.chip:hover { background: #3a3a3a; }
        it to vrFlat (cinema) or scene.camera (immersive) when a cue is
        active. Hidden until a cue activates. -->
   <a-entity id="vrSubtitlePlane" visible="false">
-    <a-plane width="1.6" height="0.18" color="#000" material="opacity:0.5"></a-plane>
-    <a-text id="vrSubtitleText" value="" align="center" color="#fff" width="3" position="0 0 0.005"></a-text>
+    <!-- Single canvas-textured plane. A CanvasTexture lets us render
+         CJK / Cyrillic / Arabic / any Unicode via the browser's native
+         font stack — A-Frame's default Roboto MSDF font is Latin-only
+         and renders all other glyphs as blank. -->
+    <a-plane id="vrSubtitleSurface" width="1.6" height="0.18"></a-plane>
   </a-entity>
 
   <!-- M4c Task 8 fade overlay. Black plane reparented to scene.camera at
@@ -2480,6 +2483,19 @@ a.chip:hover { background: #3a3a3a; }
           texture.repeat.x = -1;
           texture.offset.x =  1;
         }
+        // Anisotropic filtering + mipmaps keep the cover sharp at the
+        // glancing angles a curved cylinder presents and at the small
+        // tile size — without this Three.js falls back to a single
+        // sample, which looks soft on VR displays.
+        texture.minFilter = AFRAME.THREE.LinearMipmapLinearFilter;
+        texture.magFilter = AFRAME.THREE.LinearFilter;
+        texture.generateMipmaps = true;
+        try {
+          const caps = scene.renderer && scene.renderer.capabilities;
+          if (caps && caps.getMaxAnisotropy) {
+            texture.anisotropy = caps.getMaxAnisotropy();
+          }
+        } catch (_) {}
         texture.needsUpdate = true;
       }
       material.side = AFRAME.THREE.DoubleSide;
@@ -3608,6 +3624,63 @@ a.chip:hover { background: #3a3a3a; }
       }
     }
 
+    // CanvasTexture-backed subtitle rendering. Lazily binds a canvas to
+    // the vrSubtitleSurface plane's material so any Unicode the
+    // browser can render (CJK, Cyrillic, etc.) shows up — A-Frame's
+    // default MSDF font is Latin-only.
+    const subtitleCanvas = document.createElement('canvas');
+    subtitleCanvas.width = 2048;
+    subtitleCanvas.height = 256; // matches 1.6:0.18 plane aspect (8.89:1) closely enough
+    const subtitleCtx = subtitleCanvas.getContext('2d');
+    const subtitleTexture = AFRAME.THREE
+      ? new AFRAME.THREE.CanvasTexture(subtitleCanvas)
+      : null;
+    if (subtitleTexture) {
+      subtitleTexture.minFilter = AFRAME.THREE.LinearFilter;
+      subtitleTexture.magFilter = AFRAME.THREE.LinearFilter;
+      subtitleTexture.generateMipmaps = false;
+    }
+    let subtitleSurfaceBound = false;
+    function bindSubtitleSurface() {
+      if (subtitleSurfaceBound || !subtitleTexture) return;
+      const el = document.getElementById('vrSubtitleSurface');
+      if (!el) return;
+      const mesh = el.getObject3D('mesh');
+      if (!mesh) {
+        el.addEventListener('object3dset', bindSubtitleSurface, { once: true });
+        return;
+      }
+      mesh.material = new AFRAME.THREE.MeshBasicMaterial({
+        map: subtitleTexture,
+        transparent: true,
+        side: AFRAME.THREE.DoubleSide,
+        depthWrite: false
+      });
+      subtitleSurfaceBound = true;
+    }
+    scene.addEventListener('loaded', bindSubtitleSurface);
+
+    function paintSubtitleText(text) {
+      if (!subtitleCtx || !subtitleTexture) return;
+      const W = subtitleCanvas.width, H = subtitleCanvas.height;
+      subtitleCtx.clearRect(0, 0, W, H);
+      subtitleCtx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      subtitleCtx.fillRect(0, 0, W, H);
+      subtitleCtx.fillStyle = '#fff';
+      // Native font stack so the browser falls back through CJK /
+      // Cyrillic / Arabic system fonts as needed.
+      subtitleCtx.font = 'bold 64px "Noto Sans CJK SC", "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic", "Microsoft YaHei", Arial, sans-serif';
+      subtitleCtx.textAlign = 'center';
+      subtitleCtx.textBaseline = 'middle';
+      const lines = (text || '').split('\n');
+      const lineHeight = 80;
+      const startY = H / 2 - (lines.length - 1) * lineHeight / 2;
+      lines.forEach(function(line, i) {
+        subtitleCtx.fillText(line, W / 2, startY + i * lineHeight);
+      });
+      subtitleTexture.needsUpdate = true;
+    }
+
     function tickSubtitles() {
       const plane = document.getElementById('vrSubtitlePlane');
       if (!plane) return;
@@ -3625,8 +3698,8 @@ a.chip:hover { background: #3a3a3a; }
         }
       }
       if (active) {
-        const txt = document.getElementById('vrSubtitleText');
-        if (txt) txt.setAttribute('text', 'value', active.text);
+        if (!subtitleSurfaceBound) bindSubtitleSurface();
+        paintSubtitleText(active.text);
         plane.setAttribute('visible', 'true');
       } else {
         plane.setAttribute('visible', 'false');
