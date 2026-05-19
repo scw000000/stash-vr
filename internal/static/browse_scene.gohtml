@@ -4230,6 +4230,11 @@ a.chip:hover { background: #3a3a3a; }
         // route through applyPickerState so the visibility flip /
         // boundVR reset / applyAll path matches a manual Format pick.
         try {
+          // Cached XR layers reference the previous scene's <video>
+          // state; reusing them across a src swap crashes the Quest 3
+          // compositor. Drop the cache so applyPickerState's call to
+          // syncMediaLayer creates fresh layers against the new video.
+          if (window.invalidateMediaLayerCache) window.invalidateMediaLayerCache();
           scene.dataset.geometry = proj.Geometry || '';
           scene.dataset.fov      = String(proj.FOV || '');
           scene.dataset.stereo   = (proj.Stereo || '').toLowerCase();
@@ -4404,6 +4409,11 @@ a.chip:hover { background: #3a3a3a; }
       let refSpace         = null;
       let supported        = false;
       const layerCache = new Map(); // 'geomId:stereo' -> XRLayer
+      // Set of every media layer we've ever created (alive + destroyed).
+      // Used to filter media vs projection layers in renderState even
+      // across cache invalidations: destroyed layers can linger in
+      // renderState.layers for one frame until updateRenderState applies.
+      const knownMediaLayers = new Set();
 
       function getXRSession() {
         const xr = scene.renderer && scene.renderer.xr;
@@ -4450,25 +4460,45 @@ a.chip:hover { background: #3a3a3a; }
             transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
           });
         }
-        if (layer) layerCache.set(key, layer);
+        if (layer) {
+          layerCache.set(key, layer);
+          knownMediaLayers.add(layer);
+        }
         return layer;
       }
 
-      // Destroy ALL cached layers + restore the previously-suppressed
-      // entity. Only called on exit-vr — during a session we never
-      // destroy, we just swap which cached layer is in renderState.
-      function teardown() {
+      // Destroy all currently-cached layers, remove them from
+      // renderState.layers, and restore the previously-suppressed
+      // entity. Called on exit-vr and on scene swap (where cached
+      // layers reference the old video state and would crash the
+      // compositor if reused).
+      function dropCache() {
+        const session = getXRSession();
         layerCache.forEach(function(layer) {
           try { layer.destroy(); } catch (_) {}
+          // Keep in knownMediaLayers so syncLayer's filter still
+          // recognises the (now-destroyed) layer if renderState
+          // hasn't flushed yet.
         });
         layerCache.clear();
         activeMediaLayer = null;
+        if (session) {
+          const existing = Array.from(session.renderState.layers || []);
+          const nonMedia = existing.filter(function(l) { return !knownMediaLayers.has(l); });
+          if (nonMedia.length !== existing.length) {
+            try { session.updateRenderState({ layers: nonMedia }); }
+            catch (err) { console.warn('media-layer: dropCache updateRenderState failed', err); }
+          }
+        }
         if (suppressedGeomId) {
           const el = document.getElementById(suppressedGeomId);
           if (el) el.setAttribute('visible', 'true');
           suppressedGeomId = null;
         }
       }
+      // Expose for swapToScene to call before applyPickerState on
+      // scene swap (the new <video> content needs fresh XR layers).
+      window.invalidateMediaLayerCache = dropCache;
 
       function syncLayer() {
         if (!supported) return;
@@ -4476,12 +4506,12 @@ a.chip:hover { background: #3a3a3a; }
         if (!xrSession) return;
         const newLayer = buildOrGetLayer();
         const existing = Array.from((xrSession.renderState && xrSession.renderState.layers) || []);
-        // A "media layer" is any layer we've ever cached. Drop them
-        // all from the renderState; we'll re-add only the one we
-        // want active (or none for fisheye). This works because
-        // updateRenderState replaces the layers array wholesale.
-        const mediaSet = new Set(layerCache.values());
-        const nonMedia = existing.filter(function(l) { return !mediaSet.has(l); });
+        // Drop any media layer from renderState — we'll re-add only
+        // the one we want active (or none for fisheye). Filter against
+        // knownMediaLayers, not layerCache, so a recently-destroyed
+        // layer (after a scene-swap invalidation) is still recognised
+        // until updateRenderState applies.
+        const nonMedia = existing.filter(function(l) { return !knownMediaLayers.has(l); });
         const merged = newLayer ? [newLayer].concat(nonMedia) : nonMedia;
         try {
           xrSession.updateRenderState({ layers: merged });
@@ -4557,7 +4587,7 @@ a.chip:hover { background: #3a3a3a; }
       scene.addEventListener('enter-vr', activateOnceReady);
 
       scene.addEventListener('exit-vr', function() {
-        teardown();
+        dropCache();
         mediaBinding = null;
         refSpace = null;
         supported = false;
