@@ -4364,6 +4364,65 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     // ============================================================
+    // M5 Phase 0 diagnostic — see specs/m5 §4.1.
+    // Always-on (no URL flag); shows runtime probe values as a
+    // camera-attached <a-text> overlay so the user can read them
+    // without devtools. Tasks 2A/2B/2C diverge based on what this
+    // reports. Removed in Task 7 once Phase 1 ships.
+    // ============================================================
+    (function m5Phase0Diagnostic() {
+      let diagText = null;
+      function ensureOverlay() {
+        if (diagText) return diagText;
+        diagText = document.createElement('a-text');
+        diagText.setAttribute('id', 'm5DiagOverlay');
+        diagText.setAttribute('value', 'M5 Phase 0\n(awaiting session)');
+        diagText.setAttribute('color', '#0f0');
+        diagText.setAttribute('align', 'left');
+        diagText.setAttribute('width', '2');
+        diagText.setAttribute('position', '-0.6 0.3 -1.5');
+        diagText.setAttribute('visible', 'false');
+        // Attach to the camera entity so the panel follows head pose.
+        const cam = scene.querySelector('[camera]') || scene;
+        cam.appendChild(diagText);
+        return diagText;
+      }
+      scene.addEventListener('loaded', ensureOverlay);
+
+      scene.addEventListener('enter-vr', function() {
+        const overlay = ensureOverlay();
+        const lines = ['M5 Phase 0'];
+        let xrSession = null;
+        try {
+          xrSession = scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession();
+        } catch (_) {}
+        if (!xrSession) {
+          lines.push('NO SESSION');
+        } else {
+          const ef = xrSession.enabledFeatures
+            ? Array.from(xrSession.enabledFeatures)
+            : [];
+          lines.push('features: ' + (ef.length ? ef.join(',') : '(none)'));
+          const layersArr = xrSession.renderState && xrSession.renderState.layers;
+          lines.push('layers count: ' + (layersArr ? layersArr.length : '0'));
+          const baseLayer = xrSession.renderState && xrSession.renderState.baseLayer;
+          lines.push('baseLayer: ' + (baseLayer ? 'yes' : 'no'));
+        }
+        lines.push('XRMediaBinding: ' + (typeof XRMediaBinding !== 'undefined' ? 'yes' : 'no'));
+        const rev = (typeof AFRAME !== 'undefined' && AFRAME.THREE && AFRAME.THREE.REVISION)
+          ? AFRAME.THREE.REVISION
+          : '?';
+        lines.push('THREE: r' + rev);
+        overlay.setAttribute('text', 'value', lines.join('\n'));
+        overlay.setAttribute('visible', 'true');
+      });
+
+      scene.addEventListener('exit-vr', function() {
+        if (diagText) diagText.setAttribute('visible', 'false');
+      });
+    })();
+
+    // ============================================================
     // SPIKE: WebXR Media Layers — see followups.md "V flash" entry.
     // Activated via ?spike-layers=1. Replaces the VideoTexture render
     // path for the current projection with an XRMediaBinding layer
