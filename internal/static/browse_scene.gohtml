@@ -4387,6 +4387,13 @@ a.chip:hover { background: #3a3a3a; }
       const diagText = document.getElementById('m5DiagOverlayText');
       if (!diagRoot || !diagText) return;
 
+      // Sample at t=0, 0.25s, 0.5s, 1s, 2s, 4s after enter-vr. A-Frame's
+      // enter-vr can fire before Three.js's WebXRManager populates
+      // renderState.layers / baseLayer, so a single read at enter-vr time
+      // can show neither layer set. The last snapshot is the steady state.
+      const SAMPLE_DELAYS_MS = [0, 250, 500, 1000, 2000, 4000];
+      let sampleTimers = [];
+
       function attachToCamera() {
         if (!diagRoot.object3D || !scene.camera) return;
         if (diagRoot.object3D.parent !== scene.camera) {
@@ -4396,9 +4403,8 @@ a.chip:hover { background: #3a3a3a; }
         }
       }
 
-      scene.addEventListener('enter-vr', function() {
-        attachToCamera();
-        const lines = ['M5 Phase 0'];
+      function snapshot(label) {
+        const lines = ['M5 Phase 0 [' + label + ']'];
         let xrSession = null;
         try {
           xrSession = scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession();
@@ -4421,10 +4427,26 @@ a.chip:hover { background: #3a3a3a; }
           : '?';
         lines.push('THREE: r' + rev);
         diagText.setAttribute('text', 'value', lines.join('\n'));
+      }
+
+      function clearTimers() {
+        sampleTimers.forEach(function(id) { clearTimeout(id); });
+        sampleTimers = [];
+      }
+
+      scene.addEventListener('enter-vr', function() {
+        attachToCamera();
         diagRoot.setAttribute('visible', 'true');
+        clearTimers();
+        SAMPLE_DELAYS_MS.forEach(function(ms) {
+          sampleTimers.push(setTimeout(function() {
+            snapshot(ms === 0 ? 't=0' : 't=' + (ms / 1000) + 's');
+          }, ms));
+        });
       });
 
       scene.addEventListener('exit-vr', function() {
+        clearTimers();
         diagRoot.setAttribute('visible', 'false');
       });
     })();
