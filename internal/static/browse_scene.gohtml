@@ -2694,8 +2694,8 @@ a.chip:hover { background: #3a3a3a; }
     const TAU_RELEASE       = 0.13;  // settle to lower target in ~0.4s
     const TAU_BRAKE_REVERSE = 0.05;  // sign-flip braking in ~0.15s
 
-    const GRID_MAX_SLOW   = 1.0;   // ~2.3 grid rows/sec (row pitch ~0.43m)
-    const GRID_MAX_FAST   = 2.0;   // ~4.6 grid rows/sec
+    const GRID_MAX_SLOW   = 1.0;   // ~2.3 grid rows/sec at default cols=4 (row pitch ~0.43m)
+    const GRID_MAX_FAST   = 2.0;   // ~4.6 grid rows/sec at default cols=4
     const COLUMN_MAX_SLOW = 0.6;   // ~6 column rows/sec (row pitch 0.10m)
     const COLUMN_MAX_FAST = 1.5;   // ~15 column rows/sec
 
@@ -2725,6 +2725,8 @@ a.chip:hover { background: #3a3a3a; }
           } else if (Math.abs(target) < Math.abs(velocity)) {
             tau = TAU_RELEASE;
           } else if (Math.abs(target) >= maxFast - SCROLL_EPSILON) {
+            // epsilon is defensive; today target ∈ {0, ±maxSlow, ±maxFast}
+            // exactly, but this leaves room for a continuous mapping later.
             tau = TAU_ACCEL_FAST;
           } else {
             tau = TAU_ACCEL_SLOW;
@@ -2754,9 +2756,7 @@ a.chip:hover { background: #3a3a3a; }
     };
     function resetAllScrollSmoothers() {
       gridSmoother.reset();
-      columnSmoothers.performer.reset();
-      columnSmoothers.studio.reset();
-      columnSmoothers.tag.reset();
+      Object.values(columnSmoothers).forEach(s => s.reset());
     }
 
     // Tile rendering geometry. Computed at relayout time from browseCols
