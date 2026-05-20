@@ -2505,6 +2505,7 @@ a.chip:hover { background: #3a3a3a; }
     const TITLE_STRIP_H = 0.08;     // height of the title text strip
     const TILE_AREA_TOP_Y    = 0.85;   // top edge of first row (panel-local y); fixed regardless of cols
     const TILE_AREA_BOTTOM_Y = -1.05;  // bottom of visible tile area; tiles clipped below
+    const TILE_BUFFER_ROWS   = 1;      // rows above + below the visible band kept in the pool
     // Concentric cylinder radii — bg, tiles, and top-strip buttons share the
     // same hub at panel-local z = HUB_Z, but use different radii so their
     // surfaces don't z-fight. Smaller radius = surface farther from hub =
@@ -2956,7 +2957,37 @@ a.chip:hover { background: #3a3a3a; }
       const visibleH = TILE_AREA_TOP_Y - TILE_AREA_BOTTOM_Y;
       browseMaxScroll = Math.max(0, totalContentH - visibleH);
 
+      // Pool window: keep entities only for tiles within `visibleRows +
+      // bufferRows*2` of the current scroll position. Tiles outside the
+      // window have their entity released; scrolling back recreates the
+      // stub via the !el branch below.
+      const rowPitch = tileH + TILE_GAP_Y;
+      const visibleRows = Math.max(1, Math.ceil(visibleH / rowPitch));
+      const poolRowSpan = visibleRows + TILE_BUFFER_ROWS * 2;
+      // First fully-or-partially-visible logical row at the current scroll
+      // position. scrollY grows positive as the user scrolls forward (rows
+      // shift up), so visible row index = floor(scrollY / rowPitch).
+      const firstVisibleRow = Math.max(0, Math.floor(scrollY / rowPitch) - TILE_BUFFER_ROWS);
+      const lastVisibleRow = firstVisibleRow + poolRowSpan - 1;
+      const firstVisibleIdx = firstVisibleRow * cols;
+      const lastVisibleIdx = Math.min(browseState.tiles.length - 1, (lastVisibleRow + 1) * cols - 1);
+
       browseState.tiles.forEach((tile, i) => {
+        if (i < firstVisibleIdx || i > lastVisibleIdx) {
+          // Outside the pool window — release any entity bound to this tile.
+          const orphan = root.querySelector('a-entity[data-scene-id="' + CSS.escape(tile.id) + '"]');
+          if (orphan && orphan.parentNode) {
+            // Cancel any pending hydration job that still references it.
+            for (let q = 0; q < tileHydrationQueue.length; q++) {
+              if (tileHydrationQueue[q].el === orphan) {
+                tileHydrationQueue.splice(q, 1);
+                q--;
+              }
+            }
+            orphan.parentNode.removeChild(orphan);
+          }
+          return; // skip layout/build for off-pool tiles
+        }
         const pos = positions[i];
         // Surface points in tile-entity local coords. The tile entity is at
         // the cylinder hub. With concave-toward-user (aFrameTheta = π-ourθ),
