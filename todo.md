@@ -23,9 +23,6 @@ Just shipped (`9cfbe86..7177422`). Open follow-ups:
 
 ## VR rendering / projection
 
-### Pre-M4b — V-flash on 8K VR scenes (active)
-Intermittent diagonal black wedge on 8K source content (4320p / `#:8KVR`). Root cause: HEVC decoder misses render-tick → partial-frame `texImage2D` upload. Recommended v1: auto-downgrade 8K to 4K transcode in `internal/api/browse/scene.go` / `internal/stash/stream.go`. Size: 2–3h Go change + in-headset verify.
-
 ### M3a-followup — aspect-ratio fallback heuristic
 Read `Files[0].Width`/`Height` and apply SKYBOX-style fallback when no tag/filename projection clue. Small.
 
