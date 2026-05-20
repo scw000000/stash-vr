@@ -2677,6 +2677,88 @@ a.chip:hover { background: #3a3a3a; }
     // panel is actually shown, and we don't want to fetch /browse/filter-
     // options until then).
 
+    // ─── Smooth scroll (M4d) ────────────────────────────────────────────
+    // Shared two-tier eased velocity model used by the cover grid AND every
+    // filter column. Stick magnitude picks a target tier (SLOW for partial
+    // deflection, FAST for fully-mashed). First-order exponential ease
+    // toward target produces a smooth "ease-in-out feel" under any input
+    // changes. Frame-rate independent: 1 - exp(-dt/τ).
+    //
+    // Spec: docs/superpowers/specs/2026-05-19-smooth-scroll-design.md
+    const SCROLL_DEADZONE       = 0.30;  // matches existing scale-gate
+    const SCROLL_FULL_THRESHOLD = 0.85;  // ≥ this counts as "max stick"
+    const SCROLL_EPSILON        = 0.001; // m/s — snap-to-target threshold
+
+    const TAU_ACCEL_FAST    = 0.50;  // rest → MAX_FAST in ~1.5s
+    const TAU_ACCEL_SLOW    = 0.20;  // rest → MAX_SLOW in ~0.6s
+    const TAU_RELEASE       = 0.13;  // settle to lower target in ~0.4s
+    const TAU_BRAKE_REVERSE = 0.05;  // sign-flip braking in ~0.15s
+
+    const GRID_MAX_SLOW   = 1.0;   // ~2.3 grid rows/sec (row pitch ~0.43m)
+    const GRID_MAX_FAST   = 2.0;   // ~4.6 grid rows/sec
+    const COLUMN_MAX_SLOW = 0.6;   // ~6 column rows/sec (row pitch 0.10m)
+    const COLUMN_MAX_FAST = 1.5;   // ~15 column rows/sec
+
+    function makeScrollSmoother(maxSlow, maxFast) {
+      let velocity = 0;
+      return {
+        // Advances velocity one frame and returns the scroll delta (m) to
+        // apply this frame. Caller owns clamping to [0, max].
+        step(stick, dt) {
+          const mag = Math.abs(stick);
+
+          // 1. Two-mode target speed
+          let target;
+          if (mag < SCROLL_DEADZONE) {
+            target = 0;
+          } else if (mag >= SCROLL_FULL_THRESHOLD) {
+            target = Math.sign(stick) * maxFast;
+          } else {
+            target = Math.sign(stick) * maxSlow;
+          }
+
+          // 2. Pick τ. Order matters: reversal check first, then magnitude
+          //    comparison, then which tier we're climbing toward.
+          let tau;
+          if (velocity !== 0 && target !== 0 && Math.sign(target) !== Math.sign(velocity)) {
+            tau = TAU_BRAKE_REVERSE;
+          } else if (Math.abs(target) < Math.abs(velocity)) {
+            tau = TAU_RELEASE;
+          } else if (Math.abs(target) >= maxFast - SCROLL_EPSILON) {
+            tau = TAU_ACCEL_FAST;
+          } else {
+            tau = TAU_ACCEL_SLOW;
+          }
+
+          // 3. Frame-rate-independent exponential ease toward target
+          const alpha = 1 - Math.exp(-dt / tau);
+          velocity += (target - velocity) * alpha;
+
+          // 4. Snap to exact target near asymptote
+          if (Math.abs(velocity - target) < SCROLL_EPSILON) velocity = target;
+
+          // 5. Return integrated delta
+          return velocity * dt;
+        },
+        reset() { velocity = 0; },
+        // Exposed for diagnostics overlay only — do NOT mutate from outside.
+        _peekVelocity() { return velocity; },
+      };
+    }
+
+    const gridSmoother = makeScrollSmoother(GRID_MAX_SLOW, GRID_MAX_FAST);
+    const columnSmoothers = {
+      performer: makeScrollSmoother(COLUMN_MAX_SLOW, COLUMN_MAX_FAST),
+      studio:    makeScrollSmoother(COLUMN_MAX_SLOW, COLUMN_MAX_FAST),
+      tag:       makeScrollSmoother(COLUMN_MAX_SLOW, COLUMN_MAX_FAST),
+    };
+    function resetAllScrollSmoothers() {
+      gridSmoother.reset();
+      columnSmoothers.performer.reset();
+      columnSmoothers.studio.reset();
+      columnSmoothers.tag.reset();
+    }
+
     // Tile rendering geometry. Computed at relayout time from browseCols
     // and the panel's usable area. Constants here are the layout *parameters*;
     // derived per-tile dimensions live inside relayoutTiles().
