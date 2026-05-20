@@ -1663,6 +1663,7 @@ a.chip:hover { background: #3a3a3a; }
             if (q === browseState.pickerQuery[kind]) return;
             browseState.pickerQuery[kind] = q;
             browseState.listScrollY[kind] = 0; // reset per-column scroll on filter change
+            columnSmoothers[kind].reset();     // zero held velocity too
             renderColumnList(kind);
           }
         }, debounceMs);
@@ -2557,11 +2558,19 @@ a.chip:hover { background: #3a3a3a; }
     }
     function applyListScroll(kind, stickY, dt) {
       const max = maxListScrollY(kind);
-      if (max <= 0) return;
+      if (max <= 0) {
+        // Column has no overflow — keep the smoother at rest so the user
+        // can't build velocity that would surprise them after the list
+        // grows back to overflow.
+        columnSmoothers[kind].reset();
+        return;
+      }
       const cur = browseState.listScrollY[kind] || 0;
-      // Stick DOWN (stickY = +1) → scrollY INCREASES → later rows reveal,
-      // matching the tile-grid scroll convention from tickBrowseScroll.
-      const target = Math.max(0, Math.min(cur + stickY * 0.6 * dt, max));
+      // Stick DOWN (stickY = +1) → scrollY INCREASES → later rows reveal.
+      // Speed is eased by columnSmoothers[kind] — see the smooth-scroll
+      // block for the velocity model.
+      const delta = columnSmoothers[kind].step(stickY, dt);
+      const target = Math.max(0, Math.min(cur + delta, max));
       if (Math.abs(target - cur) < 0.0001) return;
       browseState.listScrollY[kind] = target;
       updateColumnScroll(kind);
