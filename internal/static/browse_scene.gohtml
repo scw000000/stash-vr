@@ -3795,11 +3795,13 @@ a.chip:hover { background: #3a3a3a; }
       if (!bpVis) {
         browseConsumeThumbY = false;
         browseLastScrollTickMs = 0;
+        resetAllScrollSmoothers();
         return;
       }
       if (!activeLaser) {
         browseConsumeThumbY = false;
         browseLastScrollTickMs = 0;
+        resetAllScrollSmoothers();
         return;
       }
       browseConsumeThumbY = true;  // suppress vr:scale while we own thumbstick
@@ -3807,30 +3809,37 @@ a.chip:hover { background: #3a3a3a; }
       const ts = _readThumbstickAxes(activeLaser);
       if (!ts) { browseLastScrollTickMs = 0; return; }
       // xr-standard: stick-up reads as ts.y = -1, stick-down as +1.
-      // Deadzone matches M3c's scale gate (0.3) so light drift doesn't scroll.
-      if (Math.abs(ts.y) < 0.3) { browseLastScrollTickMs = 0; return; }
+      // Deadzone is now handled inside makeScrollSmoother (target = 0 below
+      // 0.3) so the smoother can keep ticking and coast velocity to a stop
+      // when the user releases. Do NOT early-return here.
 
       const now = performance.now();
       const dt = browseLastScrollTickMs ? Math.min(0.1, (now - browseLastScrollTickMs) / 1000) : 1 / 60;
       browseLastScrollTickMs = now;
 
-      // M4c Task 7 Step 6: route the scroll to whichever surface the laser
-      // is hovering on. Pointing at a filter column → scroll that column's
-      // option list; anywhere else on the browse panel → scroll the tile
-      // grid (existing behavior).
+      // Route the scroll to whichever surface the laser is hovering on.
+      // Pointing at a filter column → scroll that column's option list;
+      // anywhere else on the browse panel → scroll the tile grid.
       const scrollTarget = _laserBrowseScrollTarget(activeLaser);
       if (scrollTarget && scrollTarget.indexOf('list-') === 0) {
         applyListScroll(scrollTarget.substring(5), ts.y, dt);
+        // The grid smoother is not being ticked while the laser is on a
+        // column — coast its velocity to zero so it doesn't resume when
+        // the laser swings back to the grid.
+        gridSmoother.reset();
         return;
       }
+      // Inverse: ensure column smoothers don't retain velocity while the
+      // laser is on the grid.
+      Object.values(columnSmoothers).forEach(s => s.reset());
 
-      // 0.6 m/s at full deflection. Stick DOWN (ts.y = +1) → scroll
-      // forward (scrollY INCREASES → tiles shift up → next rows revealed
-      // below). Stick UP reverses; scrollY clamps at 0 (top). Matches the
-      // mobile "drag down to scroll down" convention requested by the user.
-      const rate = 0.6;
-      const target = scrollY + ts.y * rate * dt;
-      const clamped = Math.max(0, Math.min(target, browseMaxScroll));
+      // Stick DOWN (ts.y = +1) → scroll forward (scrollY INCREASES → tiles
+      // shift up → next rows revealed below). Stick UP reverses; scrollY
+      // clamps at 0 (top). Speed is now eased by gridSmoother — see the
+      // smooth-scroll block above for the velocity model.
+      const delta = gridSmoother.step(ts.y, dt);
+      if (Math.abs(delta) < 0.00005) return;
+      const clamped = Math.max(0, Math.min(scrollY + delta, browseMaxScroll));
       if (Math.abs(clamped - scrollY) < 0.0001) return;
       scrollY = clamped;
       relayoutTiles();
