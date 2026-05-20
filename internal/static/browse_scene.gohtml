@@ -2699,6 +2699,13 @@ a.chip:hover { background: #3a3a3a; }
     const COLUMN_MAX_SLOW = 0.6;   // ~6 column rows/sec (row pitch 0.10m)
     const COLUMN_MAX_FAST = 1.5;   // ~15 column rows/sec
 
+    // Per-frame scroll delta below this magnitude is treated as no motion
+    // (skips relayoutTiles / updateColumnScroll). SCROLL_EPSILON snaps the
+    // smoother's velocity to zero at ~1mm/s; this gates the integrated
+    // delta. At 90Hz with v = SCROLL_EPSILON, delta ≈ 1.1e-5 — well below
+    // this threshold — so the gate never fires on real motion.
+    const SCROLL_DELTA_EPSILON = 5e-5;
+
     function makeScrollSmoother(maxSlow, maxFast) {
       let velocity = 0;
       return {
@@ -3824,13 +3831,14 @@ a.chip:hover { background: #3a3a3a; }
       if (scrollTarget && scrollTarget.indexOf('list-') === 0) {
         applyListScroll(scrollTarget.substring(5), ts.y, dt);
         // The grid smoother is not being ticked while the laser is on a
-        // column — coast its velocity to zero so it doesn't resume when
-        // the laser swings back to the grid.
+        // column — wipe its velocity so a stale value doesn't snap the
+        // grid when the laser swings back.
         gridSmoother.reset();
         return;
       }
-      // Inverse: ensure column smoothers don't retain velocity while the
-      // laser is on the grid.
+      // Inverse: wipe any stale column-smoother velocity while the laser
+      // is on the grid, for the same reason. (columnSmoothers are wired
+      // in the next task; the resets are forward-prep.)
       Object.values(columnSmoothers).forEach(s => s.reset());
 
       // Stick DOWN (ts.y = +1) → scroll forward (scrollY INCREASES → tiles
@@ -3838,7 +3846,7 @@ a.chip:hover { background: #3a3a3a; }
       // clamps at 0 (top). Speed is now eased by gridSmoother — see the
       // smooth-scroll block above for the velocity model.
       const delta = gridSmoother.step(ts.y, dt);
-      if (Math.abs(delta) < 0.00005) return;
+      if (Math.abs(delta) < SCROLL_DELTA_EPSILON) return;
       const clamped = Math.max(0, Math.min(scrollY + delta, browseMaxScroll));
       if (Math.abs(clamped - scrollY) < 0.0001) return;
       scrollY = clamped;
