@@ -4,7 +4,7 @@
 **Status:** Drafting (brainstorming approved 2026-05-09).
 **Predecessors:** [M3c SKYBOX-style controller mappings](2026-05-08-m3c-skybox-controller-mappings.md) (panel hide/show, controller bindings). [M4a web view polish](2026-05-09-m4a-web-polish.md) (clickable chips, AJAX mutations, no shared code with M4b).
 **Successors:** **M4c** — in-VR search/browse: button on the panel summons a scene grid in 3D space.
-**Reference player:** Behavior parity with [SKYBOX](https://skybox.xyz/support#Watch-Videos), per [the consolidated reference](../research/2026-05-08-skybox-ui-reference/reference.md). M4b targets section §4.1 (playback bar) of that reference.
+**Reference player:** Behavior parity with [SKYBOX](https://skybox.xyz/support#Watch-Videos), per [the consolidated reference](../../research/2026-05-08-skybox-ui-reference/reference.md). M4b targets section §4.1 (playback bar) of that reference.
 
 ---
 

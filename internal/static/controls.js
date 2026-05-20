@@ -1,4 +1,4 @@
-/* Controller mappings — see docs/superpowers/specs/2026-05-08-m3c-skybox-controller-mappings.md
+/* Controller mappings — see docs/superpowers/archive/specs/2026-05-08-m3c-skybox-controller-mappings.md
  *
  * This component listens for controller input on <a-scene> and emits
  * semantic events (vr:panel-toggle, vr:play-pause, vr:seek, vr:scale,

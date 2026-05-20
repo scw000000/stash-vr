@@ -4,7 +4,7 @@
 **Status:** Drafting (`/brainstorming` session 2026-05-08).
 **Predecessor:** [M3b in-VR projection picker spec](2026-05-08-m3b-in-vr-projection-picker.md). M3b adds the Format picker and `/browse/scene/{id}/projection` endpoint; the playback panel is always-visible there. M3c flips the panel to hidden-by-default and lets the user drive it from the controllers.
 **Successors:** **M3c-followup** — first-entry tutorial overlay, only if needed. **M3b-followup** — IPD slider in an Advanced Settings panel.
-**Reference player:** Behavior parity with [SKYBOX](https://skybox.xyz/support#Watch-Videos), per the consolidated reference at [docs/superpowers/research/2026-05-08-skybox-ui-reference/reference.md](../research/2026-05-08-skybox-ui-reference/reference.md). Where SKYBOX is silent (specifically: drag and zoom in immersive mode), this spec extends the cinema mechanic in the most coherent way and notes the extension explicitly.
+**Reference player:** Behavior parity with [SKYBOX](https://skybox.xyz/support#Watch-Videos), per the consolidated reference at [docs/superpowers/research/2026-05-08-skybox-ui-reference/reference.md](../../research/2026-05-08-skybox-ui-reference/reference.md). Where SKYBOX is silent (specifically: drag and zoom in immersive mode), this spec extends the cinema mechanic in the most coherent way and notes the extension explicitly.
 
 ---
 
