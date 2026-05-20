@@ -1723,9 +1723,14 @@ a.chip:hover { background: #3a3a3a; }
       // M4c Task 7 additions:
       cachedOptions:  {},                                            // kind → [{id,name}, ...] (Step 3)
       cachedOptionsPromise: {},                                      // kind → Promise<[ {id,name}, ... ]> while fetch is in flight
-      facetIndex: null,
-      facetIndexStatus: 'idle',                                      // 'idle' | 'loading' | 'ready' | 'failed'
-      facetIndexPromise: null,
+      facetCatalog: null,                                            // { performers, studios, tags }
+      facetCatalogStatus: 'idle',                                    // 'idle' | 'loading' | 'ready' | 'failed'
+      facetCatalogPromise: null,
+      facetCatalogEtag: '',                                          // weak ETag from /browse/filter-catalog
+      facetMatrix: null,                                             // { scenes: [...] }
+      facetMatrixStatus: 'idle',                                     // same enum as catalog
+      facetMatrixPromise: null,
+      facetMatrixEtag: '',
       pickerQuery:    { performer: '', studio: '', tag: '' },        // per-column search text (Step 5)
       listScrollY:    { performer: 0, studio: 0, tag: 0 },           // per-column scroll (Step 6)
       lastScrollFocus: 'grid',                                        // 'grid' | 'list-<kind>' | 'none'
@@ -1915,39 +1920,87 @@ a.chip:hover { background: #3a3a3a; }
       return browseState.cachedOptionsPromise[kind];
     }
 
-    function ensureFacetIndex() {
-      if (browseState.facetIndexStatus === 'ready') {
-        return Promise.resolve(browseState.facetIndex);
+    function ensureFacetCatalog() {
+      if (browseState.facetCatalogStatus === 'ready') {
+        return Promise.resolve(browseState.facetCatalog);
       }
-      if (browseState.facetIndexStatus === 'failed') {
+      if (browseState.facetCatalogStatus === 'failed') {
         return Promise.resolve(null);
       }
-      if (browseState.facetIndexPromise) {
-        return browseState.facetIndexPromise;
+      if (browseState.facetCatalogPromise) {
+        return browseState.facetCatalogPromise;
       }
-      browseState.facetIndexStatus = 'loading';
-      browseState.facetIndexPromise = fetch('/browse/filter-index', {
-        headers: { 'Accept': 'application/json' }
-      })
-        .then(r => {
-          if (!r.ok) throw new Error('filter-index ' + r.status);
+      browseState.facetCatalogStatus = 'loading';
+      const headers = { 'Accept': 'application/json' };
+      if (browseState.facetCatalogEtag) {
+        headers['If-None-Match'] = browseState.facetCatalogEtag;
+      }
+      browseState.facetCatalogPromise = fetch('/browse/filter-catalog', { headers: headers })
+        .then(function(r) {
+          if (r.status === 304) {
+            // Snapshot unchanged — keep the existing cached payload.
+            return browseState.facetCatalog;
+          }
+          if (!r.ok) throw new Error('filter-catalog ' + r.status);
+          browseState.facetCatalogEtag = r.headers.get('ETag') || '';
           return r.json();
         })
-        .then(json => {
-          browseState.facetIndex = json || null;
-          browseState.facetIndexStatus = 'ready';
-          return browseState.facetIndex;
+        .then(function(json) {
+          browseState.facetCatalog = json || null;
+          browseState.facetCatalogStatus = 'ready';
+          return browseState.facetCatalog;
         })
-        .catch(err => {
-          browseState.facetIndex = null;
-          browseState.facetIndexStatus = 'failed';
-          console.warn('stash-vr: filter index fetch failed', err);
+        .catch(function(err) {
+          console.warn('stash-vr: filter-catalog fetch failed', err);
+          browseState.facetCatalog = null;
+          browseState.facetCatalogStatus = 'failed';
           return null;
         })
         .finally(function() {
-          browseState.facetIndexPromise = null;
+          browseState.facetCatalogPromise = null;
         });
-      return browseState.facetIndexPromise;
+      return browseState.facetCatalogPromise;
+    }
+
+    function ensureFacetMatrix() {
+      if (browseState.facetMatrixStatus === 'ready') {
+        return Promise.resolve(browseState.facetMatrix);
+      }
+      if (browseState.facetMatrixStatus === 'failed') {
+        return Promise.resolve(null);
+      }
+      if (browseState.facetMatrixPromise) {
+        return browseState.facetMatrixPromise;
+      }
+      browseState.facetMatrixStatus = 'loading';
+      const headers = { 'Accept': 'application/json' };
+      if (browseState.facetMatrixEtag) {
+        headers['If-None-Match'] = browseState.facetMatrixEtag;
+      }
+      browseState.facetMatrixPromise = fetch('/browse/filter-matrix', { headers: headers })
+        .then(function(r) {
+          if (r.status === 304) {
+            return browseState.facetMatrix;
+          }
+          if (!r.ok) throw new Error('filter-matrix ' + r.status);
+          browseState.facetMatrixEtag = r.headers.get('ETag') || '';
+          return r.json();
+        })
+        .then(function(json) {
+          browseState.facetMatrix = json || null;
+          browseState.facetMatrixStatus = 'ready';
+          return browseState.facetMatrix;
+        })
+        .catch(function(err) {
+          console.warn('stash-vr: filter-matrix fetch failed', err);
+          browseState.facetMatrix = null;
+          browseState.facetMatrixStatus = 'failed';
+          return null;
+        })
+        .finally(function() {
+          browseState.facetMatrixPromise = null;
+        });
+      return browseState.facetMatrixPromise;
     }
 
     // Render `text` to a HTMLCanvas via the system font (Quest's Meta
@@ -2059,17 +2112,17 @@ a.chip:hover { background: #3a3a3a; }
       updateRaycasterTargets();
     }
 
-    function facetIndexOptionsForKind(kind) {
-      if (!browseState.facetIndex) return [];
-      if (kind === 'performer') return browseState.facetIndex.performers || [];
-      if (kind === 'studio') return browseState.facetIndex.studios || [];
-      if (kind === 'tag') return browseState.facetIndex.tags || [];
+    function facetCatalogOptionsForKind(kind) {
+      if (!browseState.facetCatalog) return [];
+      if (kind === 'performer') return browseState.facetCatalog.performers || [];
+      if (kind === 'studio') return browseState.facetCatalog.studios || [];
+      if (kind === 'tag') return browseState.facetCatalog.tags || [];
       return [];
     }
 
     function currentColumnOptions(kind) {
-      if (browseState.facetIndexStatus === 'ready') return facetIndexOptionsForKind(kind);
-      if (browseState.facetIndexStatus === 'failed') return browseState.cachedOptions[kind] || [];
+      if (browseState.facetCatalogStatus === 'ready') return facetCatalogOptionsForKind(kind);
+      if (browseState.facetCatalogStatus === 'failed') return browseState.cachedOptions[kind] || [];
       return [];
     }
 
@@ -2105,9 +2158,12 @@ a.chip:hover { background: #3a3a3a; }
       return true;
     }
 
+    // Returns a Set of facet IDs that are still reachable given current
+    // filters, OR null when the matrix hasn't loaded yet (caller should
+    // treat null as "no narrowing — show every option").
     function visibleFacetIDSet(kind) {
-      if (!browseState.facetIndex || !Array.isArray(browseState.facetIndex.scenes)) {
-        return new Set();
+      if (!browseState.facetMatrix || !Array.isArray(browseState.facetMatrix.scenes)) {
+        return null;
       }
       const key = kind === 'performer' ? 'performerIds'
         : kind === 'studio' ? 'studioIds'
@@ -2115,7 +2171,7 @@ a.chip:hover { background: #3a3a3a; }
         : null;
       const out = new Set();
       if (!key) return out;
-      browseState.facetIndex.scenes.forEach(scene => {
+      browseState.facetMatrix.scenes.forEach(scene => {
         if (!sceneMatchesActiveFacetFilters(scene)) return;
         const ids = scene[key] || [];
         ids.forEach(id => out.add(String(id)));
@@ -2125,7 +2181,11 @@ a.chip:hover { background: #3a3a3a; }
 
     function narrowedCatalog(kind) {
       const visible = visibleFacetIDSet(kind);
-      return facetIndexOptionsForKind(kind).filter(opt => visible.has(String(opt.id)));
+      if (visible === null) {
+        // Matrix not loaded yet — show all catalog options (no dimming).
+        return facetCatalogOptionsForKind(kind);
+      }
+      return facetCatalogOptionsForKind(kind).filter(opt => visible.has(String(opt.id)));
     }
 
     function regularListOptions(kind, opts) {
@@ -2231,23 +2291,22 @@ a.chip:hover { background: #3a3a3a; }
       const colLen   = parseFloat(root.getAttribute('data-col-length'));
       if (!isFinite(colTheta) || !isFinite(colLen)) return;
 
-      if (browseState.facetIndexStatus === 'loading') {
+      if (browseState.facetCatalogStatus === 'loading' || browseState.facetCatalogStatus === 'idle') {
         _columnStateHash[kind] = null;
         renderColumnMessage(root, colTheta, colLen, 'Loading…');
         return;
       }
-      if (browseState.facetIndexStatus === 'failed') {
+      if (browseState.facetCatalogStatus === 'failed') {
         ensureCachedOptions(kind).then(opts => {
           if (!root.parentNode) return; // panel torn down
           renderColumnOptions(root, kind, colTheta, colLen, opts || []);
         });
         return;
       }
-      if (browseState.facetIndexStatus !== 'ready') {
-        _columnStateHash[kind] = null;
-        renderColumnMessage(root, colTheta, colLen, 'Loading…');
-        return;
-      }
+      // Catalog ready: render rows immediately. narrowedCatalog returns the
+      // full list while matrix is still loading (no intersection dimming),
+      // then automatically narrows once the matrix arrives and the column
+      // is re-rendered.
       renderColumnOptions(root, kind, colTheta, colLen, narrowedCatalog(kind));
     }
 
@@ -2278,9 +2337,9 @@ a.chip:hover { background: #3a3a3a; }
 
     function maxListScrollY(kind) {
       let opts = [];
-      if (browseState.facetIndexStatus === 'ready') {
+      if (browseState.facetCatalogStatus === 'ready') {
         opts = narrowedCatalog(kind);
-      } else if (browseState.facetIndexStatus === 'failed') {
+      } else if (browseState.facetCatalogStatus === 'failed') {
         opts = browseState.cachedOptions[kind] || [];
       }
       const overflow = regularListOptions(kind, opts).length - LIST_VISIBLE_REGULAR;
@@ -2971,7 +3030,10 @@ a.chip:hover { background: #3a3a3a; }
         }
       });
       fetchGrid(true);
-      ensureFacetIndex().finally(function() {
+      ensureFacetCatalog().finally(function() {
+        ['performer', 'tag', 'studio'].forEach(renderColumnList);
+      });
+      ensureFacetMatrix().finally(function() {
         ['performer', 'tag', 'studio'].forEach(renderColumnList);
       });
       ['performer', 'tag', 'studio'].forEach(renderColumnList);
