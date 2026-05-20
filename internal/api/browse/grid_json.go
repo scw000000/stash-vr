@@ -50,15 +50,20 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	baseURL := apiinternal.GetBaseUrl(r)
-	tiles := make([]GridTile, 0, len(ids))
-	for _, id := range ids {
-		vd, err := h.libraryService.GetScene(r.Context(), id, false)
-		if err != nil || vd == nil || vd.SceneParts == nil {
+	vds, err := h.libraryService.GetScenesByIds(r.Context(), ids)
+	if err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: grid GetScenesByIds")
+		http.Error(w, "fetch failed", http.StatusInternalServerError)
+		return
+	}
+	tiles := make([]GridTile, 0, len(vds))
+	for i, vd := range vds {
+		if vd == nil || vd.SceneParts == nil {
 			continue
 		}
 		thumb := ""
 		if vd.SceneParts.Paths != nil && vd.SceneParts.Paths.Screenshot != nil {
-			thumb = heatmap.GetCoverUrl(baseURL, id)
+			thumb = heatmap.GetCoverUrl(baseURL, ids[i])
 		}
 		basename := ""
 		if len(vd.SceneParts.Files) > 0 && vd.SceneParts.Files[0] != nil {
@@ -72,7 +77,7 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 			tagInputs = append(tagInputs, apiinternal.TagInput{Name: t.TagParts.Name, Aliases: t.Aliases})
 		}
 		tiles = append(tiles, GridTile{
-			ID:           id,
+			ID:           ids[i],
 			Title:        vd.Title(),
 			ThumbnailURL: thumb,
 			Projection:   apiinternal.Detect(tagInputs, basename),
