@@ -1765,17 +1765,23 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     const tileHydrationQueue = [];   // [{el, tile, geom}, ...]
-    let tileHydrationScheduled = false;
+    let tileHydrationWasNonEmpty = false; // tracks last-tick state so we can emit hydration.complete once when the queue drains
 
-    function scheduleTileHydration() {
-      if (tileHydrationScheduled) return;
-      tileHydrationScheduled = true;
-      requestAnimationFrame(processTileHydrationFrame);
-    }
-
-    function processTileHydrationFrame() {
-      tileHydrationScheduled = false;
-      // Bound work-per-frame so 60Hz holds even under heavy hydration load.
+    // Drains up to HYDRATION_BUDGET_PER_FRAME hydration jobs. Called every
+    // frame from the browse-tick A-Frame component (registered near the
+    // bottom of this script). We avoid window.requestAnimationFrame on
+    // purpose — it doesn't fire reliably inside an immersive WebXR session
+    // on Quest, which leaves stubs grey forever. The scene's tick fires
+    // in both 2D and immersive modes.
+    function drainTileHydration() {
+      if (tileHydrationQueue.length === 0) {
+        if (tileHydrationWasNonEmpty) {
+          tileHydrationWasNonEmpty = false;
+          perfMark('grid.hydration.complete');
+        }
+        return;
+      }
+      tileHydrationWasNonEmpty = true;
       const HYDRATION_BUDGET_PER_FRAME = 4;
       let budget = HYDRATION_BUDGET_PER_FRAME;
       while (budget > 0 && tileHydrationQueue.length > 0) {
@@ -1786,11 +1792,6 @@ a.chip:hover { background: #3a3a3a; }
           console.warn('stash-vr: hydrateTile failed', e);
         }
         budget--;
-      }
-      if (tileHydrationQueue.length > 0) {
-        scheduleTileHydration();
-      } else {
-        perfMark('grid.hydration.complete');
       }
     }
 
@@ -2879,6 +2880,16 @@ a.chip:hover { background: #3a3a3a; }
         'shader: flat; side: double; color: #222');
       plane.setAttribute('theta-start',  geom.thetaStartDeg);
       plane.setAttribute('theta-length', geom.thetaLengthDeg);
+      // Apply panel-band clipping planes to the stub material as soon as
+      // its mesh exists. Without this, off-band rows render their grey
+      // cylinder past the band edge and bleed onto the playback panel.
+      // Hydration later replaces the material; the materialtextureloaded
+      // listener in hydrateTile re-runs applyCoverMaterial for the new
+      // material so clipping persists across the stub→full transition.
+      plane.addEventListener('loaded', function() {
+        const mesh = plane.getObject3D('mesh');
+        if (mesh && mesh.material) applyCoverMaterial(mesh.material, null);
+      });
       el.appendChild(plane);
       return el;
     }
@@ -3066,12 +3077,10 @@ a.chip:hover { background: #3a3a3a; }
           root.appendChild(el);
           tileHydrationQueue.push({ el: el, tile: tile, geom: geom });
           el.dataset.hydrationState = 'queued';   // prevent re-enqueue on next relayout
-          scheduleTileHydration();
         } else if (el.dataset.hydrationState === 'stub') {
           // Existing un-queued stub — enqueue and mark queued.
           tileHydrationQueue.push({ el: el, tile: tile, geom: geom });
           el.dataset.hydrationState = 'queued';
-          scheduleTileHydration();
         } else if (el.dataset.hydrationState === 'queued') {
           // Already in the queue; nothing to do for this relayout pass.
           // The hydration budget will pick it up.
@@ -3938,6 +3947,7 @@ a.chip:hover { background: #3a3a3a; }
     AFRAME.registerComponent('browse-tick', {
       tick: function () {
         try { tickBrowseScroll(); } catch (e) { console.warn('stash-vr: tickBrowseScroll', e); }
+        try { drainTileHydration(); } catch (e) { console.warn('stash-vr: drainTileHydration', e); }
       },
     });
     scene.setAttribute('browse-tick', '');
