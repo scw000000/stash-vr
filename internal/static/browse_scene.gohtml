@@ -1662,8 +1662,7 @@ a.chip:hover { background: #3a3a3a; }
             const q = si.value;
             if (q === browseState.pickerQuery[kind]) return;
             browseState.pickerQuery[kind] = q;
-            browseState.listScrollY[kind] = 0; // reset per-column scroll on filter change
-            columnSmoothers[kind].reset();     // zero held velocity too
+            resetColumnScroll(kind); // position + velocity together
             renderColumnList(kind);
           }
         }, debounceMs);
@@ -2191,7 +2190,7 @@ a.chip:hover { background: #3a3a3a; }
 
     function rerenderAllFacetColumns() {
       ['performer', 'tag', 'studio'].forEach(function(kind) {
-        browseState.listScrollY[kind] = 0;
+        resetColumnScroll(kind);
         renderColumnList(kind);
       });
     }
@@ -2570,6 +2569,7 @@ a.chip:hover { background: #3a3a3a; }
       // Speed is eased by columnSmoothers[kind] — see the smooth-scroll
       // block for the velocity model.
       const delta = columnSmoothers[kind].step(stickY, dt);
+      if (Math.abs(delta) < SCROLL_DELTA_EPSILON) return;
       const target = Math.max(0, Math.min(cur + delta, max));
       if (Math.abs(target - cur) < 0.0001) return;
       browseState.listScrollY[kind] = target;
@@ -2773,6 +2773,13 @@ a.chip:hover { background: #3a3a3a; }
     function resetAllScrollSmoothers() {
       gridSmoother.reset();
       Object.values(columnSmoothers).forEach(s => s.reset());
+    }
+    // Zero both the column's scroll position AND its smoother velocity.
+    // Use this anywhere code zeros listScrollY[kind]; otherwise a stale
+    // velocity will snap the freshly-reset column on the next stick tick.
+    function resetColumnScroll(kind) {
+      browseState.listScrollY[kind] = 0;
+      columnSmoothers[kind].reset();
     }
 
     // Tile rendering geometry. Computed at relayout time from browseCols
@@ -3533,7 +3540,7 @@ a.chip:hover { background: #3a3a3a; }
           window._browseClearSearchTarget('picker-' + kind);
         }
         if (had) {
-          browseState.listScrollY[kind] = 0;
+          resetColumnScroll(kind);
           renderColumnList(kind);
         }
         const si = document.getElementById('vrSearchInput');
@@ -3560,9 +3567,6 @@ a.chip:hover { background: #3a3a3a; }
           curveLabelInto(bg);
         });
         renderActiveChips();
-        ['performer', 'tag', 'studio'].forEach(kind => {
-          browseState.listScrollY[kind] = 0;
-        });
         rerenderAllFacetColumns();
         renderValuesRow();
         fetchGrid(true);
@@ -3846,8 +3850,7 @@ a.chip:hover { background: #3a3a3a; }
         return;
       }
       // Inverse: wipe any stale column-smoother velocity while the laser
-      // is on the grid, for the same reason. (columnSmoothers are wired
-      // in the next task; the resets are forward-prep.)
+      // is on the grid, for the same reason.
       Object.values(columnSmoothers).forEach(s => s.reset());
 
       // Stick DOWN (ts.y = +1) → scroll forward (scrollY INCREASES → tiles
