@@ -2393,6 +2393,16 @@ a.chip:hover { background: #3a3a3a; }
         if (!opt) continue;
         const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, state.colTheta, state.colLen, false);
         row.dataset.rowIdx = String(i);
+        // Buffer rows (outside [firstVisible, lastVisible]) must start
+        // hidden, or they bleed past the lane bounds until the next
+        // updateColumnScroll fires. setAttribute (not object3D.visible)
+        // because A-Frame component init is async — object3D doesn't
+        // exist synchronously after appendChild, so direct mutations
+        // are silently dropped. The component lifecycle applies the
+        // attribute on init.
+        if (i < firstVisible || i > lastVisible) {
+          row.setAttribute('visible', false);
+        }
         content.appendChild(row);
         added = true;
       }
