@@ -1748,6 +1748,21 @@ a.chip:hover { background: #3a3a3a; }
         console.log('vrbrowse: ' + label + ' = ' + Math.round(to.startTime - from.startTime) + 'ms');
       } catch (e) {}
     }
+    function perfClearAll() {
+      // Clear all vrbrowse.* marks so the 5-second perfReport doesn't pick
+      // up stale entries from a prior panel open.
+      try {
+        ['open',
+         'grid.json.received',
+         'grid.stubs.rendered',
+         'grid.hydration.complete',
+         'facets.catalog.received',
+         'facets.matrix.received'
+        ].forEach(function(name) {
+          performance.clearMarks('vrbrowse.' + name);
+        });
+      } catch (e) {}
+    }
 
     const tileHydrationQueue = [];   // [{el, tile, geom}, ...]
     let tileHydrationScheduled = false;
@@ -3050,11 +3065,16 @@ a.chip:hover { background: #3a3a3a; }
           el = buildTileStub(tile, geom);
           root.appendChild(el);
           tileHydrationQueue.push({ el: el, tile: tile, geom: geom });
+          el.dataset.hydrationState = 'queued';   // prevent re-enqueue on next relayout
           scheduleTileHydration();
-        } else if (el.dataset.hydrationState !== 'full') {
-          // Stub already exists (created earlier this layout); ensure it's still queued.
+        } else if (el.dataset.hydrationState === 'stub') {
+          // Existing un-queued stub — enqueue and mark queued.
           tileHydrationQueue.push({ el: el, tile: tile, geom: geom });
+          el.dataset.hydrationState = 'queued';
           scheduleTileHydration();
+        } else if (el.dataset.hydrationState === 'queued') {
+          // Already in the queue; nothing to do for this relayout pass.
+          // The hydration budget will pick it up.
         } else {
           // Existing fully-hydrated tile: cols may have changed → resize cover, badge, title.
           // Track whether per-tile geometry actually changed since the
@@ -3135,6 +3155,7 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function onBrowsePanelOpen() {
+      perfClearAll();
       perfMark('open');
       // First open: enable renderer local clipping + compute the band's
       // world-space planes from the panel's transform. Cheap to call again
