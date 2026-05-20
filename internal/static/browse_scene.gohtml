@@ -1737,6 +1737,34 @@ a.chip:hover { background: #3a3a3a; }
       overlayTarget:  'grid'                                          // 'grid' | 'picker-<kind>' (Step 5)
     };
 
+    const tileHydrationQueue = [];   // [{el, tile, geom}, ...]
+    let tileHydrationScheduled = false;
+
+    function scheduleTileHydration() {
+      if (tileHydrationScheduled) return;
+      tileHydrationScheduled = true;
+      requestAnimationFrame(processTileHydrationFrame);
+    }
+
+    function processTileHydrationFrame() {
+      tileHydrationScheduled = false;
+      // Bound work-per-frame so 60Hz holds even under heavy hydration load.
+      const HYDRATION_BUDGET_PER_FRAME = 4;
+      let budget = HYDRATION_BUDGET_PER_FRAME;
+      while (budget > 0 && tileHydrationQueue.length > 0) {
+        const job = tileHydrationQueue.shift();
+        try {
+          hydrateTile(job.el, job.tile, job.geom);
+        } catch (e) {
+          console.warn('stash-vr: hydrateTile failed', e);
+        }
+        budget--;
+      }
+      if (tileHydrationQueue.length > 0) {
+        scheduleTileHydration();
+      }
+    }
+
     function buildGridParams() {
       const p = new URLSearchParams();
       if (browseState.q) p.set('q', browseState.q);
@@ -2791,6 +2819,116 @@ a.chip:hover { background: #3a3a3a; }
       return local.y <= TILE_AREA_TOP_Y + eps && local.y >= TILE_AREA_BOTTOM_Y - eps;
     }
 
+    // Build the cheapest possible tile entity — cylinder cover with a
+    // solid background color and the right theta range. No texture load,
+    // no title chars, no badge, no hover handlers. Returns the entity
+    // ready to append; the full content arrives via hydrateTile().
+    function buildTileStub(tile, geom) {
+      const el = document.createElement('a-entity');
+      el.classList.add('vr-tile');
+      el.dataset.sceneId = tile.id;
+      el.dataset.projection = JSON.stringify(tile.projection);
+      el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
+      el.dataset.previewUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/preview';
+      el.dataset.thumbnailUrl = tile.thumbnailURL || '';
+      el.dataset.tileTitle = tile.title || '';
+      el.dataset.hydrationState = 'stub';
+
+      const plane = document.createElement('a-cylinder');
+      plane.classList.add('vr-btn', 'vr-tile-cover');
+      plane.setAttribute('radius', ARC_R);
+      plane.setAttribute('height', geom.tileCoverH);
+      plane.setAttribute('open-ended', 'true');
+      // Stub material: flat dark grey, no texture. Hydration swaps in the
+      // real cover URL via material src once we get to this tile's slot
+      // in the queue.
+      plane.setAttribute('material',
+        'shader: flat; side: double; color: #222');
+      plane.setAttribute('theta-start',  geom.thetaStartDeg);
+      plane.setAttribute('theta-length', geom.thetaLengthDeg);
+      el.appendChild(plane);
+      return el;
+    }
+
+    // Hydrate a stub: swap in the real cover texture, build the curved
+    // title characters, add the ⓘ detail badge, wire hover/preview
+    // handlers. Skipped if the element has already been hydrated for the
+    // bound tile id.
+    function hydrateTile(el, tile, geom) {
+      if (!el || !el.parentNode) return;
+      if (el.dataset.hydrationState === 'full' && el.dataset.sceneId === tile.id) return;
+
+      // Rebind in case the pool slot now points to a different tile id.
+      el.dataset.sceneId = tile.id;
+      el.dataset.projection = JSON.stringify(tile.projection);
+      el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
+      el.dataset.previewUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/preview';
+      el.dataset.thumbnailUrl = tile.thumbnailURL || '';
+      el.dataset.tileTitle = tile.title || '';
+
+      // Real cover texture.
+      const plane = el.querySelector('a-cylinder.vr-tile-cover');
+      if (plane && tile.thumbnailURL) {
+        plane.setAttribute('material',
+          'shader: flat; side: double; color: #fff; src: url(' + tile.thumbnailURL + ')');
+        plane.addEventListener('materialtextureloaded', function onLoaded() {
+          const mesh = plane.getObject3D('mesh');
+          if (!mesh || !mesh.material) return;
+          applyCoverMaterial(mesh.material, mesh.material.map || null);
+        });
+        getTileTexture(tile.thumbnailURL);
+      }
+
+      // Detail badge (build if absent; reposition if present from a prior
+      // bind on a different tile but the pool slot's geometry is reused).
+      let badge = el.querySelector(':scope > .vr-tile-detail');
+      if (!badge) {
+        badge = document.createElement('a-entity');
+        badge.classList.add('vr-btn', 'vr-tile-detail');
+        badge.setAttribute('geometry', 'primitive:circle;radius:' + geom.badgeR.toFixed(3));
+        badge.setAttribute('material', 'color:#000;opacity:0.85;shader:flat');
+        badge.setAttribute('position',
+          geom.badgeLocalX.toFixed(3) + ' ' + geom.badgeLocalY.toFixed(3) + ' ' + geom.badgeLocalZ.toFixed(3));
+        badge.setAttribute('rotation', '0 ' + geom.badgeYawDeg.toFixed(3) + ' 0');
+        const badgeText = document.createElement('a-text');
+        badgeText.setAttribute('value', 'ⓘ');
+        badgeText.setAttribute('align', 'center');
+        badgeText.setAttribute('color', '#fff');
+        badgeText.setAttribute('width', (geom.badgeR * 8).toFixed(3));
+        badgeText.setAttribute('position', '0 0 0.005');
+        badge.appendChild(badgeText);
+        el.appendChild(badge);
+      }
+
+      // Curved title characters.
+      let titleWrap = el.querySelector(':scope > .vr-tile-title');
+      if (!titleWrap) {
+        titleWrap = document.createElement('a-entity');
+        titleWrap.classList.add('vr-tile-title');
+        el.appendChild(titleWrap);
+      } else {
+        while (titleWrap.firstChild) titleWrap.removeChild(titleWrap.firstChild);
+      }
+      placeCurvedString(titleWrap, tile.title, {
+        R: ARC_R,
+        thetaStartDeg:  geom.thetaStartDeg,
+        thetaLengthDeg: geom.thetaLengthDeg,
+        color: '#fff',
+        y: geom.titleY,
+      }, 'curved-title-char');
+
+      // Hover handlers — attach exactly once per element.
+      if (!el._previewHandlersAttached) {
+        attachPreviewHandlers(el);
+        el._previewHandlersAttached = true;
+      }
+
+      el.dataset.hydrationState = 'full';
+      el.dataset.geomSig = geom.thetaStartDeg.toFixed(2) + '|' +
+                           geom.thetaLengthDeg.toFixed(2) + '|' +
+                           geom.tileCoverH.toFixed(3);
+    }
+
     function relayoutTiles() {
       const root = document.getElementById('vrBrowseTiles');
       if (!root) return;
@@ -2841,102 +2979,36 @@ a.chip:hover { background: #3a3a3a; }
         const titleZ           = titleSurfaceZ + 0.005;
         const titleYawDeg      = -pos.ourThetaCenter * 180 / Math.PI;
 
+        // Package per-tile geometry so buildTileStub/hydrateTile can use
+        // it without a long parameter list. Mirrors the locals computed
+        // just above plus tileCoverH/badgeR from the outer scope.
+        const geom = {
+          thetaStartDeg: pos.thetaStartDeg,
+          thetaLengthDeg: pos.thetaLengthDeg,
+          tileCoverH: tileCoverH,
+          badgeR: badgeR,
+          badgeLocalX: badgeLocalX,
+          badgeLocalY: badgeLocalY,
+          badgeLocalZ: badgeLocalZ,
+          badgeYawDeg: badgeYawDeg,
+          titleY: titleY,
+        };
         let el = root.querySelector('a-entity[data-scene-id="' + CSS.escape(tile.id) + '"]');
         if (!el) {
-          // Build a new tile entity from scratch.
-          el = document.createElement('a-entity');
-          el.classList.add('vr-tile');
-          el.dataset.sceneId = tile.id;
-          el.dataset.projection = JSON.stringify(tile.projection);
-          el.dataset.streamUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/stream';
-          el.dataset.previewUrl = '/browse/scene/' + encodeURIComponent(tile.id) + '/preview';
-          el.dataset.thumbnailUrl = tile.thumbnailURL;
-          // Stash the full title so the swap click handler has it without
-          // re-assembling per-character a-text values from the curved label.
-          el.dataset.tileTitle = tile.title || '';
-
-          // Cover: a curved cylinder segment. theta-start/theta-length
-          // position the visible portion of the cylinder around the row's
-          // shared hub axis, so adjacent tiles share one continuous surface
-          // and meet exactly at their edges with no cross-cut.
-          const plane = document.createElement('a-cylinder');
-          plane.classList.add('vr-btn', 'vr-tile-cover');
-          plane.setAttribute('radius', ARC_R);
-          plane.setAttribute('height', tileCoverH);
-          plane.setAttribute('open-ended', 'true');     // no top/bottom caps
-          // Material: shader-flat + side:double (so partial-cylinder winding
-          // is irrelevant — both faces render). src:<url> binds the cover
-          // texture via A-Frame's material lifecycle, which handles UV
-          // mapping on partial-arc geometry correctly.
-          plane.setAttribute('material',
-            'shader: flat; side: double; color: #fff; src: url(' + tile.thumbnailURL + ')');
-          plane.setAttribute('theta-start',  pos.thetaStartDeg);
-          plane.setAttribute('theta-length', pos.thetaLengthDeg);
-          // Once A-Frame has loaded the texture, run our cover-material
-          // settings: mirror UV on the inside-of-cylinder view, attach the
-          // panel-band clipping planes, force needsUpdate. Fires again if
-          // the material src is later changed (e.g. retry after error).
-          plane.addEventListener('materialtextureloaded', function() {
-            const mesh = plane.getObject3D('mesh');
-            if (!mesh || !mesh.material) return;
-            applyCoverMaterial(mesh.material, mesh.material.map || null);
-          });
-          // No position offset — cylinder local origin is on the hub axis,
-          // and the tile entity is positioned at the hub itself.
-          el.appendChild(plane);
-
-          // ⓘ detail badge — top-right corner of the cover, on the curve.
-          // The badge is a flat circle, so rotate it to face roughly the
-          // cylinder surface tangent at theta = right-edge.
-          const detailBadge = document.createElement('a-entity');
-          detailBadge.classList.add('vr-btn', 'vr-tile-detail');
-          detailBadge.setAttribute('geometry', 'primitive:circle;radius:' + badgeR.toFixed(3));
-          detailBadge.setAttribute('material', 'color:#000;opacity:0.85;shader:flat');
-          detailBadge.setAttribute('position',
-            badgeLocalX.toFixed(3) + ' ' + badgeLocalY.toFixed(3) + ' ' + badgeLocalZ.toFixed(3));
-          detailBadge.setAttribute('rotation', '0 ' + badgeYawDeg.toFixed(3) + ' 0');
-          const badgeText = document.createElement('a-text');
-          badgeText.setAttribute('value', 'ⓘ');
-          badgeText.setAttribute('align', 'center');
-          badgeText.setAttribute('color', '#fff');
-          badgeText.setAttribute('width', (badgeR * 8).toFixed(3));
-          badgeText.setAttribute('position', '0 0 0.005');
-          detailBadge.appendChild(badgeText);
-          el.appendChild(detailBadge);
-
-          // Title strip — per-character curved layout. The chars sit on
-          // the same arc as the cover (radius ARC_R, theta-start /
-          // theta-length from pos) but at a y below the cover center, so
-          // the whole title follows the cylinder curve and never extends
-          // past the bg arc edges. Wrapped in an <a-entity> so we can
-          // toggle its visibility as a unit when the row scrolls out of
-          // the band.
-          const titleWrap = document.createElement('a-entity');
-          titleWrap.classList.add('vr-tile-title');
-          el.appendChild(titleWrap);
-          placeCurvedString(titleWrap, tile.title, {
-            R: ARC_R,
-            thetaStartDeg:  pos.thetaStartDeg,
-            thetaLengthDeg: pos.thetaLengthDeg,
-            color: '#fff',
-            y: titleY,
-          }, 'curved-title-char');
-
-          // Cover texture is bound via the material src attribute above;
-          // A-Frame's material component handles loading + lifecycle. We
-          // still pre-warm the tileTextures cache so mouseleave can restore
-          // the cover via THREE.Texture (used by hover/sprite-cycle paths).
-          getTileTexture(tile.thumbnailURL);
-
-          attachPreviewHandlers(el);
+          // Build a stub (cylinder + grey bg only) synchronously so the
+          // grid lays out immediately. Real cover texture, title chars,
+          // badge, and hover handlers arrive via hydrateTile() across
+          // subsequent rAF ticks (bounded budget per frame).
+          el = buildTileStub(tile, geom);
           root.appendChild(el);
-          // Stamp the geom signature so the first existing-tile relayout
-          // doesn't see a mismatch and rebuild from scratch.
-          el.dataset.geomSig = pos.thetaStartDeg.toFixed(2) + '|' +
-                               pos.thetaLengthDeg.toFixed(2) + '|' +
-                               tileCoverH.toFixed(3);
+          tileHydrationQueue.push({ el: el, tile: tile, geom: geom });
+          scheduleTileHydration();
+        } else if (el.dataset.hydrationState !== 'full') {
+          // Stub already exists (created earlier this layout); ensure it's still queued.
+          tileHydrationQueue.push({ el: el, tile: tile, geom: geom });
+          scheduleTileHydration();
         } else {
-          // Existing tile: cols may have changed → resize cover, badge, title.
+          // Existing fully-hydrated tile: cols may have changed → resize cover, badge, title.
           // Track whether per-tile geometry actually changed since the
           // last relayout. If only the row's y has shifted (pure scroll),
           // we don't need to rebuild any of the cylinder geometry or the
