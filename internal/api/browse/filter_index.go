@@ -284,6 +284,52 @@ func loadFilterIndexDataWithFns(ctx context.Context, client graphql.Client, cata
 	return catalog, resp, nil
 }
 
+// buildMatrixSeeds adapts gql.FindScenesForFacetIndex into the
+// filterMatrixSeeds shape consumed by filterCache.rebuildMatrix.
+func buildMatrixSeeds(ctx context.Context, client graphql.Client) (filterMatrixSeeds, error) {
+	resp, err := gql.FindScenesForFacetIndex(ctx, client)
+	if err != nil {
+		return filterMatrixSeeds{}, fmt.Errorf("FindScenesForFacetIndex: %w", err)
+	}
+	out := filterMatrixSeeds{Scenes: make([]facetSceneSeed, 0, len(resp.FindScenes.Scenes))}
+	for _, scene := range resp.FindScenes.Scenes {
+		if scene == nil {
+			continue
+		}
+		item := facetSceneSeed{
+			ID:           scene.Id,
+			PerformerIDs: make([]string, 0, len(scene.Performers)),
+			TagIDs:       make([]string, 0, len(scene.Tags)),
+		}
+		if scene.Rating100 != nil {
+			item.Rating100 = *scene.Rating100
+		}
+		if scene.O_counter != nil {
+			item.OCount = *scene.O_counter
+		}
+		if scene.Studio != nil {
+			item.StudioID = scene.Studio.Id
+		}
+		for _, performer := range scene.Performers {
+			if performer == nil {
+				continue
+			}
+			item.PerformerIDs = append(item.PerformerIDs, performer.Id)
+		}
+		for _, tag := range scene.Tags {
+			if tag == nil {
+				continue
+			}
+			item.TagIDs = append(item.TagIDs, tag.Id)
+		}
+		if len(item.TagIDs) == 0 {
+			item.TagIDs = nil
+		}
+		out.Scenes = append(out.Scenes, item)
+	}
+	return out, nil
+}
+
 func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request) {
 	catalog, resp, err := loadFilterIndexData(r.Context(), h.libraryService.StashClient)
 	if err != nil {
@@ -356,4 +402,46 @@ func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request)
 	)); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: encode filter-index")
 	}
+}
+
+// filterCatalogHandler serves GET /browse/filter-catalog — sidebar entity
+// lists only. ETag-revalidated against an in-memory snapshot so reopens
+// without library changes return 304.
+func (h *httpHandler) filterCatalogHandler(w http.ResponseWriter, r *http.Request) {
+	payload, etag, err := h.filterCache.Catalog(r.Context(), h.libraryService.StashClient)
+	if err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-catalog build")
+		http.Error(w, "load filter catalog failed", http.StatusInternalServerError)
+		return
+	}
+	if match := r.Header.Get("If-None-Match"); match != "" && etagMatches(match, etag) {
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
+	if _, err := w.Write(payload); err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-catalog write")
+	}
+}
+
+// etagMatches returns true if any If-None-Match list entry matches the
+// snapshot's weak ETag. Strips surrounding whitespace and the optional
+// W/ prefix on each list element. Single "*" matches everything.
+func etagMatches(headerVal, etag string) bool {
+	if headerVal == "*" {
+		return true
+	}
+	target := strings.TrimPrefix(etag, "W/")
+	for _, part := range strings.Split(headerVal, ",") {
+		p := strings.TrimSpace(part)
+		p = strings.TrimPrefix(p, "W/")
+		if p == target {
+			return true
+		}
+	}
+	return false
 }

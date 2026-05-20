@@ -2,11 +2,14 @@ package browse
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
+	"stash-vr/internal/library"
 )
 
 // stubBuilder lets a test substitute the heavy GraphQL work so we can
@@ -111,5 +114,37 @@ func TestFilterCache_MatrixUsesCachedCatalogParents(t *testing.T) {
 	}
 	if atomic.LoadInt32(&stub.matrixCalls) != 1 {
 		t.Fatalf("matrix calls = %d, want 1", atomic.LoadInt32(&stub.matrixCalls))
+	}
+}
+
+func TestFilterCatalogHandler304(t *testing.T) {
+	stub := &stubBuilder{catalog: newTestCatalog(), matrixResp: newTestMatrix()}
+	h := &httpHandler{
+		libraryService: &library.Service{},
+		filterCache:    newFilterCache(stub.BuildCatalog, stub.BuildMatrix, 1*time.Hour),
+	}
+
+	// First request: expect 200 with ETag header.
+	req1 := httptest.NewRequest(http.MethodGet, "/browse/filter-catalog", nil)
+	rec1 := httptest.NewRecorder()
+	h.filterCatalogHandler(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want 200", rec1.Code)
+	}
+	etag := rec1.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("first response missing ETag")
+	}
+
+	// Second request with If-None-Match: expect 304 and empty body.
+	req2 := httptest.NewRequest(http.MethodGet, "/browse/filter-catalog", nil)
+	req2.Header.Set("If-None-Match", etag)
+	rec2 := httptest.NewRecorder()
+	h.filterCatalogHandler(rec2, req2)
+	if rec2.Code != http.StatusNotModified {
+		t.Fatalf("revalidated request status = %d, want 304", rec2.Code)
+	}
+	if rec2.Body.Len() != 0 {
+		t.Fatalf("304 response body should be empty, got %d bytes", rec2.Body.Len())
 	}
 }

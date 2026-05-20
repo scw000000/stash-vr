@@ -2,6 +2,7 @@ package browse
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"stash-vr/internal/library"
@@ -9,15 +10,20 @@ import (
 
 type httpHandler struct {
 	libraryService *library.Service
+	filterCache    *filterCache
 }
 
 func Router(libraryService *library.Service) http.Handler {
-	h := httpHandler{libraryService: libraryService}
+	h := httpHandler{
+		libraryService: libraryService,
+		filterCache:    newFilterCache(loadFilterIndexCatalog, buildMatrixSeeds, 5*time.Minute),
+	}
 	r := chi.NewRouter()
 
 	r.Get("/", h.indexHandler)
 	r.Get("/grid", h.gridJSONHandler)
 	r.Get("/filter-index", h.filterIndexHandler)
+	r.Get("/filter-catalog", h.filterCatalogHandler)
 	r.Get("/filter-options/{kind}", h.filterOptionsHandler)
 	r.Get("/perf/{id}", h.entityHandler("perf"))
 	r.Get("/studio/{id}", h.entityHandler("studio"))
