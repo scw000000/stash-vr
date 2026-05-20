@@ -2049,6 +2049,7 @@ a.chip:hover { background: #3a3a3a; }
         .then(function(json) {
           browseState.facetMatrix = json || null;
           browseState.facetMatrixStatus = 'ready';
+          _matchedScenesCacheInvalidate();
           perfMark('facets.matrix.received');
           return browseState.facetMatrix;
         })
@@ -2194,49 +2195,116 @@ a.chip:hover { background: #3a3a3a; }
       });
     }
 
-    function sceneMatchesActiveFacetFilters(scene) {
-      scene = scene || {};
-      const performerIDs = (scene.performerIds || scene.performerIDs || []).map(String);
-      const studioIDs = (scene.studioIds || scene.studioIDs || []).map(String);
-      const tagIDs = (scene.tagIds || scene.tagIDs || []).map(String);
-      const selectedPerformers = (browseState.filters.performer || []).map(String);
-      const selectedStudios = (browseState.filters.studio || []).map(String);
-      const selectedTags = (browseState.filters.tag || []).map(String);
+    // Cached subset of the matrix whose scenes match the current active
+    // facet filters. Computed once per filter change and reused across the
+    // three per-kind narrowedCatalog passes that rerenderAllFacetColumns
+    // triggers. Without this cache, going from two chips to one chip
+    // re-iterates `matrix.scenes` three times (once per kind), and each
+    // sceneMatch call allocates six arrays — easily hundreds of ms on a
+    // multi-thousand-scene library.
+    let _matchedScenesCache = null;
+    let _matchedScenesCacheKey = '';
 
-      if (!selectedPerformers.every(id => performerIDs.indexOf(id) >= 0)) return false;
-      if (!selectedStudios.every(id => studioIDs.indexOf(id) >= 0)) return false;
-      if (!selectedTags.every(id => tagIDs.indexOf(id) >= 0)) return false;
+    function _matchedScenesCacheInvalidate() {
+      _matchedScenesCache = null;
+      _matchedScenesCacheKey = '';
+    }
 
-      const starsMin = parseInt(browseState.filters.stars || '0', 10) || 0;
-      const ocountMin = parseInt(browseState.filters.ocount || '0', 10) || 0;
-      const rating100 = parseInt(scene.rating100 || 0, 10) || 0;
-      const oCount = parseInt(scene.oCount || 0, 10) || 0;
-      if (starsMin > 0 && rating100 <= starsMin * 20 - 1) return false;
-      if (ocountMin > 0 && oCount <= ocountMin - 1) return false;
+    function _filterCacheKey() {
+      const f = browseState.filters;
+      return [
+        (f.performer || []).slice().sort().join(','),
+        (f.studio || []).slice().sort().join(','),
+        (f.tag || []).slice().sort().join(','),
+        parseInt(f.stars || 0, 10) || 0,
+        parseInt(f.ocount || 0, 10) || 0,
+      ].join('|');
+    }
 
-      // Favorite intentionally does not participate here: the facet index
-      // omits favorite state, so favorite only narrows the fetched grid.
+    function _arrayHasAll(arr, required) {
+      // required is small (typically 1-2 selected ids); arr is small
+      // (typically <20 scene-tagged ids). Linear-search arr per required
+      // element — faster than building a Set on every scene.
+      for (let i = 0; i < required.length; i++) {
+        const need = required[i];
+        let found = false;
+        for (let j = 0; j < arr.length; j++) {
+          if (String(arr[j]) === need) { found = true; break; }
+        }
+        if (!found) return false;
+      }
       return true;
+    }
+
+    // Returns the scenes that satisfy the current active filters, or null
+    // when the matrix hasn't loaded yet. Caches the result keyed on the
+    // active filter signature; invalidated whenever filters or the matrix
+    // payload itself changes.
+    function matchedScenes() {
+      if (!browseState.facetMatrix || !Array.isArray(browseState.facetMatrix.scenes)) {
+        return null;
+      }
+      const key = _filterCacheKey();
+      if (_matchedScenesCacheKey === key && _matchedScenesCache !== null) {
+        return _matchedScenesCache;
+      }
+      const f = browseState.filters;
+      const selPerf = (f.performer || []).map(String);
+      const selStudio = (f.studio || []).map(String);
+      const selTag = (f.tag || []).map(String);
+      const starsMin = parseInt(f.stars || 0, 10) || 0;
+      const ocountMin = parseInt(f.ocount || 0, 10) || 0;
+      const starsThreshold = starsMin > 0 ? starsMin * 20 - 1 : -1;
+      const ocountThreshold = ocountMin > 0 ? ocountMin - 1 : -1;
+      const hasPerf = selPerf.length > 0;
+      const hasStudio = selStudio.length > 0;
+      const hasTag = selTag.length > 0;
+
+      const scenes = browseState.facetMatrix.scenes;
+      const matched = [];
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        if (!scene) continue;
+        if (starsThreshold >= 0 && ((scene.rating100 | 0) <= starsThreshold)) continue;
+        if (ocountThreshold >= 0 && ((scene.oCount | 0) <= ocountThreshold)) continue;
+        if (hasPerf) {
+          const ids = scene.performerIds || scene.performerIDs;
+          if (!ids || !_arrayHasAll(ids, selPerf)) continue;
+        }
+        if (hasStudio) {
+          const ids = scene.studioIds || scene.studioIDs;
+          if (!ids || !_arrayHasAll(ids, selStudio)) continue;
+        }
+        if (hasTag) {
+          const ids = scene.tagIds || scene.tagIDs;
+          if (!ids || !_arrayHasAll(ids, selTag)) continue;
+        }
+        matched.push(scene);
+      }
+      _matchedScenesCacheKey = key;
+      _matchedScenesCache = matched;
+      return matched;
     }
 
     // Returns a Set of facet IDs that are still reachable given current
     // filters, OR null when the matrix hasn't loaded yet (caller should
     // treat null as "no narrowing — show every option").
     function visibleFacetIDSet(kind) {
-      if (!browseState.facetMatrix || !Array.isArray(browseState.facetMatrix.scenes)) {
-        return null;
-      }
+      const scenes = matchedScenes();
+      if (scenes === null) return null;
       const key = kind === 'performer' ? 'performerIds'
         : kind === 'studio' ? 'studioIds'
         : kind === 'tag' ? 'tagIds'
         : null;
       const out = new Set();
       if (!key) return out;
-      browseState.facetMatrix.scenes.forEach(scene => {
-        if (!sceneMatchesActiveFacetFilters(scene)) return;
-        const ids = scene[key] || [];
-        ids.forEach(id => out.add(String(id)));
-      });
+      for (let i = 0; i < scenes.length; i++) {
+        const ids = scenes[i][key];
+        if (!ids) continue;
+        for (let j = 0; j < ids.length; j++) {
+          out.add(String(ids[j]));
+        }
+      }
       return out;
     }
 
