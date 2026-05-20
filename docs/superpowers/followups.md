@@ -108,6 +108,26 @@ Source: [M4c spec §2](specs/2026-05-09-m4c-in-vr-search.md). Re-entering VR cur
 ### Scrolling within deeply-long picker lists
 Source: M4c plan task 7. Each filter column shows ~5 rows; scrolling handles longer lists. If a column has thousands of options (rare), virtualization (render only visible window) would be the next step. Size: small to medium depending on need.
 
+## Smooth scroll (M4d follow-ups)
+
+### M4d-smoothscroll-followup: grid scroll frame-rate hitch
+Source: in-headset feel verification after smooth-scroll landed (commits `9cfbe86..2fe00f7`, spec [docs/superpowers/specs/2026-05-19-smooth-scroll-design.md](specs/2026-05-19-smooth-scroll-design.md)). User reports column scroll feels right, but grid scroll "looks bad because of the frame rate." Two probable causes, both rooted in the grid's render path rather than the smoother math:
+
+1. `relayoutTiles()` is called every frame while velocity ≠ 0. It recomputes per-tile positions for every tile in the pool (`tileCellPositions` → `forEach` over `browseState.tiles` → A-Frame `setAttribute('position', ...)`), which at 4 cols and a deep pool is expensive enough to bump us off 90Hz. Column scroll doesn't have this problem because [browse_scene.gohtml:2523-2543](../../internal/static/browse_scene.gohtml#L2523-L2543) (`updateColumnScroll`) just nudges `content.object3D.position.y` — the existing comment around line 2451 calls this out as "buttery-smooth scrolling" intentionally.
+
+2. The smoother now produces continuous motion through the entire ~0.4s release coast (previously, sub-deadzone stick zeroed motion instantly), so any per-frame relayout hitch is more perceptually visible than under linear scroll.
+
+Fix path: port the grid to the column's translate-the-container pattern. Place all tiles in a single A-Frame entity whose `object3D.position.y` is set per frame (no per-tile recompute); recompute positions only on row/col count change, content fetch, or scrollY crossing a virtualization boundary. The clip-plane culling at [browse_scene.gohtml:2721-2738](../../internal/static/browse_scene.gohtml#L2721-L2738) already handles visibility, so off-band tiles can stay in the container without cost. Size: medium — non-trivial restructure of `relayoutTiles` and its callers, but a well-bounded change.
+
+### M4d-smoothscroll-followup: gridSmoother reset on fetchGrid(true)
+Source: final code review noted this gap. If a filter change mid-scroll triggers `fetchGrid(true)` while `gridSmoother` has non-zero velocity, the velocity persists. Visible artifact: grid feels "stuck at the new bottom" for ~0.4s after the filter shrinks results. One-line fix: call `gridSmoother.reset()` at the top of `fetchGrid(true)` (or from each filter-change site). Size: trivial. Defer until in-headset verification confirms it's perceptible.
+
+### M4d-smoothscroll-followup: per-user MAX_SLOW / MAX_FAST tuning
+Source: [smooth-scroll design spec §"Out of scope"](specs/2026-05-19-smooth-scroll-design.md). Constants currently live in source. Expose via `config.json` (or a control-panel slider) if defaults don't suit. Size: small.
+
+### M4d-smoothscroll-followup: extract smoother block to its own JS asset
+Source: final code review. The smoother is ~95 self-contained lines in a 4000+ line `.gohtml` template. Clean lift-and-shift candidate once a real static-JS pipeline exists. Pairs naturally with the [extract `browse_scene.gohtml` CSS](#extract-browse_scenegohtml-css-to-a-separate-file) follow-up above. Size: small.
+
 ## Watch-resume / playback memory
 
 ### Watch-resume / continue-watching
