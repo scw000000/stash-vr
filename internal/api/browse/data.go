@@ -136,6 +136,23 @@ type FilterIndexResponse struct {
 	Scenes     []FilterIndexScene `json:"scenes"`
 }
 
+// FilterCatalogResponse is the JSON shape returned by /browse/filter-catalog.
+// It carries only the sidebar entity lists; the client uses it to render
+// columns immediately while the matrix payload is still in flight.
+type FilterCatalogResponse struct {
+	Performers []FilterOption `json:"performers"`
+	Studios    []FilterOption `json:"studios"`
+	Tags       []FilterOption `json:"tags"`
+}
+
+// FilterMatrixResponse is the JSON shape returned by /browse/filter-matrix.
+// It carries the per-scene facet ID memberships used by the client-side
+// intersection logic. Catalog parent maps are pre-applied so studio + tag
+// IDs are already ancestor-expanded.
+type FilterMatrixResponse struct {
+	Scenes []FilterIndexScene `json:"scenes"`
+}
+
 // SceneState is the JSON returned by every mutation POST. The client
 // uses it to update the DOM in place.
 type SceneState struct {
