@@ -3,7 +3,6 @@ package browse
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -330,77 +329,48 @@ func buildMatrixSeeds(ctx context.Context, client graphql.Client) (filterMatrixS
 	return out, nil
 }
 
+// filterIndexHandler serves the legacy GET /browse/filter-index endpoint
+// as a thin alias that composes the catalog + matrix snapshots into the
+// pre-split wire shape (FilterIndexResponse). Kept online for one cycle
+// so clients that haven't been updated still work; remove once all
+// callers use /browse/filter-catalog + /browse/filter-matrix.
 func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request) {
-	catalog, resp, err := loadFilterIndexData(r.Context(), h.libraryService.StashClient)
+	catalogPayload, _, err := h.filterCache.Catalog(r.Context(), h.libraryService.StashClient)
 	if err != nil {
-		var loadErr *filterIndexLoadError
-		if errors.As(err, &loadErr) {
-			switch loadErr.source {
-			case "catalog":
-				log.Ctx(r.Context()).Err(loadErr.err).Msg("browse: filter-index load catalog")
-				http.Error(w, "load filter catalog failed", http.StatusInternalServerError)
-				return
-			case "scenes":
-				log.Ctx(r.Context()).Err(loadErr.err).Msg("browse: filter-index fetch scenes")
-				http.Error(w, "fetch scenes failed", http.StatusInternalServerError)
-				return
-			}
-		}
-		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index load data")
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index (legacy) catalog")
+		http.Error(w, "load filter catalog failed", http.StatusInternalServerError)
+		return
+	}
+	matrixPayload, _, err := h.filterCache.Matrix(r.Context(), h.libraryService.StashClient)
+	if err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index (legacy) matrix")
+		http.Error(w, "load filter matrix failed", http.StatusInternalServerError)
+		return
+	}
+
+	var catalog FilterCatalogResponse
+	if err := json.Unmarshal(catalogPayload, &catalog); err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index (legacy) decode catalog")
+		http.Error(w, "load filter index failed", http.StatusInternalServerError)
+		return
+	}
+	var matrix FilterMatrixResponse
+	if err := json.Unmarshal(matrixPayload, &matrix); err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index (legacy) decode matrix")
 		http.Error(w, "load filter index failed", http.StatusInternalServerError)
 		return
 	}
 
-	scenes := make([]facetSceneSeed, 0, len(resp.FindScenes.Scenes))
-	for _, scene := range resp.FindScenes.Scenes {
-		if scene == nil {
-			continue
-		}
-		item := facetSceneSeed{
-			ID:           scene.Id,
-			PerformerIDs: make([]string, 0, len(scene.Performers)),
-			TagIDs:       make([]string, 0, len(scene.Tags)),
-		}
-		if scene.Rating100 != nil {
-			item.Rating100 = *scene.Rating100
-		}
-		if scene.O_counter != nil {
-			item.OCount = *scene.O_counter
-		}
-		if scene.Studio != nil {
-			item.StudioID = scene.Studio.Id
-		}
-		for _, performer := range scene.Performers {
-			if performer == nil {
-				continue
-			}
-			item.PerformerIDs = append(item.PerformerIDs, performer.Id)
-		}
-		for _, tag := range scene.Tags {
-			if tag == nil {
-				continue
-			}
-			item.TagIDs = append(item.TagIDs, tag.Id)
-		}
-		if len(item.TagIDs) == 0 {
-			item.TagIDs = nil
-		}
-		scenes = append(scenes, item)
+	resp := FilterIndexResponse{
+		Performers: catalog.Performers,
+		Studios:    catalog.Studios,
+		Tags:       catalog.Tags,
+		Scenes:     matrix.Scenes,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(buildFilterIndexPayload(
-		catalog.sidebar.Performers,
-		catalog.sidebar.Studios,
-		catalog.sidebar.Tags,
-		scenes,
-		catalog.selectableStudioIDs,
-		catalog.selectableTagIDs,
-		catalog.studioParentsByID,
-		catalog.tagParentsByID,
-	)); err != nil {
-		log.Ctx(r.Context()).Err(err).Msg("browse: encode filter-index")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-index (legacy) encode")
 	}
 }
 

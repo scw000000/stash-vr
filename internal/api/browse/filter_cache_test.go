@@ -2,6 +2,7 @@ package browse
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -173,5 +174,40 @@ func TestFilterMatrixHandler304(t *testing.T) {
 	h.filterMatrixHandler(rec2, req2)
 	if rec2.Code != http.StatusNotModified {
 		t.Fatalf("revalidated request status = %d, want 304", rec2.Code)
+	}
+}
+
+func TestFilterIndexHandlerComposesCachedSnapshots(t *testing.T) {
+	stub := &stubBuilder{catalog: newTestCatalog(), matrixResp: newTestMatrix()}
+	h := &httpHandler{
+		libraryService: &library.Service{},
+		filterCache:    newFilterCache(stub.BuildCatalog, stub.BuildMatrix, 1*time.Hour),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/browse/filter-index", nil)
+	rec := httptest.NewRecorder()
+	h.filterIndexHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp FilterIndexResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Performers) != 1 || resp.Performers[0].ID != "p1" {
+		t.Fatalf("performers = %#v, want [{p1,Alpha}]", resp.Performers)
+	}
+	if len(resp.Scenes) != 1 || resp.Scenes[0].ID != "sc1" {
+		t.Fatalf("scenes = %#v, want [{sc1,...}]", resp.Scenes)
+	}
+	// Second call must hit the cache (builders ran exactly once each).
+	rec2 := httptest.NewRecorder()
+	h.filterIndexHandler(rec2, httptest.NewRequest(http.MethodGet, "/browse/filter-index", nil))
+	if got := atomic.LoadInt32(&stub.catalogCalls); got != 1 {
+		t.Fatalf("catalog calls = %d after 2nd request, want 1", got)
+	}
+	if got := atomic.LoadInt32(&stub.matrixCalls); got != 1 {
+		t.Fatalf("matrix calls = %d after 2nd request, want 1", got)
 	}
 }
