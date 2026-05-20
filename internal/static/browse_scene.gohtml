@@ -1737,6 +1737,18 @@ a.chip:hover { background: #3a3a3a; }
       overlayTarget:  'grid'                                          // 'grid' | 'picker-<kind>' (Step 5)
     };
 
+    function perfMark(name) {
+      try { performance.mark('vrbrowse.' + name); } catch (e) {}
+    }
+    function perfReport(label, fromMark, toMark) {
+      try {
+        const from = performance.getEntriesByName('vrbrowse.' + fromMark).pop();
+        const to = performance.getEntriesByName('vrbrowse.' + toMark).pop();
+        if (!from || !to) return;
+        console.log('vrbrowse: ' + label + ' = ' + Math.round(to.startTime - from.startTime) + 'ms');
+      } catch (e) {}
+    }
+
     const tileHydrationQueue = [];   // [{el, tile, geom}, ...]
     let tileHydrationScheduled = false;
 
@@ -1762,6 +1774,8 @@ a.chip:hover { background: #3a3a3a; }
       }
       if (tileHydrationQueue.length > 0) {
         scheduleTileHydration();
+      } else {
+        perfMark('grid.hydration.complete');
       }
     }
 
@@ -1799,6 +1813,7 @@ a.chip:hover { background: #3a3a3a; }
       })
         .then(r => r.json())
         .then(json => {
+          perfMark('grid.json.received');
           browseState.tiles = browseState.tiles.concat(json.tiles || []);
           browseState.hasMore = !!json.hasMore;
           browseState.cursor = json.nextCursor || '1';
@@ -1976,6 +1991,7 @@ a.chip:hover { background: #3a3a3a; }
         .then(function(json) {
           browseState.facetCatalog = json || null;
           browseState.facetCatalogStatus = 'ready';
+          perfMark('facets.catalog.received');
           return browseState.facetCatalog;
         })
         .catch(function(err) {
@@ -2017,6 +2033,7 @@ a.chip:hover { background: #3a3a3a; }
         .then(function(json) {
           browseState.facetMatrix = json || null;
           browseState.facetMatrixStatus = 'ready';
+          perfMark('facets.matrix.received');
           return browseState.facetMatrix;
         })
         .catch(function(err) {
@@ -3114,9 +3131,11 @@ a.chip:hover { background: #3a3a3a; }
           badgeNode.object3D.visible = (badgeAbsY > TILE_AREA_BOTTOM_Y && badgeAbsY < TILE_AREA_TOP_Y);
         }
       });
+      perfMark('grid.stubs.rendered');
     }
 
     function onBrowsePanelOpen() {
+      perfMark('open');
       // First open: enable renderer local clipping + compute the band's
       // world-space planes from the panel's transform. Cheap to call again
       // on every open (the panel's transform doesn't change, but this lets
@@ -3140,6 +3159,13 @@ a.chip:hover { background: #3a3a3a; }
         ['performer', 'tag', 'studio'].forEach(renderColumnList);
       });
       ['performer', 'tag', 'studio'].forEach(renderColumnList);
+      setTimeout(function() {
+        perfReport('json wait', 'open', 'grid.json.received');
+        perfReport('stub render', 'grid.json.received', 'grid.stubs.rendered');
+        perfReport('hydration', 'grid.stubs.rendered', 'grid.hydration.complete');
+        perfReport('catalog', 'open', 'facets.catalog.received');
+        perfReport('matrix', 'open', 'facets.matrix.received');
+      }, 5000);
     }
 
     function vrAction(action, el) {

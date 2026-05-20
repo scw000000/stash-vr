@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -18,6 +19,7 @@ import (
 // ocount) compose into a SceneFilterType; q is fed to the FindFilter's
 // full-text search; cursor is a 1-indexed page number.
 func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
+	startAll := time.Now()
 	q := r.URL.Query()
 	searchQ := q.Get("q")
 	// Multi-value: in-VR picker allows AND-selection across multiple
@@ -42,15 +44,19 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 	_ = favorite // favorite filter deferred — see plan note.
 
 	sceneFilter := buildGridFilter(performers, studios, tags, starsMin, ocountMin)
+	startIds := time.Now()
 	ids, total, err := fetchSceneIDsWithSize(r.Context(), h.libraryService.StashClient, sceneFilter, searchQ, page, perPage)
+	findIdsMs := time.Since(startIds).Milliseconds()
 	if err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: grid fetchSceneIDs")
 		http.Error(w, "fetch failed", http.StatusInternalServerError)
 		return
 	}
 
+	startBatch := time.Now()
 	baseURL := apiinternal.GetBaseUrl(r)
 	vds, err := h.libraryService.GetScenesByIds(r.Context(), ids)
+	batchFetchMs := time.Since(startBatch).Milliseconds()
 	if err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: grid GetScenesByIds")
 		http.Error(w, "fetch failed", http.StatusInternalServerError)
@@ -91,10 +97,21 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 	if resp.HasMore {
 		resp.NextCursor = strconv.Itoa(page + 1)
 	}
+
+	startEncode := time.Now()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: encode grid")
 	}
+	encodeMs := time.Since(startEncode).Milliseconds()
+
+	log.Ctx(r.Context()).Trace().
+		Int64("findIdsMs", findIdsMs).
+		Int64("batchFetchMs", batchFetchMs).
+		Int64("encodeMs", encodeMs).
+		Int64("totalMs", time.Since(startAll).Milliseconds()).
+		Int("tiles", len(tiles)).
+		Msg("browse: grid timing")
 }
 
 // buildGridFilter composes a SceneFilterType from URL params. Each

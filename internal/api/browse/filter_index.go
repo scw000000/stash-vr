@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/rs/zerolog/log"
@@ -378,7 +379,9 @@ func (h *httpHandler) filterIndexHandler(w http.ResponseWriter, r *http.Request)
 // lists only. ETag-revalidated against an in-memory snapshot so reopens
 // without library changes return 304.
 func (h *httpHandler) filterCatalogHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	payload, etag, err := h.filterCache.Catalog(r.Context(), h.libraryService.StashClient)
+	gqlMs := time.Since(start).Milliseconds()
 	if err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: filter-catalog build")
 		http.Error(w, "load filter catalog failed", http.StatusInternalServerError)
@@ -388,14 +391,28 @@ func (h *httpHandler) filterCatalogHandler(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("ETag", etag)
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusNotModified)
+		log.Ctx(r.Context()).Trace().
+			Int64("gqlMs", gqlMs).
+			Bool("cacheHit", true).
+			Bool("notModified", true).
+			Msg("browse: filter-catalog timing")
 		return
 	}
+	startWrite := time.Now()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "no-cache")
 	if _, err := w.Write(payload); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: filter-catalog write")
 	}
+	encodeMs := time.Since(startWrite).Milliseconds()
+
+	log.Ctx(r.Context()).Trace().
+		Int64("gqlMs", gqlMs).
+		Int64("encodeMs", encodeMs).
+		Int("bytes", len(payload)).
+		Bool("cacheHit", gqlMs < 5).
+		Msg("browse: filter-catalog timing")
 }
 
 // filterMatrixHandler serves GET /browse/filter-matrix — the per-scene
@@ -403,7 +420,9 @@ func (h *httpHandler) filterCatalogHandler(w http.ResponseWriter, r *http.Reques
 // as filter-catalog. Heavier payload; the snapshot pays for itself most
 // on warm reopens (304).
 func (h *httpHandler) filterMatrixHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	payload, etag, err := h.filterCache.Matrix(r.Context(), h.libraryService.StashClient)
+	gqlMs := time.Since(start).Milliseconds()
 	if err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: filter-matrix build")
 		http.Error(w, "load filter matrix failed", http.StatusInternalServerError)
@@ -413,14 +432,28 @@ func (h *httpHandler) filterMatrixHandler(w http.ResponseWriter, r *http.Request
 		w.Header().Set("ETag", etag)
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusNotModified)
+		log.Ctx(r.Context()).Trace().
+			Int64("gqlMs", gqlMs).
+			Bool("cacheHit", true).
+			Bool("notModified", true).
+			Msg("browse: filter-matrix timing")
 		return
 	}
+	startWrite := time.Now()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "no-cache")
 	if _, err := w.Write(payload); err != nil {
 		log.Ctx(r.Context()).Err(err).Msg("browse: filter-matrix write")
 	}
+	encodeMs := time.Since(startWrite).Milliseconds()
+
+	log.Ctx(r.Context()).Trace().
+		Int64("gqlMs", gqlMs).
+		Int64("encodeMs", encodeMs).
+		Int("bytes", len(payload)).
+		Bool("cacheHit", gqlMs < 5).
+		Msg("browse: filter-matrix timing")
 }
 
 // etagMatches returns true if any If-None-Match list entry matches the
