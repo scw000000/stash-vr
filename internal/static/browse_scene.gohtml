@@ -2240,7 +2240,25 @@ a.chip:hover { background: #3a3a3a; }
       return out;
     }
 
+    function noFacetFiltersActive() {
+      const f = browseState.filters;
+      return (
+        (!f.performer || f.performer.length === 0) &&
+        (!f.studio || f.studio.length === 0) &&
+        (!f.tag || f.tag.length === 0) &&
+        (!f.stars || f.stars === 0) &&
+        (!f.ocount || f.ocount === 0)
+      );
+    }
+
     function narrowedCatalog(kind) {
+      // Fast path: when no facet filters are active (e.g. user just
+      // deselected the last chip), every catalog option is reachable.
+      // Skip the O(matrix.scenes × 3 kinds) intersection iteration —
+      // on libraries with thousands of scenes that's hundreds of ms.
+      if (noFacetFiltersActive()) {
+        return facetCatalogOptionsForKind(kind);
+      }
       const visible = visibleFacetIDSet(kind);
       if (visible === null) {
         // Matrix not loaded yet — show all catalog options (no dimming).
@@ -2983,13 +3001,25 @@ a.chip:hover { background: #3a3a3a; }
       const tileH = tileCoverH + TITLE_GAP + TITLE_STRIP_H;
       const badgeR = Math.min(0.04, tileW * 0.07);
 
-      // Remove tile entities for tiles no longer in state.tiles.
+      // Remove tile entities for tiles no longer in state.tiles. This
+      // covers filter changes (fetchGrid(true) wipes the array) and any
+      // other case where the tile set shrinks.
       const expected = new Set(browseState.tiles.map(t => t.id));
       Array.from(root.children).forEach(child => {
         if (!expected.has(child.dataset.sceneId)) {
           root.removeChild(child);
         }
       });
+      // Prune the hydration queue of jobs whose entity was just removed.
+      // Without this, the browse-tick budget spends ~15+ frames draining
+      // no-op orphan jobs before reaching the new stubs — visible as lag
+      // when the user clears a filter and waits for the broader grid to
+      // populate. Mirrors the off-pool release path's queue cleanup.
+      for (let q = tileHydrationQueue.length - 1; q >= 0; q--) {
+        if (!tileHydrationQueue[q].el.parentNode) {
+          tileHydrationQueue.splice(q, 1);
+        }
+      }
 
       const positions = tileCellPositions(tileW, tileH, tileCoverH, browseState.tiles.length);
 
@@ -2999,6 +3029,15 @@ a.chip:hover { background: #3a3a3a; }
       const totalContentH = totalRows > 0 ? totalRows * (tileH + TILE_GAP_Y) - TILE_GAP_Y : 0;
       const visibleH = TILE_AREA_TOP_Y - TILE_AREA_BOTTOM_Y;
       browseMaxScroll = Math.max(0, totalContentH - visibleH);
+      // Clamp scrollY to the new range. When a filter change shrinks the
+      // tile count (deselecting a chip → fewer scenes match → smaller
+      // browseMaxScroll), the prior scrollY may sit past the bottom of
+      // the new content. tickBrowseScroll only clamps on stick input, so
+      // without this the visible band would be empty until the user
+      // scrolls.
+      if (scrollY > browseMaxScroll) {
+        scrollY = browseMaxScroll;
+      }
 
       // Pool window: keep entities only for tiles within `visibleRows +
       // bufferRows*2` of the current scroll position. Tiles outside the
