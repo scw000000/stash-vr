@@ -126,11 +126,11 @@ func (h *httpHandler) gridJSONHandler(w http.ResponseWriter, r *http.Request) {
 // O-count: same trick — strict-greater-than (ocountMin - 1) is
 // equivalent to "at least ocountMin".
 //
-// MultiCriterionInput / HierarchicalMultiCriterionInput with multiple
-// IDs in Value behave as AND across the IDs (Stash's "Includes" modifier
-// requires all listed IDs on the scene), which matches the in-VR UX
-// expectation of "scenes with Alice AND Bob" / "scenes tagged POV AND
-// Outdoor".
+// Multi-select uses INCLUDES_ALL (AND): Stash's INCLUDES modifier is
+// "any of these IDs", INCLUDES_ALL is "all of these IDs". The in-VR
+// UX is "scenes with Alice AND Bob" / "scenes tagged POV AND Outdoor",
+// and the local column-narrowing in browse_scene.gohtml already
+// intersects, so the grid must too.
 func buildGridFilter(performers, studios, tags []string, starsMin, ocountMin int) *gql.SceneFilterType {
 	if len(performers) == 0 && len(studios) == 0 && len(tags) == 0 && starsMin == 0 && ocountMin == 0 {
 		return nil
@@ -139,20 +139,20 @@ func buildGridFilter(performers, studios, tags []string, starsMin, ocountMin int
 	if len(performers) > 0 {
 		f.Performers = &gql.MultiCriterionInput{
 			Value:    performers,
-			Modifier: gql.CriterionModifierIncludes,
+			Modifier: gql.CriterionModifierIncludesAll,
 		}
 	}
 	if len(studios) > 0 {
 		f.Studios = &gql.HierarchicalMultiCriterionInput{
 			Value:    studios,
-			Modifier: gql.CriterionModifierIncludes,
+			Modifier: gql.CriterionModifierIncludesAll,
 			Depth:    util.Ptr(-1),
 		}
 	}
 	if len(tags) > 0 {
 		f.Tags = &gql.HierarchicalMultiCriterionInput{
 			Value:    tags,
-			Modifier: gql.CriterionModifierIncludes,
+			Modifier: gql.CriterionModifierIncludesAll,
 			Depth:    util.Ptr(-1),
 		}
 	}
