@@ -148,3 +148,30 @@ func TestFilterCatalogHandler304(t *testing.T) {
 		t.Fatalf("304 response body should be empty, got %d bytes", rec2.Body.Len())
 	}
 }
+
+func TestFilterMatrixHandler304(t *testing.T) {
+	stub := &stubBuilder{catalog: newTestCatalog(), matrixResp: newTestMatrix()}
+	h := &httpHandler{
+		libraryService: &library.Service{},
+		filterCache:    newFilterCache(stub.BuildCatalog, stub.BuildMatrix, 1*time.Hour),
+	}
+
+	req1 := httptest.NewRequest(http.MethodGet, "/browse/filter-matrix", nil)
+	rec1 := httptest.NewRecorder()
+	h.filterMatrixHandler(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, want 200", rec1.Code)
+	}
+	etag := rec1.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("first response missing ETag")
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/browse/filter-matrix", nil)
+	req2.Header.Set("If-None-Match", etag)
+	rec2 := httptest.NewRecorder()
+	h.filterMatrixHandler(rec2, req2)
+	if rec2.Code != http.StatusNotModified {
+		t.Fatalf("revalidated request status = %d, want 304", rec2.Code)
+	}
+}

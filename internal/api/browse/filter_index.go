@@ -428,6 +428,31 @@ func (h *httpHandler) filterCatalogHandler(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// filterMatrixHandler serves GET /browse/filter-matrix — the per-scene
+// facet ID matrix used by client-side intersection. Same ETag protocol
+// as filter-catalog. Heavier payload; the snapshot pays for itself most
+// on warm reopens (304).
+func (h *httpHandler) filterMatrixHandler(w http.ResponseWriter, r *http.Request) {
+	payload, etag, err := h.filterCache.Matrix(r.Context(), h.libraryService.StashClient)
+	if err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-matrix build")
+		http.Error(w, "load filter matrix failed", http.StatusInternalServerError)
+		return
+	}
+	if match := r.Header.Get("If-None-Match"); match != "" && etagMatches(match, etag) {
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
+	if _, err := w.Write(payload); err != nil {
+		log.Ctx(r.Context()).Err(err).Msg("browse: filter-matrix write")
+	}
+}
+
 // etagMatches returns true if any If-None-Match list entry matches the
 // snapshot's weak ETag. Strips surrounding whitespace and the optional
 // W/ prefix on each list element. Single "*" matches everything.
