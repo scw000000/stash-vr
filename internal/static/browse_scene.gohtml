@@ -2346,6 +2346,71 @@ a.chip:hover { background: #3a3a3a; }
       });
     }
 
+    // Per-column state needed for lazy row creation. ensureColumnRows
+    // reads opts/colTheta/colLen here so it doesn't need them passed every
+    // call (it runs on every scroll update via updateColumnScroll).
+    const _columnRenderState = { performer: null, studio: null, tag: null };
+    const COLUMN_ROW_BUFFER = 3;  // off-band rows kept in the pool above + below
+
+    // Build/release row entities so only the rows inside the visible band
+    // (± COLUMN_ROW_BUFFER) exist. Called from renderColumnOptions on
+    // initial render and from updateColumnScroll whenever the user scrolls
+    // the column. Without this, a catalog of N options creates N a-cylinder
+    // rows + N canvas+texture labels in one synchronous render pass — on
+    // a multi-thousand-scene library that's 2-3 seconds of jank.
+    function ensureColumnRows(kind) {
+      const state = _columnRenderState[kind];
+      if (!state || !state.content || !state.content.parentNode) return;
+      const opts = state.opts;
+      if (!opts || opts.length === 0) return;
+
+      const scrollY = browseState.listScrollY[kind] || 0;
+      const half = LIST_ROW_H / 2;
+      // Row i visible when (LIST_TOP_Y + scrollY - i * LIST_ROW_H) is in
+      // [LIST_REGULAR_BOTTOM_Y - half, LIST_TOP_Y + half]. Solve for i.
+      const firstVisible = Math.max(0, Math.ceil((scrollY - half) / LIST_ROW_H));
+      const lastVisible = Math.min(
+        opts.length - 1,
+        Math.floor((LIST_TOP_Y - LIST_REGULAR_BOTTOM_Y + half + scrollY) / LIST_ROW_H)
+      );
+      const firstI = Math.max(0, firstVisible - COLUMN_ROW_BUFFER);
+      const lastI = Math.min(opts.length - 1, lastVisible + COLUMN_ROW_BUFFER);
+
+      // Index existing rows for O(1) lookup; build missing rows; drop
+      // rows far outside the window so memory doesn't grow unbounded if
+      // the user scrolls through a large catalog.
+      const existing = new Map();
+      const content = state.content;
+      Array.from(content.children).forEach(ch => {
+        const i = parseInt(ch.dataset.rowIdx || '-1', 10);
+        if (i >= 0) existing.set(i, ch);
+      });
+
+      let added = false;
+      for (let i = firstI; i <= lastI; i++) {
+        if (existing.has(i)) continue;
+        const opt = opts[i];
+        if (!opt) continue;
+        const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, state.colTheta, state.colLen, false);
+        row.dataset.rowIdx = String(i);
+        content.appendChild(row);
+        added = true;
+      }
+
+      // Release rows well outside the buffer (FAR > buffer) so we keep
+      // some scrollback ready without holding every row ever built.
+      const FAR = COLUMN_ROW_BUFFER + 20;
+      const farFirst = Math.max(0, firstVisible - FAR);
+      const farLast = Math.min(opts.length - 1, lastVisible + FAR);
+      existing.forEach((row, i) => {
+        if (i < farFirst || i > farLast) {
+          content.removeChild(row);
+        }
+      });
+
+      if (added) updateRaycasterTargets();
+    }
+
     function renderColumnOptions(root, kind, colTheta, colLen, opts) {
       const selectedIds = browseState.filters[kind] || [];
       const selectedNames = browseState.filterNames[kind] || [];
@@ -2353,9 +2418,10 @@ a.chip:hover { background: #3a3a3a; }
       const regularOpts = regularListOptions(kind, opts);
 
       // Skip rebuild when only the scroll position changed — the scroll
-      // path uses updateColumnScroll which only translates the content
-      // container and toggles per-row visibility. Hash everything that
-      // affects which rows exist or how they look (NOT scrollY).
+      // path uses updateColumnScroll which translates the content
+      // container, toggles per-row visibility, and tops up the row pool
+      // via ensureColumnRows. Hash everything that affects which rows
+      // exist or how they look (NOT scrollY).
       const hash = JSON.stringify([
         regularOpts.map(o => String(o.id)),
         selectedIdStrings,
@@ -2373,35 +2439,22 @@ a.chip:hover { background: #3a3a3a; }
       // local y = -i * LIST_ROW_H (row 0 at container origin). The
       // container's own y position carries the scroll offset, which lets
       // applyListScroll just nudge container.object3D.position.y per
-      // frame for buttery-smooth scrolling — no DOM churn, no canvas-
-      // texture rebuilds. Row visibility is toggled in updateColumnScroll
-      // so rows scrolled outside [LIST_TOP_Y, LIST_REGULAR_BOTTOM_Y]
-      // disappear instead of poking out above headers / below the lane.
-      //
-      // Important: A-Frame entity components init asynchronously via a
-      // MutationObserver microtask after appendChild, so object3D doesn't
-      // exist synchronously. The initial position + per-row visibility
-      // therefore go through setAttribute so the component lifecycle
-      // applies them on init. updateColumnScroll's direct object3D
-      // mutations only kick in from later scroll frames, by which point
-      // the entities are fully initialized.
+      // frame for buttery-smooth scrolling.
       const initialScrollY = browseState.listScrollY[kind] || 0;
-      const half = LIST_ROW_H / 2;
-      const visTop = LIST_TOP_Y + half;
-      const visBottom = LIST_REGULAR_BOTTOM_Y - half;
       const content = document.createElement('a-entity');
       content.id = 'vrFiltersListContent-' + kind;
       content.setAttribute('position', '0 ' + (LIST_TOP_Y + initialScrollY) + ' 0');
-      regularOpts.forEach((opt, i) => {
-        const row = makeFilterRow(kind, opt, -i * LIST_ROW_H, colTheta, colLen, false);
-        row.dataset.rowIdx = String(i);
-        const worldY = LIST_TOP_Y + initialScrollY - i * LIST_ROW_H;
-        if (worldY > visTop || worldY < visBottom) {
-          row.setAttribute('visible', false);
-        }
-        content.appendChild(row);
-      });
       root.appendChild(content);
+
+      // Stash the options + column geometry so ensureColumnRows can build
+      // additional rows on demand (when the user scrolls past the buffer).
+      _columnRenderState[kind] = {
+        content: content,
+        opts: regularOpts,
+        colTheta: colTheta,
+        colLen: colLen,
+      };
+      ensureColumnRows(kind);
 
       // Selected sub-list — sits BELOW the lane bg so it never overlaps
       // the regular list area. Renders all selected entries (no visible
@@ -2419,10 +2472,6 @@ a.chip:hover { background: #3a3a3a; }
         root.appendChild(sel);
       }
 
-      // Initial position + visibility were baked into setAttribute calls
-      // above so they apply via the component init lifecycle. Skip the
-      // synchronous updateColumnScroll here — object3D doesn't exist yet
-      // and the call would be a no-op (the !object3D guard would bail).
       updateRaycasterTargets();
     }
 
@@ -2466,6 +2515,10 @@ a.chip:hover { background: #3a3a3a; }
       if (!content || !content.object3D) return;
       const scrollY = browseState.listScrollY[kind] || 0;
       content.object3D.position.set(0, LIST_TOP_Y + scrollY, 0);
+      // Top up the row pool for the new scroll position. Rows that scroll
+      // into the buffer band get built; rows far outside get released.
+      // Cheap because the pool is bounded (~visibleRows + buffer*2).
+      ensureColumnRows(kind);
       const half = LIST_ROW_H / 2;
       const top = LIST_TOP_Y + half;
       const bottom = LIST_REGULAR_BOTTOM_Y - half;
