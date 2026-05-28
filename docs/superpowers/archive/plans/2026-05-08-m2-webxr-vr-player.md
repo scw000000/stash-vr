@@ -125,7 +125,7 @@ Expected: both exit code 0, no errors. If `go build` fails with "pattern vendor/
 
 Start stash-vr against the user's running Stash:
 ```
-go run ./cmd/stash-vr --STASH_GRAPHQL_URL=http://192.168.1.183:9999/graphql
+go run ./cmd/stash-vr --STASH_GRAPHQL_URL=http://10.0.0.4:9999/graphql
 ```
 
 In another terminal:

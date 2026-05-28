@@ -134,7 +134,7 @@ implementation:
   `/heresphere` and are unchanged in M1. Auto-sections still produce 400+
   sections in `/deovr`'s output, which is unusable in DeoVR's library
   renderer; that's accepted as M4's eventual cleanup, not M2's concern.
-- **Stash** at `192.168.1.183:9999`, Stash version `v0.31.1`.
+- **Stash** at `10.0.0.4:9999`, Stash version `v0.31.1`.
 - **Caddy** at `localhost:443/9666` reverse-proxies `https://stash-vr.duckdns.org/`
   → `http://localhost:9666/`. Cert auto-renews via DuckDNS DNS-01.
 - **Quest 3** uses manual DNS (8.8.8.8 + 1.1.1.1) to bypass router rebinding

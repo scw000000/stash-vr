@@ -72,15 +72,15 @@ images same-origin with no apikey leak.
 ## Working state of the user's environment
 
 - **stash-vr.exe** at `C:\Users\scw00\Downloads\stash-vr.exe`, launch flags include both
-  `--STASH_GRAPHQL_URL=http://192.168.1.183:9999/graphql` (the LAN IP version is what wins)
+  `--STASH_GRAPHQL_URL=http://10.0.0.4:9999/graphql` (the LAN IP version is what wins)
   and `--LISTEN_ADDRESS=:9666`. Build helper at `scripts/build-windows.bat`.
-- **Stash** runs on the same Windows host at `192.168.1.183:9999`.
+- **Stash** runs on the same Windows host at `10.0.0.4:9999`.
 - **Caddy** (custom build with `dns.providers.duckdns` plugin) reverse-proxies
   `https://stash-vr.duckdns.org/...` → `http://localhost:9666/...`. Cert auto-renews via
   Let's Encrypt DNS-01 challenge using a DuckDNS token. Caddyfile uses
   `propagation_timeout -1` to skip the DNS-propagation pre-check (the user's network blocks
   outbound DNS to non-default servers).
-- **DuckDNS** subdomain `stash-vr.duckdns.org` points at LAN IP `192.168.1.183`.
+- **DuckDNS** subdomain `stash-vr.duckdns.org` points at LAN IP `10.0.0.4`.
 - **Router** (Google Fiber Network Box) does DNS-rebinding-protection at the resolver layer
   with no UI to disable. Workaround: client devices set custom DNS directly to bypass
   the router's DNS proxy.
