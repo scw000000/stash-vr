@@ -157,7 +157,7 @@ Expected: no errors. Both `go vet` and `go build` exit code 0.
 
 Start stash-vr against the user's running Stash:
 ```
-go run ./cmd/stash-vr --STASH_GRAPHQL_URL=http://192.168.1.183:9999/graphql
+go run ./cmd/stash-vr --STASH_GRAPHQL_URL=http://10.0.0.4:9999/graphql
 ```
 
 Pick a substring known to appear in some scene title (the user can suggest one; otherwise pick the first word of the first card visible at `http://localhost:9666/browse`).
@@ -479,7 +479,7 @@ Open `http://localhost:9666/browse/scene/<TEST_SCENE_ID>` in a desktop browser. 
 - Seek slider works (proves byte-range from Stash).
 - All existing mutation buttons (rating stars, favorite, tags, O-counter, organized) still render and are clickable.
 
-If the video shows a broken-image / "format not supported" indicator, check the `DirectStreamURL` value — it should look like `http://192.168.1.183:9999/scene/<id>/stream?apikey=...` or similar. If empty, `vd.SceneParts.Paths.Stream` was nil at handler time — investigate Stash's response.
+If the video shows a broken-image / "format not supported" indicator, check the `DirectStreamURL` value — it should look like `http://10.0.0.4:9999/scene/<id>/stream?apikey=...` or similar. If empty, `vd.SceneParts.Paths.Stream` was nil at handler time — investigate Stash's response.
 
 - [ ] **Step 6: Commit**
 
