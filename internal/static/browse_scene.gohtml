@@ -5169,6 +5169,48 @@ a.chip:hover { background: #3a3a3a; }
         supported = false;
       });
     })();
+
+    // Projection-layer keep-alive (V-flash fix).
+    //
+    // With the M5 media layer active and HUD dismissed, the WebGL
+    // scene rendered into the projection layer has zero visible
+    // entities. The renderer's per-frame work then reduces to a
+    // single gl.clear() against a transparent clear color
+    // (renderer="alpha: true" + setClearColor(0,0,0,0) — set in the
+    // media-layer manager so the layer behind shows through).
+    //
+    // Quest 3's GPU is a tile-based deferred renderer (Adreno XR2
+    // Gen 2). On those, a clear with no subsequent draw call doesn't
+    // reliably materialize to the framebuffer — the tile system fuses
+    // the clear into the first draw's tile op, and with zero draws
+    // the clear may be elided. The XR runtime then composites a
+    // stale/uninitialised projection-layer framebuffer over the media
+    // layer, producing the periodic black "V-flash" on 8K scenes
+    // (confirmed on Quest 3, Meta Browser).
+    //
+    // Fix: ensure at least one draw call per frame. A 1mm plane with
+    // a fully transparent material — Three.js still issues the draw
+    // call (which materializes the clear ahead of it), but the
+    // fragment shader writes alpha=0 so no pixels change. Invisible
+    // by construction, no need to hide it off-axis. Attached to the
+    // camera so its lifecycle matches the scene.
+    //
+    // Verified mechanism (2026-06-02): an opaque pin fixed the flash;
+    // switching to opacity=0 transparent ALSO fixed it. So the
+    // necessary ingredient is the draw call, not the framebuffer
+    // pixel content — mechanism (A), driver-level lazy clear.
+    (function projectionLayerKeepAlive() {
+      scene.addEventListener('loaded', function() {
+        const cam = scene.querySelector('[camera]');
+        if (!cam) return;
+        const pin = document.createElement('a-entity');
+        pin.setAttribute('id', 'projectionLayerKeepAlivePin');
+        pin.setAttribute('geometry', 'primitive: plane; width: 0.001; height: 0.001');
+        pin.setAttribute('material', 'shader: flat; color: #000; opacity: 0; transparent: true');
+        pin.setAttribute('position', '0 0 -1');
+        cam.appendChild(pin);
+      });
+    })();
   })();
 </script>
 {{end}}
