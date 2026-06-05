@@ -5174,31 +5174,50 @@ a.chip:hover { background: #3a3a3a; }
     //
     // With the M5 media layer active and HUD dismissed, the WebGL
     // scene rendered into the projection layer has zero visible
-    // entities. The renderer's per-frame work then reduces to a
-    // single gl.clear() against a transparent clear color
-    // (renderer="alpha: true" + setClearColor(0,0,0,0) — set in the
-    // media-layer manager so the layer behind shows through).
+    // entities. Each frame reduces to a single gl.clear() against a
+    // transparent clear color (renderer="alpha: true" +
+    // setClearColor(0,0,0,0) — set in the media-layer manager so the
+    // layer behind shows through).
     //
-    // Quest 3's GPU is a tile-based deferred renderer (Adreno XR2
-    // Gen 2). On those, a clear with no subsequent draw call doesn't
-    // reliably materialize to the framebuffer — the tile system fuses
-    // the clear into the first draw's tile op, and with zero draws
-    // the clear may be elided. The XR runtime then composites a
-    // stale/uninitialised projection-layer framebuffer over the media
-    // layer, producing the periodic black "V-flash" on 8K scenes
-    // (confirmed on Quest 3, Meta Browser).
+    // On Quest 3, this triggers a periodic "V-flash" — the
+    // compositor intermittently drops the media layer behind. Best
+    // current understanding: the XR runtime / compositor activates a
+    // cache for projection layers whose framebuffer is byte-identical
+    // between submissions, and once latched it stops compositing the
+    // layer correctly. Defeating this requires the framebuffer to
+    // actually change between frames.
     //
-    // Fix: ensure at least one draw call per frame. A 1mm plane with
-    // a fully transparent material — Three.js still issues the draw
-    // call (which materializes the clear ahead of it), but the
-    // fragment shader writes alpha=0 so no pixels change. Invisible
-    // by construction, no need to hide it off-axis. Attached to the
-    // camera so its lifecycle matches the scene.
+    // Empirical observations that triangulate the mechanism:
+    //  - Opaque 1mm pin parented to camera (static NDC position →
+    //    byte-identical framebuffer): suppresses for ~10min then
+    //    flash returns. Cache latches even with one opaque pixel.
+    //  - Transparent 1mm pin (opacity=0): suppresses briefly, fails
+    //    fast — driver elides alpha=0 writes as no-ops.
+    //  - In-VR diag overlay re-setting text via setAttribute every
+    //    500ms: suppressed indefinitely. A-Frame rebuilds text
+    //    geometry on each setAttribute, varying framebuffer content.
     //
-    // Verified mechanism (2026-06-02): an opaque pin fixed the flash;
-    // switching to opacity=0 transparent ALSO fixed it. So the
-    // necessary ingredient is the draw call, not the framebuffer
-    // pixel content — mechanism (A), driver-level lazy clear.
+    // Fix: pin's material color alternates between two near-black
+    // values (1/255 R delta — below visual acuity) every frame.
+    //
+    // Tick MUST be driven by A-Frame's component-tick mechanism, not
+    // window.requestAnimationFrame: per the WebXR spec, window.rAF
+    // callbacks are deferred indefinitely while an XRSession is
+    // presenting. A-Frame's component tick is driven by Three.js's
+    // WebXRManager animation loop and fires on every XR frame.
+    // (Same precedent: panel-tickers above.)
+    if (typeof AFRAME !== 'undefined') {
+      AFRAME.registerComponent('vflash-keepalive', {
+        init: function() { this.alt = false; },
+        tick: function() {
+          const mesh = this.el.getObject3D('mesh');
+          if (mesh && mesh.material && mesh.material.color) {
+            mesh.material.color.setRGB(this.alt ? 1/255 : 0, 0, 0);
+            this.alt = !this.alt;
+          }
+        }
+      });
+    }
     (function projectionLayerKeepAlive() {
       scene.addEventListener('loaded', function() {
         const cam = scene.querySelector('[camera]');
@@ -5206,8 +5225,9 @@ a.chip:hover { background: #3a3a3a; }
         const pin = document.createElement('a-entity');
         pin.setAttribute('id', 'projectionLayerKeepAlivePin');
         pin.setAttribute('geometry', 'primitive: plane; width: 0.001; height: 0.001');
-        pin.setAttribute('material', 'shader: flat; color: #000; opacity: 0; transparent: true');
-        pin.setAttribute('position', '0 0 -1');
+        pin.setAttribute('material', 'shader: flat; color: #000; opacity: 1; transparent: false');
+        pin.setAttribute('position', '0 -0.35 -1');
+        pin.setAttribute('vflash-keepalive', '');
         cam.appendChild(pin);
       });
     })();

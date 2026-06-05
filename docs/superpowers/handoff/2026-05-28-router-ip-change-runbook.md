@@ -14,7 +14,7 @@ Quest 3 ──https──▶ stash-vr.duckdns.org
                   Router (10.0.0.1)
                      │
                      ▼
-                  PC at 10.0.0.4
+                  PC at 10.0.0.19
                      │
               ┌──────┴───────┐
               │              │
@@ -35,7 +35,7 @@ IP. Both are on the same PC. Quest hits the public hostname over HTTPS.
 | stash-vr exe     | `C:\Users\scw00\Downloads\stash-vr.bat` (running)    | `STASH_GRAPHQL_URL`  |
 | stash-vr (repo)  | `scripts\stash-vr.bat` (no secrets — checked in)     | `STASH_GRAPHQL_URL`  |
 | DuckDNS A-record | duckdns.org dashboard                                | IP for `stash-vr`    |
-| PC LAN IP        | Router admin → DHCP reservation                      | bind MAC → `10.0.0.4` |
+| PC LAN IP        | Router admin → DHCP reservation                      | bind MAC → `10.0.0.19` |
 | Quest WiFi       | Quest settings (only if using static IP — see below) | gateway + DNS        |
 | Caddy            | `C:\caddy\Caddyfile`                                 | **no IP** — talks to `localhost:9666` |
 | Stash            | `~/.stash/config.yml`                                | **no IP** — binds `0.0.0.0` |
@@ -52,7 +52,7 @@ different one, stash-vr → Stash breaks.
 1. On the PC: `ipconfig` → note IPv4 address, default gateway, MAC of the
    active adapter.
 2. Router admin (usually `http://<gateway>`) → DHCP Reservation → bind the
-   PC's MAC to a chosen IP (default here: `10.0.0.4`).
+   PC's MAC to a chosen IP (default here: `10.0.0.19`).
 3. `ipconfig /release && ipconfig /renew` → confirm the reserved IP came back.
 
 ### 2. Update the running stash-vr launcher
@@ -72,7 +72,7 @@ stash-vr.exe ^
     --AUTO_SECTIONS_AGGREGATES=true
 ```
 
-- `<NEW_LAN_IP>` — the address pinned in step 1 (e.g. `10.0.0.4`).
+- `<NEW_LAN_IP>` — the address pinned in step 1 (e.g. `10.0.0.19`).
 - `<KEY_FROM_STASH_CONFIG>` — read from `C:\Users\scw00\.stash\config.yml`
   field `api_key:`. Same value as Stash settings → Security → API Key.
 - The repo copy at `scripts\stash-vr.bat` should be updated for `STASH_GRAPHQL_URL`
