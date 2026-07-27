@@ -5644,15 +5644,16 @@ a.chip:hover { background: #3a3a3a; }
         const thetaRightEdge   = pos.ourThetaCenter + pos.thetaPerTile / 2;
         const titleSurfaceX    =  ARC_R * Math.sin(pos.ourThetaCenter);
         const titleSurfaceZ    = -ARC_R * Math.cos(pos.ourThetaCenter);
-        const badgeSurfaceX    =  ARC_R * Math.sin(thetaRightEdge);
-        const badgeSurfaceZ    = -ARC_R * Math.cos(thetaRightEdge);
-        const badgeLocalX      = badgeSurfaceX - badgeR - 0.005;
+        // Move left from the cover's right edge along the cylinder arc,
+        // then place every badge on the same radial layer in front of the
+        // cover. A fixed `x -= badgeR` offset changes radial depth across
+        // the curve and pushed column 1 behind its cover.
+        const badgeTheta       = thetaRightEdge - (badgeR + 0.005) / ARC_R;
+        const badgeRadius      = ARC_R - 0.005;
+        const badgeLocalX      =  badgeRadius * Math.sin(badgeTheta);
         const badgeLocalY      = (tileCoverH / 2) - badgeR - 0.005;
-        // +0.005 along surface→hub direction (toward user, since hub is on
-        // user's side of the curved surface). For concave the surface z is
-        // negative, hub at 0; moving toward hub = adding small positive z.
-        const badgeLocalZ      = badgeSurfaceZ + 0.005;
-        const badgeYawDeg      = -thetaRightEdge * 180 / Math.PI;
+        const badgeLocalZ      = -badgeRadius * Math.cos(badgeTheta);
+        const badgeYawDeg      = -badgeTheta * 180 / Math.PI;
         const titleY           = -(tileCoverH / 2 + TITLE_GAP + TITLE_STRIP_H / 2);
         const titleZ           = titleSurfaceZ + 0.005;
         const titleYawDeg      = -pos.ourThetaCenter * 180 / Math.PI;

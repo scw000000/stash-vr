@@ -26,3 +26,10 @@
   whole referenced surface as the scope. Do not implement a representative
   subset of controls or assume a read-only tab is complete without first
   inventorying the source interactions and their data mutations.
+
+## 2026-07-27
+
+- When a curved-surface UI defect follows a row or column pattern, inspect
+  per-cell geometry in the live headset before blaming loading or lifecycle
+  state. Apply insets in tangent/radial coordinates; a fixed Cartesian-axis
+  offset can move controls behind the surface on one side of an arc.

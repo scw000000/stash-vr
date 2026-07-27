@@ -86,3 +86,26 @@ func TestDetailPanelUsesSubtitleOptionTextAsGlobalFontFloor(t *testing.T) {
 		}
 	}
 }
+
+func TestBrowseTileDetailBadgeUsesConsistentRadialDepthAcrossColumns(t *testing.T) {
+	var rendered bytes.Buffer
+	if err := sceneTmpl.Execute(&rendered, SceneDetailData{DirectStreamURL: "/test.mp4"}); err != nil {
+		t.Fatalf("render scene template: %v", err)
+	}
+	source := rendered.String()
+
+	for _, expected := range []string{
+		"const badgeTheta       = thetaRightEdge - (badgeR + 0.005) / ARC_R",
+		"const badgeRadius      = ARC_R - 0.005",
+		"const badgeLocalX      =  badgeRadius * Math.sin(badgeTheta)",
+		"const badgeLocalZ      = -badgeRadius * Math.cos(badgeTheta)",
+		"const badgeYawDeg      = -badgeTheta * 180 / Math.PI",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Errorf("browse tile badge radial placement is missing %q", expected)
+		}
+	}
+	if strings.Contains(source, "badgeSurfaceX - badgeR") {
+		t.Fatal("browse tile badge still uses a column-dependent Cartesian depth offset")
+	}
+}
