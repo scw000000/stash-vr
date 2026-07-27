@@ -12,6 +12,7 @@ import (
 	"stash-vr/internal/logger"
 	"stash-vr/internal/server"
 	"stash-vr/internal/stash"
+	"stash-vr/internal/subtitles"
 )
 
 func Run(ctx context.Context) error {
@@ -25,8 +26,18 @@ func Run(ctx context.Context) error {
 	logVersions(ctx, stashClient)
 
 	libraryService := library.NewService(stashClient)
+	subtitleService := subtitles.New(ctx, subtitles.Config{
+		PythonExecutable: config.Application().CaptionPython,
+		GeneratorPath:    config.Application().CaptionGeneratorPath,
+		EnvFile:          config.Application().CaptionEnvFile,
+		StashClient:      stashClient,
+	})
+	defer subtitleService.Close()
+	if err := subtitleService.Prepare(ctx); err != nil {
+		log.Warn().Err(err).Msg("Subtitle task plugin is unavailable")
+	}
 
-	err := server.Listen(ctx, config.Application().ListenAddress, config.Application().HTTPSListenAddress, libraryService)
+	err := server.Listen(ctx, config.Application().ListenAddress, config.Application().HTTPSListenAddress, libraryService, subtitleService)
 	if err != nil {
 		return fmt.Errorf("server: %w", err)
 	}

@@ -15,11 +15,12 @@ import (
 	"stash-vr/internal/config"
 	"stash-vr/internal/library"
 	"stash-vr/internal/static"
+	"stash-vr/internal/subtitles"
 	"stash-vr/internal/util"
 	"time"
 )
 
-func Router(libraryService *library.Service) *chi.Mux {
+func Router(libraryService *library.Service, subtitleService *subtitles.Service) *chi.Mux {
 	router := chi.NewRouter()
 
 	router.Use(requestLogger)
@@ -30,7 +31,7 @@ func Router(libraryService *library.Service) *chi.Mux {
 
 	router.Mount("/heresphere", logMod("heresphere", heresphere.Router(libraryService)))
 	router.Mount("/deovr", logMod("deovr", deovr.Router(libraryService)))
-	router.Mount("/browse", logMod("browse", browse.Router(libraryService)))
+	router.Mount("/browse", logMod("browse", browse.Router(libraryService, subtitleService)))
 
 	router.Post("/filters", logMod("filters", web.FiltersUpdateHandler()).ServeHTTP)
 	router.Get("/cover/{videoId}", logMod("heatmap", heatmap.CoverHandler(libraryService)).ServeHTTP)

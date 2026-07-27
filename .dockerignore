@@ -2,6 +2,7 @@
 .git
 .github
 .goreleaser.yaml
+.env
 
 build/
 

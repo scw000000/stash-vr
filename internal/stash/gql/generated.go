@@ -1583,6 +1583,50 @@ func (v *FindStudioByNameResponse) GetFindStudios() *FindStudioByNameFindStudios
 	return v.FindStudios
 }
 
+// FindSubtitleJobFindJob includes the requested fields of the GraphQL type Job.
+type FindSubtitleJobFindJob struct {
+	Id          string     `json:"id"`
+	Description string     `json:"description"`
+	Status      JobStatus  `json:"status"`
+	Progress    *float64   `json:"progress"`
+	AddTime     time.Time  `json:"addTime"`
+	StartTime   *time.Time `json:"startTime"`
+	EndTime     *time.Time `json:"endTime"`
+	Error       *string    `json:"error"`
+}
+
+// GetId returns FindSubtitleJobFindJob.Id, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetId() string { return v.Id }
+
+// GetDescription returns FindSubtitleJobFindJob.Description, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetDescription() string { return v.Description }
+
+// GetStatus returns FindSubtitleJobFindJob.Status, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetStatus() JobStatus { return v.Status }
+
+// GetProgress returns FindSubtitleJobFindJob.Progress, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetProgress() *float64 { return v.Progress }
+
+// GetAddTime returns FindSubtitleJobFindJob.AddTime, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetAddTime() time.Time { return v.AddTime }
+
+// GetStartTime returns FindSubtitleJobFindJob.StartTime, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetStartTime() *time.Time { return v.StartTime }
+
+// GetEndTime returns FindSubtitleJobFindJob.EndTime, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetEndTime() *time.Time { return v.EndTime }
+
+// GetError returns FindSubtitleJobFindJob.Error, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobFindJob) GetError() *string { return v.Error }
+
+// FindSubtitleJobResponse is returned by FindSubtitleJob on success.
+type FindSubtitleJobResponse struct {
+	FindJob *FindSubtitleJobFindJob `json:"findJob"`
+}
+
+// GetFindJob returns FindSubtitleJobResponse.FindJob, and is useful for accessing the field via an interface.
+func (v *FindSubtitleJobResponse) GetFindJob() *FindSubtitleJobFindJob { return v.FindJob }
+
 // FindTagByNameFindTagsFindTagsResultType includes the requested fields of the GraphQL type FindTagsResultType.
 type FindTagByNameFindTagsFindTagsResultType struct {
 	Tags []*FindTagByNameFindTagsFindTagsResultTypeTagsTag `json:"tags"`
@@ -2587,6 +2631,26 @@ type IsSceneOrganizedResponse struct {
 // GetFindScene returns IsSceneOrganizedResponse.FindScene, and is useful for accessing the field via an interface.
 func (v *IsSceneOrganizedResponse) GetFindScene() *IsSceneOrganizedFindScene { return v.FindScene }
 
+type JobStatus string
+
+const (
+	JobStatusCancelled JobStatus = "CANCELLED"
+	JobStatusFailed    JobStatus = "FAILED"
+	JobStatusFinished  JobStatus = "FINISHED"
+	JobStatusReady     JobStatus = "READY"
+	JobStatusRunning   JobStatus = "RUNNING"
+	JobStatusStopping  JobStatus = "STOPPING"
+)
+
+var AllJobStatus = []JobStatus{
+	JobStatusCancelled,
+	JobStatusFailed,
+	JobStatusFinished,
+	JobStatusReady,
+	JobStatusRunning,
+	JobStatusStopping,
+}
+
 type MovieFilterType struct {
 	AND *MovieFilterType `json:"AND,omitempty"`
 	NOT *MovieFilterType `json:"NOT,omitempty"`
@@ -3030,6 +3094,14 @@ var AllPreviewPreset = []PreviewPreset{
 	PreviewPresetVeryslow,
 }
 
+// ReloadSubtitlePluginsResponse is returned by ReloadSubtitlePlugins on success.
+type ReloadSubtitlePluginsResponse struct {
+	ReloadPlugins bool `json:"reloadPlugins"`
+}
+
+// GetReloadPlugins returns ReloadSubtitlePluginsResponse.ReloadPlugins, and is useful for accessing the field via an interface.
+func (v *ReloadSubtitlePluginsResponse) GetReloadPlugins() bool { return v.ReloadPlugins }
+
 type ResolutionCriterionInput struct {
 	Modifier CriterionModifier `json:"modifier"`
 	Value    ResolutionEnum    `json:"value"`
@@ -3093,6 +3165,19 @@ var AllResolutionEnum = []ResolutionEnum{
 	ResolutionEnumVrHd,
 	ResolutionEnumWebHd,
 }
+
+// RunSubtitlePluginTaskResponse is returned by RunSubtitlePluginTask on success.
+type RunSubtitlePluginTaskResponse struct {
+	// Run a plugin task.
+	// If task_name is provided, then the task must exist in the plugin config and the tasks configuration
+	// will be used to run the plugin.
+	// If no task_name is provided, then the plugin will be executed with the arguments provided only.
+	// Returns the job ID
+	RunPluginTask string `json:"runPluginTask"`
+}
+
+// GetRunPluginTask returns RunSubtitlePluginTaskResponse.RunPluginTask, and is useful for accessing the field via an interface.
+func (v *RunSubtitlePluginTaskResponse) GetRunPluginTask() string { return v.RunPluginTask }
 
 // SavedFilterParts includes the GraphQL fields of SavedFilter requested by the fragment SavedFilterParts.
 type SavedFilterParts struct {
@@ -5408,6 +5493,74 @@ func (v *StudioFilterType) GetUpdated_at() *TimestampCriterionInput { return v.U
 // GetUrl returns StudioFilterType.Url, and is useful for accessing the field via an interface.
 func (v *StudioFilterType) GetUrl() *StringCriterionInput { return v.Url }
 
+// SubtitlePluginConfigurationConfigurationConfigResult includes the requested fields of the GraphQL type ConfigResult.
+// The GraphQL type's documentation follows.
+//
+// All configuration settings
+type SubtitlePluginConfigurationConfigurationConfigResult struct {
+	General *SubtitlePluginConfigurationConfigurationConfigResultGeneralConfigGeneralResult `json:"general"`
+}
+
+// GetGeneral returns SubtitlePluginConfigurationConfigurationConfigResult.General, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationConfigurationConfigResult) GetGeneral() *SubtitlePluginConfigurationConfigurationConfigResultGeneralConfigGeneralResult {
+	return v.General
+}
+
+// SubtitlePluginConfigurationConfigurationConfigResultGeneralConfigGeneralResult includes the requested fields of the GraphQL type ConfigGeneralResult.
+type SubtitlePluginConfigurationConfigurationConfigResultGeneralConfigGeneralResult struct {
+	// Path to plugins
+	PluginsPath string `json:"pluginsPath"`
+}
+
+// GetPluginsPath returns SubtitlePluginConfigurationConfigurationConfigResultGeneralConfigGeneralResult.PluginsPath, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationConfigurationConfigResultGeneralConfigGeneralResult) GetPluginsPath() string {
+	return v.PluginsPath
+}
+
+// SubtitlePluginConfigurationPluginsPlugin includes the requested fields of the GraphQL type Plugin.
+type SubtitlePluginConfigurationPluginsPlugin struct {
+	Id      string                                                     `json:"id"`
+	Enabled bool                                                       `json:"enabled"`
+	Tasks   []*SubtitlePluginConfigurationPluginsPluginTasksPluginTask `json:"tasks"`
+}
+
+// GetId returns SubtitlePluginConfigurationPluginsPlugin.Id, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationPluginsPlugin) GetId() string { return v.Id }
+
+// GetEnabled returns SubtitlePluginConfigurationPluginsPlugin.Enabled, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationPluginsPlugin) GetEnabled() bool { return v.Enabled }
+
+// GetTasks returns SubtitlePluginConfigurationPluginsPlugin.Tasks, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationPluginsPlugin) GetTasks() []*SubtitlePluginConfigurationPluginsPluginTasksPluginTask {
+	return v.Tasks
+}
+
+// SubtitlePluginConfigurationPluginsPluginTasksPluginTask includes the requested fields of the GraphQL type PluginTask.
+type SubtitlePluginConfigurationPluginsPluginTasksPluginTask struct {
+	Name string `json:"name"`
+}
+
+// GetName returns SubtitlePluginConfigurationPluginsPluginTasksPluginTask.Name, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationPluginsPluginTasksPluginTask) GetName() string { return v.Name }
+
+// SubtitlePluginConfigurationResponse is returned by SubtitlePluginConfiguration on success.
+type SubtitlePluginConfigurationResponse struct {
+	// Returns the current, complete configuration
+	Configuration *SubtitlePluginConfigurationConfigurationConfigResult `json:"configuration"`
+	// List loaded plugins
+	Plugins []*SubtitlePluginConfigurationPluginsPlugin `json:"plugins"`
+}
+
+// GetConfiguration returns SubtitlePluginConfigurationResponse.Configuration, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationResponse) GetConfiguration() *SubtitlePluginConfigurationConfigurationConfigResult {
+	return v.Configuration
+}
+
+// GetPlugins returns SubtitlePluginConfigurationResponse.Plugins, and is useful for accessing the field via an interface.
+func (v *SubtitlePluginConfigurationResponse) GetPlugins() []*SubtitlePluginConfigurationPluginsPlugin {
+	return v.Plugins
+}
+
 // TagCreateResponse is returned by TagCreate on success.
 type TagCreateResponse struct {
 	TagCreate *TagCreateTagCreateTag `json:"tagCreate"`
@@ -5916,6 +6069,14 @@ type __FindStudioByNameInput struct {
 // GetName returns __FindStudioByNameInput.Name, and is useful for accessing the field via an interface.
 func (v *__FindStudioByNameInput) GetName() string { return v.Name }
 
+// __FindSubtitleJobInput is used internally by genqlient
+type __FindSubtitleJobInput struct {
+	Id string `json:"id"`
+}
+
+// GetId returns __FindSubtitleJobInput.Id, and is useful for accessing the field via an interface.
+func (v *__FindSubtitleJobInput) GetId() string { return v.Id }
+
 // __FindTagByNameInput is used internally by genqlient
 type __FindTagByNameInput struct {
 	Name string `json:"name"`
@@ -5955,6 +6116,26 @@ type __IsSceneOrganizedInput struct {
 
 // GetId returns __IsSceneOrganizedInput.Id, and is useful for accessing the field via an interface.
 func (v *__IsSceneOrganizedInput) GetId() *string { return v.Id }
+
+// __RunSubtitlePluginTaskInput is used internally by genqlient
+type __RunSubtitlePluginTaskInput struct {
+	PluginID    string                  `json:"pluginID"`
+	Description string                  `json:"description"`
+	TaskName    string                  `json:"taskName"`
+	Args        *map[string]interface{} `json:"args"`
+}
+
+// GetPluginID returns __RunSubtitlePluginTaskInput.PluginID, and is useful for accessing the field via an interface.
+func (v *__RunSubtitlePluginTaskInput) GetPluginID() string { return v.PluginID }
+
+// GetDescription returns __RunSubtitlePluginTaskInput.Description, and is useful for accessing the field via an interface.
+func (v *__RunSubtitlePluginTaskInput) GetDescription() string { return v.Description }
+
+// GetTaskName returns __RunSubtitlePluginTaskInput.TaskName, and is useful for accessing the field via an interface.
+func (v *__RunSubtitlePluginTaskInput) GetTaskName() string { return v.TaskName }
+
+// GetArgs returns __RunSubtitlePluginTaskInput.Args, and is useful for accessing the field via an interface.
+func (v *__RunSubtitlePluginTaskInput) GetArgs() *map[string]interface{} { return v.Args }
 
 // __SceneAddOVRInput is used internally by genqlient
 type __SceneAddOVRInput struct {
@@ -7309,6 +7490,47 @@ func FindStudioByName(
 	return data_, err_
 }
 
+// The query executed by FindSubtitleJob.
+const FindSubtitleJob_Operation = `
+query FindSubtitleJob ($id: ID!) {
+	findJob(input: {id:$id}) {
+		id
+		description
+		status
+		progress
+		addTime
+		startTime
+		endTime
+		error
+	}
+}
+`
+
+func FindSubtitleJob(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+) (data_ *FindSubtitleJobResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindSubtitleJob",
+		Query:  FindSubtitleJob_Operation,
+		Variables: &__FindSubtitleJobInput{
+			Id: id,
+		},
+	}
+
+	data_ = &FindSubtitleJobResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The query executed by FindTagByName.
 const FindTagByName_Operation = `
 query FindTagByName ($name: String!) {
@@ -7457,6 +7679,72 @@ func IsSceneOrganized(
 	}
 
 	data_ = &IsSceneOrganizedResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by ReloadSubtitlePlugins.
+const ReloadSubtitlePlugins_Operation = `
+mutation ReloadSubtitlePlugins {
+	reloadPlugins
+}
+`
+
+func ReloadSubtitlePlugins(
+	ctx_ context.Context,
+	client_ graphql.Client,
+) (data_ *ReloadSubtitlePluginsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "ReloadSubtitlePlugins",
+		Query:  ReloadSubtitlePlugins_Operation,
+	}
+
+	data_ = &ReloadSubtitlePluginsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by RunSubtitlePluginTask.
+const RunSubtitlePluginTask_Operation = `
+mutation RunSubtitlePluginTask ($pluginID: ID!, $description: String!, $taskName: String!, $args: Map) {
+	runPluginTask(plugin_id: $pluginID, description: $description, task_name: $taskName, args_map: $args)
+}
+`
+
+func RunSubtitlePluginTask(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	pluginID string,
+	description string,
+	taskName string,
+	args *map[string]interface{},
+) (data_ *RunSubtitlePluginTaskResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "RunSubtitlePluginTask",
+		Query:  RunSubtitlePluginTask_Operation,
+		Variables: &__RunSubtitlePluginTaskInput{
+			PluginID:    pluginID,
+			Description: description,
+			TaskName:    taskName,
+			Args:        args,
+		},
+	}
+
+	data_ = &RunSubtitlePluginTaskResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -9067,6 +9355,45 @@ func SceneUpdateURLsVR(
 	}
 
 	data_ = &SceneUpdateURLsVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by SubtitlePluginConfiguration.
+const SubtitlePluginConfiguration_Operation = `
+query SubtitlePluginConfiguration {
+	configuration {
+		general {
+			pluginsPath
+		}
+	}
+	plugins {
+		id
+		enabled
+		tasks {
+			name
+		}
+	}
+}
+`
+
+func SubtitlePluginConfiguration(
+	ctx_ context.Context,
+	client_ graphql.Client,
+) (data_ *SubtitlePluginConfigurationResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SubtitlePluginConfiguration",
+		Query:  SubtitlePluginConfiguration_Operation,
+	}
+
+	data_ = &SubtitlePluginConfigurationResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(

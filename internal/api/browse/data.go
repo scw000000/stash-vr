@@ -23,6 +23,9 @@ type EntityRef struct {
 type CaptionRef struct {
 	LanguageCode string `json:"languageCode"`
 	CaptionType  string `json:"captionType"`
+	Label        string `json:"label"`
+	FileKey      string `json:"fileKey,omitempty"`
+	Generated    bool   `json:"generated,omitempty"`
 }
 
 type SceneMarker struct {

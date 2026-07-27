@@ -33,6 +33,9 @@ const (
 	envKeyAggregateUnwatched     = "AGGREGATE_UNWATCHED"
 	envKeyHighlyRatedThreshold   = "HIGHLY_RATED_THRESHOLD"
 	envKeyAggregateLimit         = "AGGREGATE_LIMIT"
+	envKeyCaptionPython          = "CAPTION_PYTHON"
+	envKeyCaptionGeneratorPath   = "CAPTION_GENERATOR_PATH"
+	envKeyCaptionEnvFile         = "CAPTION_ENV_FILE"
 )
 
 type ApplicationConfig struct {
@@ -61,6 +64,9 @@ type ApplicationConfig struct {
 	AggregateUnwatched     bool
 	HighlyRatedThreshold   int
 	AggregateLimit         int
+	CaptionPython          string
+	CaptionGeneratorPath   string
+	CaptionEnvFile         string
 }
 
 var applicationConfig ApplicationConfig
@@ -141,6 +147,15 @@ func Init() {
 	pflag.Int(envKeyAggregateLimit, 100, "Per-aggregate max scene count")
 	_ = viper.BindPFlag(envKeyAggregateLimit, pflag.Lookup(envKeyAggregateLimit))
 
+	pflag.String(envKeyCaptionPython, "python", "Python executable used for runtime subtitle generation")
+	_ = viper.BindPFlag(envKeyCaptionPython, pflag.Lookup(envKeyCaptionPython))
+
+	pflag.String(envKeyCaptionGeneratorPath, "../python_tools/CaptionGenerator", "Path to the CaptionGenerator source directory")
+	_ = viper.BindPFlag(envKeyCaptionGeneratorPath, pflag.Lookup(envKeyCaptionGeneratorPath))
+
+	pflag.String(envKeyCaptionEnvFile, ".env", "Dotenv file used by CaptionGenerator for API keys")
+	_ = viper.BindPFlag(envKeyCaptionEnvFile, pflag.Lookup(envKeyCaptionEnvFile))
+
 	pflag.BoolP("help", "h", false, "Display usage information")
 	_ = viper.BindPFlag("help", pflag.Lookup("help"))
 
@@ -178,6 +193,9 @@ func Init() {
 	applicationConfig.AggregateUnwatched = viper.GetBool(envKeyAggregateUnwatched)
 	applicationConfig.HighlyRatedThreshold = viper.GetInt(envKeyHighlyRatedThreshold)
 	applicationConfig.AggregateLimit = viper.GetInt(envKeyAggregateLimit)
+	applicationConfig.CaptionPython = viper.GetString(envKeyCaptionPython)
+	applicationConfig.CaptionGeneratorPath = viper.GetString(envKeyCaptionGeneratorPath)
+	applicationConfig.CaptionEnvFile = viper.GetString(envKeyCaptionEnvFile)
 
 }
 
@@ -189,5 +207,7 @@ func (a ApplicationConfig) Redacted() ApplicationConfig {
 	a.StashGraphQLUrl = Redacted(a.StashGraphQLUrl)
 	a.StashApiKey = Redacted(a.StashApiKey)
 	a.ConfigPath = Redacted(a.ConfigPath)
+	a.CaptionGeneratorPath = Redacted(a.CaptionGeneratorPath)
+	a.CaptionEnvFile = Redacted(a.CaptionEnvFile)
 	return a
 }

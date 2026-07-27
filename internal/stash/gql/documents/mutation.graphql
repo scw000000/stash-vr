@@ -196,3 +196,21 @@ mutation SceneRevealFileVR($id: ID!) {
 mutation SceneSubmitStashBoxVR($input: StashBoxDraftSubmissionInput!) {
     submitStashBoxSceneDraft(input: $input)
 }
+
+mutation ReloadSubtitlePlugins {
+    reloadPlugins
+}
+
+mutation RunSubtitlePluginTask(
+    $pluginID: ID!,
+    $description: String!,
+    $taskName: String!,
+    $args: Map
+) {
+    runPluginTask(
+        plugin_id: $pluginID,
+        description: $description,
+        task_name: $taskName,
+        args_map: $args
+    )
+}

@@ -6,17 +6,20 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"stash-vr/internal/library"
+	"stash-vr/internal/subtitles"
 )
 
 type httpHandler struct {
-	libraryService *library.Service
-	filterCache    *filterCache
+	libraryService  *library.Service
+	subtitleService *subtitles.Service
+	filterCache     *filterCache
 }
 
-func Router(libraryService *library.Service) http.Handler {
+func Router(libraryService *library.Service, subtitleService *subtitles.Service) http.Handler {
 	h := httpHandler{
-		libraryService: libraryService,
-		filterCache:    newFilterCache(loadFilterIndexCatalog, buildMatrixSeeds, 5*time.Minute),
+		libraryService:  libraryService,
+		subtitleService: subtitleService,
+		filterCache:     newFilterCache(loadFilterIndexCatalog, buildMatrixSeeds, 5*time.Minute),
 	}
 	r := chi.NewRouter()
 
@@ -35,6 +38,9 @@ func Router(libraryService *library.Service) http.Handler {
 	r.Get("/scene/{id}", h.sceneDetailHandler)
 	r.Get("/scene/{id}/stream", h.sceneStreamHandler)
 	r.Get("/scene/{id}/caption", h.sceneCaptionHandler)
+	r.Get("/scene/{id}/subtitles", h.sceneSubtitlesHandler)
+	r.Post("/scene/{id}/subtitles/generate", h.sceneSubtitleGenerateHandler)
+	r.Post("/scene/{id}/subtitles/delete", h.sceneSubtitleDeleteHandler)
 	r.Get("/scene/{id}/preview", h.scenePreviewHandler)
 	r.Get("/scene/{id}/sprite", h.sceneSpriteHandler)
 	r.Get("/scene/{id}/meta", h.sceneMetaHandler)

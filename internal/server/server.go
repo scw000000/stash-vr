@@ -10,11 +10,12 @@ import (
 	"stash-vr/internal/api"
 	"stash-vr/internal/cert"
 	"stash-vr/internal/library"
+	"stash-vr/internal/subtitles"
 	"time"
 )
 
-func Listen(ctx context.Context, listenAddress string, httpsListenAddress string, libraryService *library.Service) error {
-	handler := api.Router(libraryService)
+func Listen(ctx context.Context, listenAddress string, httpsListenAddress string, libraryService *library.Service, subtitleService *subtitles.Service) error {
+	handler := api.Router(libraryService, subtitleService)
 
 	httpServer := http.Server{Addr: listenAddress, Handler: handler}
 	servers := []*http.Server{&httpServer}

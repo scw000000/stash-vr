@@ -11,6 +11,7 @@ import (
 	"stash-vr/internal/api/heatmap"
 	apiinternal "stash-vr/internal/api/internal"
 	"stash-vr/internal/static"
+	"stash-vr/internal/subtitles"
 )
 
 var sceneTmpl = template.Must(template.New("browse_scene.gohtml").Funcs(template.FuncMap{
@@ -81,7 +82,14 @@ func (h *httpHandler) sceneDetailHandler(w http.ResponseWriter, r *http.Request)
 		data.Captions = append(data.Captions, CaptionRef{
 			LanguageCode: c.Language_code,
 			CaptionType:  c.Caption_type,
+			Label:        c.Language_code + " · " + c.Caption_type,
 		})
+	}
+	if h.subtitleService != nil {
+		data.Captions = appendSidecarCaptions(
+			data.Captions,
+			subtitles.RelatedFiles(sceneVideoPaths(vd)),
+		)
 	}
 
 	// Scene markers: chapter dots on the scrub bar.

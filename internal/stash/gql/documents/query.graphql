@@ -10,6 +10,34 @@ query UIConfiguration{
     }
 }
 
+query SubtitlePluginConfiguration {
+    configuration {
+        general {
+            pluginsPath
+        }
+    }
+    plugins {
+        id
+        enabled
+        tasks {
+            name
+        }
+    }
+}
+
+query FindSubtitleJob($id: ID!) {
+    findJob(input: {id: $id}) {
+        id
+        description
+        status
+        progress
+        addTime
+        startTime
+        endTime
+        error
+    }
+}
+
 query FindCredentials{
     configuration {
         general {

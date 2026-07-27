@@ -1955,6 +1955,15 @@ a.chip:hover { background: #3a3a3a; }
       markerLoop: null,
       effectsPage: 0,
       editPage: 0,
+      subtitleOptions: {
+        sourceLanguage: 'ja',
+        mode: 'transcribe_translate',
+        transcriptionService: 'assemblyai',
+        transcriptionModel: 'models/gemini-3.1-pro-preview',
+        translationService: 'openai',
+        translationModel: 'gpt-4o-mini'
+      },
+      subtitlePollTimer: null,
       effects: vrVideoEffects
     };
     const DETAIL_DESCRIPTION_VISIBLE_LINES = 2;
@@ -1967,6 +1976,45 @@ a.chip:hover { background: #3a3a3a; }
       { id: 'files', label: 'File Info' },
       { id: 'history', label: 'History' },
       { id: 'edit', label: 'Edit' }
+    ];
+    const SUBTITLE_SOURCE_OPTIONS = [
+      { value: 'ja', label: 'Japanese' },
+      { value: 'zh', label: 'Mandarin Chinese' }
+    ];
+    const SUBTITLE_MODE_OPTIONS = [
+      { value: 'transcribe_translate', label: 'Transcribe + Traditional Chinese' },
+      { value: 'transcribe_only', label: 'Transcribe only' },
+      { value: 'translate_only', label: 'Translate existing .jp.srt' }
+    ];
+    const SUBTITLE_TRANSCRIPTION_OPTIONS = [
+      { value: 'openai', label: 'OpenAI GPT-4o Transcribe' },
+      { value: 'gemini', label: 'Google Gemini' },
+      { value: 'assemblyai', label: 'AssemblyAI Universal' },
+      { value: 'granite', label: 'IBM Granite Speech 4.1 2B', japaneseOnly: true },
+      { value: 'qwen3', label: 'Qwen3-ASR-1.7B' },
+      { value: 'kotoba', label: 'Kotoba-Whisper v2.2', japaneseOnly: true },
+      { value: 'reazonspeech', label: 'ReazonSpeech-NeMo v3', japaneseOnly: true }
+    ];
+    const SUBTITLE_GEMINI_MODELS = [
+      { value: 'models/gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+      { value: 'models/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview' },
+      { value: 'models/gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
+    ];
+    const SUBTITLE_TRANSLATION_OPTIONS = [
+      { value: 'openai', label: 'OpenAI' },
+      { value: 'gemini', label: 'Google Gemini' },
+      { value: 'local_llm', label: 'Local LLM via Ollama' }
+    ];
+    const SUBTITLE_OPENAI_MODELS = [
+      { value: 'gpt-4o-mini', label: 'GPT-4o-mini' },
+      { value: 'gpt-4o', label: 'GPT-4o' }
+    ];
+    const SUBTITLE_LOCAL_MODELS = [
+      { value: 'qwen3:14b', label: 'Qwen3 14B' },
+      { value: 'qwen3:8b', label: 'Qwen3 8B' },
+      { value: 'qwen3:30b-a3b', label: 'Qwen3 30B-A3B' },
+      { value: 'deepseek-r1:14b', label: 'DeepSeek R1 14B' },
+      { value: 'deepseek-r1:7b', label: 'DeepSeek R1 7B' }
     ];
 
     function isDetailPanelVisible() {
@@ -2047,6 +2095,10 @@ a.chip:hover { background: #3a3a3a; }
     const DETAIL_TEXT_RADIUS = 2.919;
     const DETAIL_CONTENT_TOP = 0.08;
     const DETAIL_CONTENT_BOTTOM = -1.10;
+    // Subtitle option values established the smallest comfortable type in
+    // headset. Apply that same floor to every detail-panel label, including
+    // metadata, chips, secondary actions, and long strings that need fitting.
+    const DETAIL_MIN_FONT_SCALE = 0.36;
 
     // A-Frame's cylinder winding is reversed on the left extension compared
     // with the logical Stash row order: increasing θ moves toward the user's
@@ -2075,29 +2127,43 @@ a.chip:hover { background: #3a3a3a; }
       // The texture canvas becomes much taller for narrow curved buttons.
       // Scale the font from that height so chips and tab labels stay readable
       // instead of collapsing into the tiny text seen on the flat prototype.
-      let fontPx = Math.max(opts.fontPx || 0,
-        Math.round(canvasH * (opts.fontScale || 0.54)));
-      ctx.clearRect(0, 0, canvasW, canvasH);
-      ctx.fillStyle = opts.textColor || '#ffffff';
-      ctx.textAlign = align;
-      ctx.textBaseline = 'middle';
-      let text = String(value || '');
+      const requestedFontScale = isFinite(Number(opts.fontScale))
+        ? Number(opts.fontScale) : 0.54;
+      const effectiveFontScale = Math.max(DETAIL_MIN_FONT_SCALE, requestedFontScale);
+      const minimumFontPx = Math.max(26, Math.ceil(canvasH * DETAIL_MIN_FONT_SCALE));
+      const baseFontPx = Math.max(
+        opts.fontPx || 0,
+        minimumFontPx,
+        Math.ceil(canvasH * effectiveFontScale)
+      );
       const pad = 20;
       const maxW = canvasW - pad * 2;
-      const setFont = function() {
-        ctx.font = (opts.bold ? '600 ' : '') + fontPx + 'px sans-serif';
-      };
-      setFont();
-      // Keep the type large, but step it down for a legitimate long title
-      // before falling back to a single ellipsis-trimmed line.
-      while (fontPx > 26 && ctx.measureText(text).width > maxW) {
-        fontPx = Math.max(26, Math.floor(fontPx * 0.88));
+      const drawLabel = function(nextValue) {
+        let fontPx = baseFontPx;
+        let text = String(nextValue || '');
+        const originalText = text;
+        const setFont = function() {
+          ctx.font = (opts.bold ? '600 ' : '') + fontPx + 'px sans-serif';
+        };
         setFont();
-      }
-      while (text.length > 1 && ctx.measureText(text).width > maxW) text = text.slice(0, -1);
-      if (text !== String(value || '')) text = text.slice(0, Math.max(0, text.length - 1)) + '…';
-      const x = align === 'left' ? pad : align === 'right' ? canvasW - pad : canvasW / 2;
-      ctx.fillText(text, x, canvasH / 2);
+        // Keep the type large, but step it down for a legitimate long title
+        // before falling back to a single ellipsis-trimmed line.
+        while (fontPx > minimumFontPx && ctx.measureText(text).width > maxW) {
+          fontPx = Math.max(minimumFontPx, Math.floor(fontPx * 0.88));
+          setFont();
+        }
+        while (text.length > 1 && ctx.measureText(text).width > maxW) text = text.slice(0, -1);
+        if (text !== originalText) text = text.slice(0, Math.max(0, text.length - 1)) + '…';
+        ctx.clearRect(0, 0, canvasW, canvasH);
+        ctx.fillStyle = opts.textColor || '#ffffff';
+        ctx.textAlign = align;
+        ctx.textBaseline = 'middle';
+        const x = align === 'left' ? pad : align === 'right' ? canvasW - pad : canvasW / 2;
+        ctx.fillText(text, x, canvasH / 2);
+        parent.dataset.detailFontPx = String(fontPx);
+        parent.dataset.detailFontScale = (fontPx / canvasH).toFixed(4);
+      };
+      drawLabel(value);
       const texture = new AFRAME.THREE.CanvasTexture(canvas);
       texture.minFilter = AFRAME.THREE.LinearFilter;
       texture.magFilter = AFRAME.THREE.LinearFilter;
@@ -2132,15 +2198,22 @@ a.chip:hover { background: #3a3a3a; }
       // tab/action handler.
       labelMesh.raycast = function() {};
       label.setObject3D('mesh', labelMesh);
+      label._detailSetLabel = function(nextValue) {
+        drawLabel(nextValue);
+        texture.needsUpdate = true;
+      };
       // Canvas labels are an overlay on their owning curved row. Rendering
       // them after opaque panel geometry avoids Quest/Adreno depth sorting
       // hiding text on shallow, side-facing segments.
       labelMesh.renderOrder = 1000;
       parent.appendChild(label);
+      return label;
     }
 
     function addDetailRow(root, opts) {
       const row = document.createElement('a-cylinder');
+      if (opts.id) row.id = opts.id;
+      row.dataset.detailLabel = String(opts.label || '');
       const interactive = typeof opts.onClick === 'function';
       const logicalThetaStart = opts.thetaStart == null ? DETAIL_THETA_START : opts.thetaStart;
       const thetaLength = opts.thetaLength == null ? DETAIL_THETA_LENGTH : opts.thetaLength;
@@ -2171,7 +2244,7 @@ a.chip:hover { background: #3a3a3a; }
           setTimeout(updateDetailContentScroll, 0);
         });
       }
-      attachDetailRowLabel(row, opts.label, {
+      const label = attachDetailRowLabel(row, opts.label, {
         thetaStart: visualThetaStart,
         thetaLength: thetaLength,
         height: opts.height || 0.10,
@@ -2181,6 +2254,10 @@ a.chip:hover { background: #3a3a3a; }
         fontScale: opts.fontScale,
         bold: opts.bold,
       });
+      row._detailSetLabel = function(value) {
+        row.dataset.detailLabel = String(value || '');
+        if (label && typeof label._detailSetLabel === 'function') label._detailSetLabel(value);
+      };
       if (interactive) row.addEventListener('click', opts.onClick);
       return row;
     }
@@ -2388,9 +2465,11 @@ a.chip:hover { background: #3a3a3a; }
     function detailRow(root, y, label, opts) {
       opts = opts || {};
       return addDetailRow(root, {
+        id: opts.id,
         y: y, height: opts.height || 0.09, color: opts.color,
         textColor: opts.textColor || '#d9e2e8', label: label,
         fontScale: opts.fontScale || 0.48, bold: opts.bold,
+        fontPx: opts.fontPx,
         thetaStart: opts.thetaStart, thetaLength: opts.thetaLength,
         onClick: opts.onClick
       });
@@ -3253,6 +3332,310 @@ a.chip:hover { background: #3a3a3a; }
       }, hint);
     }
 
+    function subtitleOptionLabel(options, value) {
+      const match = (options || []).find(function(option) { return option.value === value; });
+      return match ? match.label : String(value || '—');
+    }
+
+    function availableSubtitleTranscriptionOptions() {
+      if (detailState.subtitleOptions.sourceLanguage === 'ja') {
+        return SUBTITLE_TRANSCRIPTION_OPTIONS;
+      }
+      return SUBTITLE_TRANSCRIPTION_OPTIONS.filter(function(option) { return !option.japaneseOnly; });
+    }
+
+    function subtitleTranslationModelOptions() {
+      if (detailState.subtitleOptions.translationService === 'gemini') return SUBTITLE_GEMINI_MODELS;
+      if (detailState.subtitleOptions.translationService === 'local_llm') return SUBTITLE_LOCAL_MODELS;
+      return SUBTITLE_OPENAI_MODELS;
+    }
+
+    function subtitleOptionChoices(field) {
+      switch (field) {
+      case 'sourceLanguage': return SUBTITLE_SOURCE_OPTIONS;
+      case 'mode': return SUBTITLE_MODE_OPTIONS;
+      case 'transcriptionService': return availableSubtitleTranscriptionOptions();
+      case 'transcriptionModel': return SUBTITLE_GEMINI_MODELS;
+      case 'translationService': return SUBTITLE_TRANSLATION_OPTIONS;
+      case 'translationModel': return subtitleTranslationModelOptions();
+      default: return [];
+      }
+    }
+
+    function subtitleOptionPrefix(field) {
+      switch (field) {
+      case 'sourceLanguage': return 'Audio';
+      case 'mode': return 'Mode';
+      case 'transcriptionService': return 'Transcribe';
+      case 'transcriptionModel': return 'Transcription model';
+      case 'translationService': return 'Translate';
+      case 'translationModel': return 'Translation model';
+      default: return field;
+      }
+    }
+
+    function subtitleOptionEnabled(field) {
+      const options = detailState.subtitleOptions;
+      if (subtitleJobActive(detailState.meta && detailState.meta.subtitleJob)) return false;
+      if ((field === 'transcriptionService' || field === 'transcriptionModel') &&
+          options.mode === 'translate_only') return false;
+      if (field === 'transcriptionModel' && options.transcriptionService !== 'gemini') return false;
+      if ((field === 'translationService' || field === 'translationModel') &&
+          options.mode === 'transcribe_only') return false;
+      return true;
+    }
+
+    function subtitleOptionText(field) {
+      const options = subtitleOptionChoices(field);
+      return subtitleOptionPrefix(field) + ': ' +
+        subtitleOptionLabel(options, detailState.subtitleOptions[field]);
+    }
+
+    function setSubtitleRowColor(row, color) {
+      if (!row) return;
+      row.setAttribute('material',
+        'shader: flat; side: double; color: ' + color + '; opacity: 1.0');
+    }
+
+    function refreshSubtitleOptionRows() {
+      [
+        'sourceLanguage', 'mode', 'transcriptionService',
+        'transcriptionModel', 'translationService', 'translationModel'
+      ].forEach(function(field) {
+        const enabled = subtitleOptionEnabled(field);
+        const valueRow = document.getElementById('vrSubtitleOption-' + field);
+        if (valueRow && typeof valueRow._detailSetLabel === 'function') {
+          valueRow._detailSetLabel(subtitleOptionText(field));
+        }
+        setSubtitleRowColor(valueRow, enabled ? '#223944' : '#35434a');
+        setSubtitleRowColor(document.getElementById('vrSubtitleOption-' + field + '-previous'),
+          enabled ? '#293a46' : '#46545c');
+        setSubtitleRowColor(document.getElementById('vrSubtitleOption-' + field + '-next'),
+          enabled ? '#293a46' : '#46545c');
+      });
+    }
+
+    function stepSubtitleOption(field, direction) {
+      if (!subtitleOptionEnabled(field)) return;
+      const options = subtitleOptionChoices(field);
+      if (!options.length) return;
+      const current = detailState.subtitleOptions[field];
+      let index = options.findIndex(function(option) { return option.value === current; });
+      if (index < 0) index = direction > 0 ? -1 : 0;
+      index = (index + direction + options.length) % options.length;
+      detailState.subtitleOptions[field] = options[index].value;
+
+      if (field === 'sourceLanguage') {
+        const transcriptionOptions = availableSubtitleTranscriptionOptions();
+        if (!transcriptionOptions.some(function(option) {
+          return option.value === detailState.subtitleOptions.transcriptionService;
+        })) {
+          detailState.subtitleOptions.transcriptionService = transcriptionOptions[0].value;
+        }
+      }
+      if (field === 'translationService') {
+        detailState.subtitleOptions.translationModel = subtitleTranslationModelOptions()[0].value;
+      }
+      refreshSubtitleOptionRows();
+    }
+
+    function subtitleJobActive(job) {
+      return !!job && (job.status === 'queued' || job.status === 'running');
+    }
+
+    function applySubtitleState(state) {
+      if (!state || !detailState.meta) return;
+      detailState.meta.generatedSubtitles = Array.isArray(state.files) ? state.files : [];
+      detailState.meta.subtitleJob = state.job || null;
+      detailState.meta.subtitleRuntime = state.runtime || { available: false, message: 'Subtitle runtime unavailable' };
+      if (state.err) detailState.status = state.err;
+      renderCurvedDetailPanel(detailState.meta);
+      if (subtitleJobActive(state.job)) scheduleSubtitlePoll();
+    }
+
+    function requestSubtitleState(path, fields) {
+      const requestedID = detailState.sceneId;
+      if (!requestedID || !detailState.meta) return Promise.reject(new Error('no scene selected'));
+      const body = new URLSearchParams(fields || {});
+      return fetch('/browse/scene/' + encodeURIComponent(requestedID) + '/subtitles' + path, {
+        method: fields ? 'POST' : 'GET',
+        headers: fields ? {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
+        } : { 'Accept': 'application/json' },
+        body: fields ? body.toString() : undefined
+      }).then(function(resp) {
+        return resp.json().catch(function() { return { err: 'HTTP ' + resp.status }; })
+          .then(function(state) {
+            if (detailState.sceneId === requestedID && detailState.meta) applySubtitleState(state);
+            if (!resp.ok || state.err) throw new Error(state.err || ('HTTP ' + resp.status));
+            return state;
+          });
+      });
+    }
+
+    function clearSubtitlePoll() {
+      if (detailState.subtitlePollTimer != null) {
+        clearTimeout(detailState.subtitlePollTimer);
+        detailState.subtitlePollTimer = null;
+      }
+    }
+
+    function scheduleSubtitlePoll() {
+      clearSubtitlePoll();
+      if (!detailState.meta || !subtitleJobActive(detailState.meta.subtitleJob) || !isDetailPanelVisible()) return;
+      detailState.subtitlePollTimer = setTimeout(pollSubtitleState, 1000);
+    }
+
+    function pollSubtitleState() {
+      detailState.subtitlePollTimer = null;
+      const requestedID = detailState.sceneId;
+      if (!requestedID || !detailState.meta || !isDetailPanelVisible()) return;
+      const wasActive = subtitleJobActive(detailState.meta.subtitleJob);
+      requestSubtitleState('', null).then(function(state) {
+        if (detailState.sceneId !== requestedID) return;
+        if (wasActive && !subtitleJobActive(state.job)) {
+          if (String(sceneId) === String(requestedID) && typeof refreshSceneMeta === 'function') {
+            refreshSceneMeta(requestedID);
+          }
+          refreshDetailMeta();
+        }
+      }).catch(function(err) {
+        console.warn('stash-vr: subtitle status poll failed', err);
+        if (detailState.sceneId === requestedID && detailState.meta) {
+          detailState.status = 'Subtitle status unavailable';
+          renderCurvedDetailPanel(detailState.meta);
+          if (subtitleJobActive(detailState.meta.subtitleJob)) scheduleSubtitlePoll();
+        }
+      });
+    }
+
+    function startSubtitleJob() {
+      const runtime = detailState.meta && detailState.meta.subtitleRuntime;
+      if (!runtime || !runtime.available || subtitleJobActive(detailState.meta.subtitleJob)) return;
+      detailState.status = 'Starting subtitle job…';
+      renderCurvedDetailPanel(detailState.meta);
+      requestSubtitleState('/generate', detailState.subtitleOptions).then(function() {
+        detailState.status = 'Subtitle job started';
+        if (detailState.meta) renderCurvedDetailPanel(detailState.meta);
+        scheduleSubtitlePoll();
+      }).catch(function(err) {
+        console.warn('stash-vr: subtitle generation failed to start', err);
+        if (detailState.meta) {
+          detailState.status = err.message || 'Could not start subtitle job';
+          renderCurvedDetailPanel(detailState.meta);
+        }
+      });
+    }
+
+    function deleteRelatedSubtitle(file) {
+      if (!file || !file.key) return;
+      requestDetailConfirmation('Delete ' + file.name + ' from the video folder?', function() {
+        requestSubtitleState('/delete', { key: file.key }).then(function() {
+          detailState.status = 'Deleted ' + file.name;
+          if (String(sceneId) === String(detailState.sceneId) && typeof refreshSceneMeta === 'function') {
+            refreshSceneMeta(detailState.sceneId);
+          }
+        }).catch(function(err) {
+          console.warn('stash-vr: subtitle delete failed', err);
+          if (detailState.meta) {
+            detailState.status = err.message || 'Could not delete subtitle';
+            renderCurvedDetailPanel(detailState.meta);
+          }
+        });
+      });
+    }
+
+    function renderSubtitleOptionSelector(root, y, field) {
+      const enabled = subtitleOptionEnabled(field);
+      const prefix = 'vrSubtitleOption-' + field;
+      addDetailRow(root, {
+        id: prefix + '-previous',
+        y: y, height: 0.11, thetaStart: 222.5, thetaLength: 5.5,
+        color: enabled ? '#293a46' : '#46545c', textColor: '#ffffff',
+        label: '<', fontScale: 0.48, bold: true,
+        onClick: function() { stepSubtitleOption(field, -1); }
+      });
+      addDetailRow(root, {
+        id: prefix,
+        y: y, height: 0.11, thetaStart: 228.5, thetaLength: 33.5,
+        color: enabled ? '#223944' : '#35434a', textColor: '#ffffff',
+        label: subtitleOptionText(field), fontScale: 0.36
+      });
+      addDetailRow(root, {
+        id: prefix + '-next',
+        y: y, height: 0.11, thetaStart: 262.5, thetaLength: 5.5,
+        color: enabled ? '#293a46' : '#46545c', textColor: '#ffffff',
+        label: '>', fontScale: 0.48, bold: true,
+        onClick: function() { stepSubtitleOption(field, 1); }
+      });
+      return y - 0.13;
+    }
+
+    function renderSubtitleGenerationSection(root, meta, y) {
+      const sectionHeading = function(label) {
+        detailRow(root, y, label, { textColor: '#ffffff', bold: true, height: 0.09 });
+        y -= 0.14;
+      };
+      sectionHeading('Runtime subtitle generation');
+      const runtime = meta.subtitleRuntime || { available: false, message: 'Subtitle runtime unavailable' };
+      detailRow(root, y, runtime.message || (runtime.available ? 'Ready' : 'Unavailable'), {
+        textColor: runtime.available ? '#9ed5af' : '#ffb3b3', height: 0.085, fontScale: 0.30
+      });
+      y -= 0.12;
+
+      const job = meta.subtitleJob;
+      if (job) {
+        const progress = Math.max(0, Math.min(100, Number(job.progress) || 0));
+        const jobLabel = job.status === 'failed'
+          ? 'Failed · ' + (job.error || job.stage || 'Unknown error')
+          : Math.round(progress) + '% · ' + (job.stage || job.status);
+        detailRow(root, y, jobLabel, {
+          color: job.status === 'failed' ? '#722d2d' : job.status === 'succeeded' ? '#2e6b53' : '#223944',
+          textColor: '#ffffff', height: 0.10, fontScale: 0.31
+        });
+        y -= 0.13;
+      }
+
+      y = renderSubtitleOptionSelector(root, y, 'sourceLanguage');
+      y = renderSubtitleOptionSelector(root, y, 'mode');
+      y = renderSubtitleOptionSelector(root, y, 'transcriptionService');
+      y = renderSubtitleOptionSelector(root, y, 'transcriptionModel');
+      y = renderSubtitleOptionSelector(root, y, 'translationService');
+      y = renderSubtitleOptionSelector(root, y, 'translationModel');
+
+      const active = subtitleJobActive(job);
+      detailRow(root, y, active ? 'Subtitle job running…' : 'Generate subtitle for this video', {
+        height: 0.13,
+        color: active || !runtime.available ? '#46545c' : '#267bb5',
+        textColor: '#ffffff', fontScale: 0.42, bold: true,
+        onClick: active || !runtime.available ? null : startSubtitleJob
+      });
+      y -= 0.20;
+
+      sectionHeading('Related .srt files');
+      const files = Array.isArray(meta.generatedSubtitles) ? meta.generatedSubtitles : [];
+      if (!files.length) {
+        detailRow(root, y, 'No related .srt files beside this video', {
+          textColor: '#a8bcc9', height: 0.085, fontScale: 0.30
+        });
+        return y - 0.12;
+      }
+      files.forEach(function(file) {
+        addDetailRow(root, {
+          y: y, height: 0.10, thetaStart: 222.5, thetaLength: 37.0,
+          color: '#223944', textColor: '#ffffff', label: file.name, fontScale: 0.29
+        });
+        addDetailRow(root, {
+          y: y, height: 0.10, thetaStart: 260.6, thetaLength: 7.4,
+          color: active ? '#46545c' : '#a01010', textColor: '#ffffff', label: 'Delete', fontScale: 0.26,
+          onClick: active ? null : function() { deleteRelatedSubtitle(file); }
+        });
+        y -= 0.12;
+      });
+      return y;
+    }
+
     function renderDetailOperations(root, meta) {
       detailRow(root, 0.02, 'Scene operations', { textColor: '#ffffff', bold: true, height: 0.09 });
       detailRow(root, -0.12, 'Rescan file', {
@@ -3419,6 +3802,9 @@ a.chip:hover { background: #3a3a3a; }
       y = renderEditableRelationChips(root, meta.groups || [], y, 'group', '#d9cae8');
       y -= 0.13;
       detailRow(root, y, '+ Add group', { height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31, onClick: function() { startRelationPicker('group', 'add'); } });
+      y -= 0.22;
+
+      renderSubtitleGenerationSection(root, meta, y);
     }
 
     function renderDetailTabContent(root, meta) {
@@ -3522,6 +3908,7 @@ a.chip:hover { background: #3a3a3a; }
       detailState.descriptionOffset = 0;
       resetDetailContentScroll();
       renderCurvedDetailPanel(meta);
+      scheduleSubtitlePoll();
     }
 
     function fetchDetailMeta(sceneID) {
@@ -3578,6 +3965,7 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function openDetailPanel(sceneID, sourceTile) {
+      clearSubtitlePoll();
       if (!sceneID) return;
       detailState.sceneId = String(sceneID);
       detailState.meta = null;
@@ -3631,6 +4019,7 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function closeDetailPanel() {
+      clearSubtitlePoll();
       detailState.sceneId = '';
       detailState.meta = null;
       detailState.sourceTile = null;
@@ -6004,7 +6393,12 @@ a.chip:hover { background: #3a3a3a; }
       while (buttonsRoot.firstChild) buttonsRoot.removeChild(buttonsRoot.firstChild);
 
       const items = [{ lang: '', type: '', label: 'Off' }].concat(
-        captionsData.map(c => ({ lang: c.languageCode, type: c.captionType, label: c.languageCode }))
+        captionsData.map(c => ({
+          lang: c.languageCode,
+          type: c.captionType,
+          fileKey: c.fileKey || '',
+          label: c.label || [c.languageCode, c.captionType].filter(Boolean).join(' · ')
+        }))
       );
       const PER_ROW = 4;
       const BTN_W = 0.40;
@@ -6027,6 +6421,7 @@ a.chip:hover { background: #3a3a3a; }
         btn.classList.add('vr-btn', 'vr-cc-pick');
         btn.dataset.ccLang = it.lang;
         btn.dataset.ccType = it.type;
+        btn.dataset.ccFile = it.fileKey || '';
         btn.setAttribute('geometry', 'primitive:plane;width:' + BTN_W + ';height:' + BTN_H);
         btn.setAttribute('material', 'color:#2c5282;opacity:0.95');
         btn.setAttribute('position', xCenter.toFixed(3) + ' ' + yCenter.toFixed(3) + ' 0.005');
@@ -6042,7 +6437,7 @@ a.chip:hover { background: #3a3a3a; }
         // Direct click handler — the global .vr-btn click router only fires
         // vrAction(data-action) or handlePickerTap(data-pick-row); these
         // language buttons have neither, so no double-fire.
-        btn.addEventListener('click', () => handleCCPick(it.lang, it.type));
+        btn.addEventListener('click', () => handleCCPick(it.lang, it.type, it.fileKey || ''));
       });
     }
     scene.addEventListener('loaded', renderSubtitlePicker);
@@ -6083,18 +6478,21 @@ a.chip:hover { background: #3a3a3a; }
     let currentCues = [];
     let currentLang = '';
 
-    function handleCCPick(lang, type) {
+    function handleCCPick(lang, type, fileKey) {
       setSubpanelVisible('vrSubtitlePicker', false);
-      if (!lang) {
+      if (!lang && !fileKey) {
         currentCues = [];
         currentLang = '';
         return;
       }
-      fetch('/browse/scene/' + encodeURIComponent(sceneId) + '/caption?lang=' + encodeURIComponent(lang) + '&type=' + encodeURIComponent(type))
+      const query = fileKey
+        ? 'file=' + encodeURIComponent(fileKey)
+        : 'lang=' + encodeURIComponent(lang) + '&type=' + encodeURIComponent(type);
+      fetch('/browse/scene/' + encodeURIComponent(sceneId) + '/caption?' + query)
         .then(r => r.text())
         .then(text => {
           currentCues = parseSubtitles(text);
-          currentLang = lang;
+          currentLang = fileKey || lang;
         })
         .catch(err => console.warn('stash-vr: caption fetch failed', err));
     }

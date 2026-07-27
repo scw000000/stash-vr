@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"stash-vr/internal/stash"
+	"stash-vr/internal/subtitles"
 )
 
 // sceneCaptionHandler proxies Stash's caption file (typically VTT) for a
@@ -17,6 +18,28 @@ import (
 func (h *httpHandler) sceneCaptionHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	q := r.URL.Query()
+	if fileKey := q.Get("file"); fileKey != "" {
+		_, paths, ok := h.subtitleScene(w, r)
+		if !ok {
+			return
+		}
+		file, err := subtitles.OpenFile(paths, fileKey)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer file.Close()
+		info, err := file.Stat()
+		if err != nil {
+			http.Error(w, "subtitle unavailable", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-subrip; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+		return
+	}
+
 	lang := q.Get("lang")
 	captionType := q.Get("type")
 	if lang == "" || captionType == "" {

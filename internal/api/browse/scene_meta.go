@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"stash-vr/internal/stash/gql"
+	"stash-vr/internal/subtitles"
 )
 
 // SceneMetaResponse is the JSON returned by GET /browse/scene/{id}/meta.
@@ -23,31 +24,34 @@ type SceneMetaResponse struct {
 	// Detail fields feed the Stash-style scene panel in the in-VR browser.
 	// Keep this response as the single source of metadata for both the
 	// seamless scene swap and the detail panel.
-	Description  string                 `json:"description"`
-	Code         string                 `json:"code"`
-	Director     string                 `json:"director"`
-	URLs         []string               `json:"urls"`
-	CustomFields map[string]interface{} `json:"customFields"`
-	StashIDs     []StashIDRef           `json:"stashIDs"`
-	CreatedAt    string                 `json:"createdAt"`
-	UpdatedAt    string                 `json:"updatedAt"`
-	Date         string                 `json:"date"`
-	Rating1to5   int                    `json:"rating1to5"`
-	PlayCount    int                    `json:"playCount"`
-	OCounter     int                    `json:"oCounter"`
-	IsFavorite   bool                   `json:"isFavorite"`
-	Performers   []EntityRef            `json:"performers"`
-	Studio       *EntityRef             `json:"studio"`
-	Tags         []EntityRef            `json:"tags"`
-	Galleries    []EntityRef            `json:"galleries"`
-	Groups       []SceneGroupRef        `json:"groups"`
-	Organized    bool                   `json:"organized"`
-	ResumeTime   *float64               `json:"resumeTime,omitempty"`
-	PlayDuration *float64               `json:"playDuration,omitempty"`
-	LastPlayedAt *time.Time             `json:"lastPlayedAt,omitempty"`
-	PlayHistory  []time.Time            `json:"playHistory"`
-	OHistory     []time.Time            `json:"oHistory"`
-	Files        []SceneFile            `json:"files"`
+	Description        string                  `json:"description"`
+	Code               string                  `json:"code"`
+	Director           string                  `json:"director"`
+	URLs               []string                `json:"urls"`
+	CustomFields       map[string]interface{}  `json:"customFields"`
+	StashIDs           []StashIDRef            `json:"stashIDs"`
+	CreatedAt          string                  `json:"createdAt"`
+	UpdatedAt          string                  `json:"updatedAt"`
+	Date               string                  `json:"date"`
+	Rating1to5         int                     `json:"rating1to5"`
+	PlayCount          int                     `json:"playCount"`
+	OCounter           int                     `json:"oCounter"`
+	IsFavorite         bool                    `json:"isFavorite"`
+	Performers         []EntityRef             `json:"performers"`
+	Studio             *EntityRef              `json:"studio"`
+	Tags               []EntityRef             `json:"tags"`
+	Galleries          []EntityRef             `json:"galleries"`
+	Groups             []SceneGroupRef         `json:"groups"`
+	Organized          bool                    `json:"organized"`
+	ResumeTime         *float64                `json:"resumeTime,omitempty"`
+	PlayDuration       *float64                `json:"playDuration,omitempty"`
+	LastPlayedAt       *time.Time              `json:"lastPlayedAt,omitempty"`
+	PlayHistory        []time.Time             `json:"playHistory"`
+	OHistory           []time.Time             `json:"oHistory"`
+	Files              []SceneFile             `json:"files"`
+	GeneratedSubtitles []subtitles.File        `json:"generatedSubtitles"`
+	SubtitleJob        *subtitles.Job          `json:"subtitleJob,omitempty"`
+	SubtitleRuntime    subtitles.RuntimeStatus `json:"subtitleRuntime"`
 }
 
 // SceneFile carries the media details shown by the File Info VR tab.
@@ -174,7 +178,15 @@ func (h *httpHandler) sceneMetaHandler(w http.ResponseWriter, r *http.Request) {
 		out.Captions = append(out.Captions, CaptionRef{
 			LanguageCode: c.Language_code,
 			CaptionType:  c.Caption_type,
+			Label:        c.Language_code + " · " + c.Caption_type,
 		})
+	}
+	if h.subtitleService != nil {
+		subtitleState := h.subtitleService.State(id, sceneVideoPaths(vd))
+		out.GeneratedSubtitles = subtitleState.Files
+		out.SubtitleJob = subtitleState.Job
+		out.SubtitleRuntime = subtitleState.Runtime
+		out.Captions = appendSidecarCaptions(out.Captions, subtitleState.Files)
 	}
 	out.SceneMarkers = make([]SceneMarker, 0, len(sp.Scene_markers))
 	for _, m := range sp.Scene_markers {

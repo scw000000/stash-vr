@@ -9,3 +9,10 @@
 /devstash-vrscan_output.json
 /scripts/slr_*
 /scripts/deovr_page.html
+
+# Local CaptionGenerator API keys.
+/.env
+
+# Python helper bytecode.
+__pycache__/
+*.pyc
