@@ -528,6 +528,30 @@ a.chip:hover { background: #3a3a3a; }
       <a-entity id="vrFiltersChipsStrip" position="0 -1.05 3.02"></a-entity>
     </a-entity>
 
+    <!--
+      Stash Desktop scene details, built as the browse grid's left-hand
+      cylindrical extension. It shares the grid's panel hub (z=3.02),
+      background radius (3.02), and left seam (theta=222.5), exactly as the
+      filters extension shares the right seam at theta=137.5. This makes the
+      panel one continuous curved shell instead of a detached flat card.
+    -->
+    <a-entity id="vrDetailPanel" visible="false">
+      <a-cylinder class="vr-detail-bg"
+                  radius="3.02" height="2.4" position="0 0 3.02"
+                  theta-start="222.5" theta-length="45.5" open-ended="true"
+                  material="shader: flat; side: double; color: #202c34; opacity: 0.98">
+      </a-cylinder>
+      <a-cylinder class="vr-detail-bg"
+                  radius="3.01" height="1.58" position="0 -0.21 3.02"
+                  theta-start="222.5" theta-length="45.5" open-ended="true"
+                  material="shader: flat; side: double; color: #182932; opacity: 1.0">
+      </a-cylinder>
+      <!-- JS renders every header, metadata row, tag chip, and action as a
+           concentric cylinder segment under this hub. Canvas-text labels
+           keep CJK Stash metadata readable in Meta Browser. -->
+      <a-entity id="vrDetailRows" position="0 0 3.02"></a-entity>
+    </a-entity>
+
   </a-entity>
 
   </a-entity><!-- /vrControlsRoot -->
@@ -719,6 +743,108 @@ a.chip:hover { background: #3a3a3a; }
     // ignores offset/repeat and applies its own UV math via uniforms,
     // so sharing is safe.
     let sharedTex = null;
+
+    // The desktop Filters tab adjusts the rendered video, not scene metadata.
+    // Keep the effect uniforms on the WebGL materials so the controls affect
+    // both the curved 180/360 view and the flat fallback in-headset (CSS
+    // filters alone do not affect a THREE.VideoTexture).
+    const vrVideoEffects = { brightness: 100, contrast: 100, gamma: 100, saturation: 100, hue: 0, warmth: 0,
+      red: 100, green: 100, blue: 100, blur: 0, rotate: 0, scale: 100, aspect: 100 };
+    function currentVideoEffects() { return vrVideoEffects; }
+
+    function writeVideoEffectUniforms(uniforms) {
+      if (!uniforms) return;
+      const fx = currentVideoEffects();
+      const values = {
+        uVrBrightness: (Number(fx.brightness) - 100) / 100,
+        uVrContrast: Number(fx.contrast) / 100,
+        uVrGamma: Number(fx.gamma) / 100,
+        uVrSaturation: Number(fx.saturation) / 100,
+        uVrHue: Number(fx.hue) * Math.PI / 180,
+        uVrWarmth: Number(fx.warmth) / 100,
+        uVrRed: Number(fx.red) / 100,
+        uVrGreen: Number(fx.green) / 100,
+        uVrBlue: Number(fx.blue) / 100,
+        uVrBlur: Number(fx.blur),
+        uVrRotate: Number(fx.rotate) * Math.PI / 180,
+        uVrScale: Number(fx.scale) / 100,
+        uVrAspect: Number(fx.aspect) / 100
+      };
+      Object.keys(values).forEach(function(key) {
+        if (uniforms[key]) uniforms[key].value = values[key];
+      });
+    }
+
+    function effectUniformDeclarations() {
+      return [
+        'uniform float uVrBrightness;', 'uniform float uVrContrast;', 'uniform float uVrGamma;',
+        'uniform float uVrSaturation;', 'uniform float uVrHue;', 'uniform float uVrWarmth;',
+        'uniform float uVrRed;', 'uniform float uVrGreen;', 'uniform float uVrBlue;',
+        'uniform float uVrBlur;', 'uniform float uVrRotate;', 'uniform float uVrScale;', 'uniform float uVrAspect;'
+      ].join('\n');
+    }
+
+    function effectColorCode(sourceName) {
+      return [
+        'vec3 vrEffectColor = ' + sourceName + ';',
+        'vrEffectColor = (vrEffectColor - 0.5) * uVrContrast + 0.5 + uVrBrightness;',
+        'vrEffectColor = pow(max(vrEffectColor, vec3(0.0001)), vec3(1.0 / max(0.05, uVrGamma)));',
+        'float vrLuma = dot(vrEffectColor, vec3(0.299, 0.587, 0.114));',
+        'vrEffectColor = mix(vec3(vrLuma), vrEffectColor, uVrSaturation);',
+        'float vrHueCos = cos(uVrHue); float vrHueSin = sin(uVrHue);',
+        'mat3 vrHueMatrix = mat3(',
+        '  0.213 + vrHueCos*0.787 - vrHueSin*0.213, 0.715 - vrHueCos*0.715 - vrHueSin*0.715, 0.072 - vrHueCos*0.072 + vrHueSin*0.928,',
+        '  0.213 - vrHueCos*0.213 + vrHueSin*0.143, 0.715 + vrHueCos*0.285 + vrHueSin*0.140, 0.072 - vrHueCos*0.072 - vrHueSin*0.283,',
+        '  0.213 - vrHueCos*0.213 - vrHueSin*0.787, 0.715 - vrHueCos*0.715 + vrHueSin*0.715, 0.072 + vrHueCos*0.928 + vrHueSin*0.072);',
+        'vrEffectColor = vrHueMatrix * vrEffectColor;',
+        'vrEffectColor.r += uVrWarmth * 0.12; vrEffectColor.b -= uVrWarmth * 0.12;',
+        'vrEffectColor *= vec3(uVrRed, uVrGreen, uVrBlue);',
+        sourceName + ' = clamp(vrEffectColor, 0.0, 1.0);'
+      ].join('\n');
+    }
+
+    function installVideoEffectShader(material) {
+      material.onBeforeCompile = function(shader) {
+        Object.assign(shader.uniforms, {
+          uVrBrightness: { value: 0 }, uVrContrast: { value: 1 }, uVrGamma: { value: 1 },
+          uVrSaturation: { value: 1 }, uVrHue: { value: 0 }, uVrWarmth: { value: 0 },
+          uVrRed: { value: 1 }, uVrGreen: { value: 1 }, uVrBlue: { value: 1 },
+          uVrBlur: { value: 0 }, uVrRotate: { value: 0 }, uVrScale: { value: 1 }, uVrAspect: { value: 1 }
+        });
+        shader.fragmentShader = shader.fragmentShader.replace('void main() {', effectUniformDeclarations() + '\nvoid main() {');
+        shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', [
+          '#ifdef USE_MAP',
+          'vec2 vrEffectUV = vMapUv;',
+          'vrEffectUV.x = (vrEffectUV.x - 0.5) / max(0.05, uVrAspect) + 0.5;',
+          'vrEffectUV = (vrEffectUV - 0.5) / max(0.05, uVrScale) + 0.5;',
+          'float vrCos = cos(uVrRotate); float vrSin = sin(uVrRotate);',
+          'vrEffectUV = mat2(vrCos, -vrSin, vrSin, vrCos) * (vrEffectUV - 0.5) + 0.5;',
+          'vec2 vrBlurOffset = vec2(uVrBlur * 0.00035);',
+          'vec4 sampledDiffuseColor = (texture2D(map, vrEffectUV) + texture2D(map, vrEffectUV + vec2(vrBlurOffset.x, 0.0)) + texture2D(map, vrEffectUV - vec2(vrBlurOffset.x, 0.0)) + texture2D(map, vrEffectUV + vec2(0.0, vrBlurOffset.y)) + texture2D(map, vrEffectUV - vec2(0.0, vrBlurOffset.y))) / 5.0;',
+          'diffuseColor *= sampledDiffuseColor;',
+          '#endif'
+        ].join('\n'));
+        shader.fragmentShader = shader.fragmentShader.replace('#include <output_fragment>', effectColorCode('outgoingLight') + '\n#include <output_fragment>');
+        material.userData.vrEffectShader = shader;
+        writeVideoEffectUniforms(shader.uniforms);
+      };
+      material.needsUpdate = true;
+    }
+
+    function applyVideoEffects() {
+      const fx = currentVideoEffects();
+      // Preserve a CSS approximation for the 2D web view. The WebGL shader
+      // above remains the authoritative path in immersive VR.
+      video.style.filter = 'brightness(' + fx.brightness + '%) contrast(' + fx.contrast + '%) saturate(' + fx.saturation + '%) hue-rotate(' + fx.hue + 'deg) blur(' + fx.blur + 'px)';
+      ['vrSphere180', 'vrSphere360', 'vrFlat', 'vrFisheye'].forEach(function(id) {
+        const mesh = document.getElementById(id)?.getObject3D('mesh');
+        if (!mesh || !mesh.material) return;
+        if (mesh.material.userData && mesh.material.userData.vrEffectShader) {
+          writeVideoEffectUniforms(mesh.material.userData.vrEffectShader.uniforms);
+        }
+        if (mesh.material.uniforms) writeVideoEffectUniforms(mesh.material.uniforms);
+      });
+    }
     function getSharedTex() {
       if (!sharedTex) {
         sharedTex = new AFRAME.THREE.VideoTexture(video);
@@ -864,6 +990,12 @@ a.chip:hover { background: #3a3a3a; }
       canvas.addEventListener('webglcontextrestored', function() {
         console.warn('stash-vr: WebGL context restored — rebuilding video texture');
         refreshVideoTexture();
+        // Also re-establish the M5 media layer — its old XREquirectLayer
+        // held GL resources tied to the lost context, so the runtime
+        // likely already dropped it from renderState. Without this, we
+        // silently fall through to the VideoTexture-on-sphere path and
+        // the 8K V-flash artifact returns after every deep sleep.
+        try { if (window.syncMediaLayer) window.syncMediaLayer(); } catch (e) { console.warn('stash-vr: post-restore syncMediaLayer', e); }
       }, false);
     });
 
@@ -901,6 +1033,7 @@ a.chip:hover { background: #3a3a3a; }
         map: tex,
         side: AFRAME.THREE.BackSide
       });
+      installVideoEffectShader(mesh.material);
       mesh.onBeforeRender = function(renderer, sceneObj, cam) {
         const xr = renderer.xr;
         const stereo = scene.dataset.stereo || '';
@@ -946,6 +1079,7 @@ a.chip:hover { background: #3a3a3a; }
       const mesh = el.getObject3D('mesh');
       if (!mesh || mesh.userData.boundVR) return;
       mesh.material = new AFRAME.THREE.MeshBasicMaterial({ map: getSharedTex() });
+      installVideoEffectShader(mesh.material);
       mesh.userData.boundVR = true;
     }
     // applyFisheye binds a custom ShaderMaterial that converts each
@@ -969,7 +1103,11 @@ a.chip:hover { background: #3a3a3a; }
           uFOV:       { value: fov },
           uCant:      { value: 0.0 },
           uEyeOffset: { value: new AFRAME.THREE.Vector2(0, 0) },
-          uEyeRepeat: { value: new AFRAME.THREE.Vector2(1, 1) }
+          uEyeRepeat: { value: new AFRAME.THREE.Vector2(1, 1) },
+          uVrBrightness: { value: 0 }, uVrContrast: { value: 1 }, uVrGamma: { value: 1 },
+          uVrSaturation: { value: 1 }, uVrHue: { value: 0 }, uVrWarmth: { value: 0 },
+          uVrRed: { value: 1 }, uVrGreen: { value: 1 }, uVrBlue: { value: 1 },
+          uVrBlur: { value: 0 }, uVrRotate: { value: 0 }, uVrScale: { value: 1 }, uVrAspect: { value: 1 }
         },
         vertexShader: [
           'varying vec3 vDir;',
@@ -986,6 +1124,7 @@ a.chip:hover { background: #3a3a3a; }
           'uniform float uCant;',
           'uniform vec2 uEyeOffset;',
           'uniform vec2 uEyeRepeat;',
+          effectUniformDeclarations(),
           'void main() {',
           '  vec3 d = normalize(vDir);',
           '  float c = cos(uCant);',
@@ -998,11 +1137,20 @@ a.chip:hover { background: #3a3a3a; }
           '  float phi = atan(dr.y, dr.x);',
           '  vec2 uv = vec2(0.5 + r * cos(phi), 0.5 + r * sin(phi));',
           '  uv = uv * uEyeRepeat + uEyeOffset;',
-          '  gl_FragColor = texture2D(uMap, uv);',
+          '  uv.x = (uv.x - 0.5) / max(0.05, uVrAspect) + 0.5;',
+          '  uv = (uv - 0.5) / max(0.05, uVrScale) + 0.5;',
+          '  float vrCos = cos(uVrRotate); float vrSin = sin(uVrRotate);',
+          '  uv = mat2(vrCos, -vrSin, vrSin, vrCos) * (uv - 0.5) + 0.5;',
+          '  vec2 vrBlurOffset = vec2(uVrBlur * 0.00035);',
+          '  vec4 vrSample = (texture2D(uMap, uv) + texture2D(uMap, uv + vec2(vrBlurOffset.x, 0.0)) + texture2D(uMap, uv - vec2(vrBlurOffset.x, 0.0)) + texture2D(uMap, uv + vec2(0.0, vrBlurOffset.y)) + texture2D(uMap, uv - vec2(0.0, vrBlurOffset.y))) / 5.0;',
+          '  vec3 vrColor = vrSample.rgb;',
+          effectColorCode('vrColor'),
+          '  gl_FragColor = vec4(vrColor, vrSample.a);',
           '}'
         ].join('\n')
       });
       mesh.material = material;
+      writeVideoEffectUniforms(material.uniforms);
       mesh.onBeforeRender = function(renderer, sceneObj, cam) {
         const xr = renderer.xr;
         const stereo = scene.dataset.stereo || '';
@@ -1220,6 +1368,10 @@ a.chip:hover { background: #3a3a3a; }
         }
         root.setAttribute('visible', visible ? 'true' : 'false');
       }
+      // Detail is nested under the browse panel. Clear its own visible
+      // state when the complete control cluster is dismissed so it cannot
+      // reappear after the next trigger-based panel summon.
+      if (!visible && typeof closeDetailPanel === 'function') closeDetailPanel();
       setLaserActive(document.getElementById('vrLaserRight'), visible);
       setLaserActive(document.getElementById('vrLaserLeft'),  visible);
     }
@@ -1359,6 +1511,22 @@ a.chip:hover { background: #3a3a3a; }
       if (panel.object3D) {
         panel.object3D.traverse(function(obj) { obj.visible = visible; });
       }
+      // The detail extension is a child of the browse shell so its curved
+      // background can share the exact same hub. It is nevertheless an
+      // on-demand surface: opening Browse must not make an inactive detail
+      // panel visible just because the parent traversal turns descendants on.
+      if (panelId === 'vrBrowsePanel') {
+        const detail = document.getElementById('vrDetailPanel');
+        const browseVisible = visible === true || visible === 'true';
+        // Hiding the parent (including during a scene swap) also dismisses
+        // its detail extension. Otherwise the next Browse open can wake an
+        // old detail panel before the current scene's metadata arrives.
+        if (detail && !browseVisible) detail.setAttribute('visible', false);
+        const detailVisible = detail && (detail.getAttribute('visible') === true || detail.getAttribute('visible') === 'true');
+        if (detail && detail.object3D && !detailVisible) {
+          detail.object3D.traverse(function(obj) { obj.visible = false; });
+        }
+      }
       updateRaycasterTargets();
     }
 
@@ -1366,20 +1534,21 @@ a.chip:hover { background: #3a3a3a; }
     // sub-panel visibility. Three.js Raycaster doesn't honor object.visible
     // (own or ancestor), so without this, hidden sub-panel buttons still
     // intercept clicks at their world position. Always include the main
-    // panel's targets + all panel backgrounds (so trigger lands on the
-    // dark area between buttons count as a panel hit and don't fire
-    // vr:panel-toggle). Only include a sub-panel's targets while it is
+    // panel's targets + panel backgrounds. The detail-panel shell is a
+    // visual-only surface and intentionally excluded: otherwise its large
+    // curved mesh is the first controller-ray hit and blocks every tab.
+    // Only include a sub-panel's targets while it is
     // actually visible.
     function updateRaycasterTargets() {
       const parts = ['#vrControls .vr-btn', '#vrControls .vr-panel-bg'];
-      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker', 'vrBrowsePanel'].forEach(id => {
+      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker', 'vrBrowsePanel', 'vrDetailPanel'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         const v = el.getAttribute('visible');
         const isVisible = (v === true || v === 'true');
         if (isVisible) {
           parts.push('#' + id + ' .vr-btn');
-          parts.push('#' + id + ' .vr-panel-bg');
+          if (id !== 'vrDetailPanel') parts.push('#' + id + ' .vr-panel-bg');
         }
       });
       const selector = parts.join(', ');
@@ -1390,7 +1559,7 @@ a.chip:hover { background: #3a3a3a; }
     }
 
     function closeAllSubpanels(except) {
-      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker', 'vrBrowsePanel'].forEach(id => {
+      ['vrFormatPicker', 'vrHelpPanel', 'vrSubtitlePicker', 'vrBrowsePanel', 'vrDetailPanel'].forEach(id => {
         if (id === except) return;
         setSubpanelVisible(id, false);
       });
@@ -1644,6 +1813,15 @@ a.chip:hover { background: #3a3a3a; }
       }
 
       si.addEventListener('input', function() {
+        // The detail editor, marker editor, and relation pickers reuse the
+        // same headset keyboard.  They register a focused entry target here
+        // so typing edits the active Stash control instead of accidentally
+        // changing the browse search behind the panel.
+        const detailEntry = window._vrDetailTextEntry;
+        if (detailEntry && detailEntry.active) {
+          detailEntry.onInput(si.value);
+          return;
+        }
         updateActiveSearchLabel(si.value);
         if (timer) clearTimeout(timer);
         const target = (browseState && browseState.overlayTarget) || 'grid';
@@ -1737,6 +1915,1613 @@ a.chip:hover { background: #3a3a3a; }
       overlayTarget:  'grid'                                          // 'grid' | 'picker-<kind>' (Step 5)
     };
 
+    // Stash Desktop-style scene detail panel state. The source tile is kept
+    // so the primary action can use the exact same seamless swap path as a
+    // direct cover click, including its stream URL and projection payload.
+    const detailState = {
+      sceneId: '',
+      meta: null,
+      sourceTile: null,
+      activeTab: 'details',
+      status: '',
+      descriptionLines: [],
+      descriptionOffset: 0,
+      queueContinue: false,
+      queueOffset: 0,
+      textEntry: null,
+      relationPicker: null,
+      stashBoxPicker: null,
+      markerEditor: null,
+      confirmation: null,
+      operationsOpen: false,
+      fileIndex: 0,
+      markerLoop: null,
+      effectsPage: 0,
+      editPage: 0,
+      effects: vrVideoEffects
+    };
+    const DETAIL_DESCRIPTION_VISIBLE_LINES = 2;
+    const detailQueue = [];
+    const DETAIL_TABS = [
+      { id: 'details', label: 'Details' },
+      { id: 'queue', label: 'Queue' },
+      { id: 'markers', label: 'Markers' },
+      { id: 'filters', label: 'Filters' },
+      { id: 'files', label: 'File Info' },
+      { id: 'history', label: 'History' },
+      { id: 'edit', label: 'Edit' }
+    ];
+
+    function isDetailPanelVisible() {
+      const panel = document.getElementById('vrDetailPanel');
+      if (!panel) return false;
+      const v = panel.getAttribute('visible');
+      return v === true || v === 'true';
+    }
+
+    function compactDetailTitle(value) {
+      const title = String(value || '').replace(/\s+/g, ' ').trim();
+      return title.length > 52 ? title.slice(0, 51) + '…' : title;
+    }
+
+    function formatDetailDate(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return String(value);
+      return date.toLocaleDateString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric'
+      });
+    }
+
+    function formatDetailDuration(seconds) {
+      if (!isFinite(seconds) || seconds <= 0) return '';
+      const total = Math.floor(seconds);
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+      if (hours > 0) return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+      return minutes + ':' + String(secs).padStart(2, '0');
+    }
+
+    // Wrap to a predictable number of characters so detail scrolling can
+    // page the description without rendering text outside the panel's
+    // Stash-like content area. Prefer word boundaries, but gracefully split
+    // long tokens and languages that don't use spaces.
+    function wrapDetailDescription(value, maxChars) {
+      const source = String(value || '').replace(/\r\n?/g, '\n').trim();
+      if (!source) return ['No description provided.'];
+      const lines = [];
+      source.split('\n').forEach(paragraph => {
+        let remaining = paragraph.trim();
+        if (!remaining) {
+          lines.push('');
+          return;
+        }
+        while (remaining.length > maxChars) {
+          let cut = remaining.lastIndexOf(' ', maxChars);
+          if (cut < Math.floor(maxChars * 0.55)) cut = maxChars;
+          lines.push(remaining.slice(0, cut).trim());
+          remaining = remaining.slice(cut).trim();
+        }
+        if (remaining) lines.push(remaining);
+      });
+      return lines.length ? lines : ['No description provided.'];
+    }
+
+    function clearDetailChildren(id) {
+      const root = document.getElementById(id);
+      if (!root) return null;
+      while (root.firstChild) root.removeChild(root.firstChild);
+      return root;
+    }
+
+    // Detail extension geometry deliberately mirrors vrFiltersExtension:
+    // every row is a cylinder segment that shares the browse panel's hub and
+    // radius. A flat plane here reads as a loose HUD (the regression the user
+    // caught); these values make the left panel physically continuous with the
+    // grid and the right-side filters.
+    const DETAIL_THETA_START = 222.5;
+    const DETAIL_THETA_LENGTH = 45.5;
+    // The detail shell is radius 3.02. On this left-hand arc, decreasing
+    // the radius moves a row toward the camera. Keep the click surface well
+    // in front of the shell so the controller ray hits the row before the
+    // passive panel backdrop.
+    const DETAIL_ROW_RADIUS = 2.92;
+    const DETAIL_TEXT_RADIUS = 2.90;
+
+    function attachDetailRowLabel(parent, value, opts) {
+      const thetaStart = opts.thetaStart;
+      const thetaLength = opts.thetaLength;
+      const radius = DETAIL_TEXT_RADIUS;
+      const chordW = 2 * radius * Math.sin((thetaLength / 2) * Math.PI / 180);
+      const planeH = Math.max(0.045, opts.height - 0.012);
+      const canvasW = 2048;
+      const canvasH = Math.max(48, Math.round(canvasW * planeH / chordW));
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasW;
+      canvas.height = canvasH;
+      const ctx = canvas.getContext('2d');
+      const align = opts.align || 'center';
+      // The texture canvas becomes much taller for narrow curved buttons.
+      // Scale the font from that height so chips and tab labels stay readable
+      // instead of collapsing into the tiny text seen on the flat prototype.
+      let fontPx = Math.max(opts.fontPx || 0,
+        Math.round(canvasH * (opts.fontScale || 0.54)));
+      ctx.clearRect(0, 0, canvasW, canvasH);
+      ctx.fillStyle = opts.textColor || '#ffffff';
+      ctx.textAlign = align;
+      ctx.textBaseline = 'middle';
+      let text = String(value || '');
+      const pad = 20;
+      const maxW = canvasW - pad * 2;
+      const setFont = function() {
+        ctx.font = (opts.bold ? '600 ' : '') + fontPx + 'px sans-serif';
+      };
+      setFont();
+      // Keep the type large, but step it down for a legitimate long title
+      // before falling back to a single ellipsis-trimmed line.
+      while (fontPx > 26 && ctx.measureText(text).width > maxW) {
+        fontPx = Math.max(26, Math.floor(fontPx * 0.88));
+        setFont();
+      }
+      while (text.length > 1 && ctx.measureText(text).width > maxW) text = text.slice(0, -1);
+      if (text !== String(value || '')) text = text.slice(0, Math.max(0, text.length - 1)) + '…';
+      const x = align === 'left' ? pad : align === 'right' ? canvasW - pad : canvasW / 2;
+      ctx.fillText(text, x, canvasH / 2);
+      const texture = new AFRAME.THREE.CanvasTexture(canvas);
+      texture.minFilter = AFRAME.THREE.LinearFilter;
+      texture.magFilter = AFRAME.THREE.LinearFilter;
+      // The panel is viewed from the inside of the cylinder.  Canvas UVs
+      // otherwise arrive reversed on the double-sided inner surface, which
+      // mirrors every title and label in-headset.
+      texture.wrapS = AFRAME.THREE.RepeatWrapping;
+      texture.repeat.x = -1;
+      texture.offset.x = 1;
+      texture.needsUpdate = true;
+
+      // The text mesh uses the same cylindrical arc as the button beneath it.
+      // A tangent plane looked flat and bent in the wrong direction at the
+      // panel edges. Building a transparent CylinderGeometry lets the text,
+      // touch target, and shell all follow the shared grid hub precisely.
+      const label = document.createElement('a-entity');
+      const labelMesh = new AFRAME.THREE.Mesh(
+        new AFRAME.THREE.CylinderGeometry(
+          radius, radius, planeH,
+          Math.max(8, Math.ceil(thetaLength * 0.8)), 1, true,
+          thetaStart * Math.PI / 180, thetaLength * Math.PI / 180
+        ),
+        new AFRAME.THREE.MeshBasicMaterial({
+          map: texture, transparent: true, depthTest: false, depthWrite: false,
+          toneMapped: false,
+          side: AFRAME.THREE.DoubleSide,
+        })
+      );
+      // The canvas is visual-only. If it participates in the raycast, the
+      // intersection is attributed to this child entity rather than its
+      // owning .vr-btn cylinder, so a controller trigger never reaches the
+      // tab/action handler.
+      labelMesh.raycast = function() {};
+      label.setObject3D('mesh', labelMesh);
+      // Canvas labels are an overlay on their owning curved row. Rendering
+      // them after opaque panel geometry avoids Quest/Adreno depth sorting
+      // hiding text on shallow, side-facing segments.
+      labelMesh.renderOrder = 1000;
+      parent.appendChild(label);
+    }
+
+    function addDetailRow(root, opts) {
+      const row = document.createElement('a-cylinder');
+      const interactive = typeof opts.onClick === 'function';
+      if (interactive) row.classList.add('vr-btn');
+      row.setAttribute('radius', DETAIL_ROW_RADIUS);
+      row.setAttribute('height', (opts.height || 0.10).toFixed(3));
+      row.setAttribute('open-ended', 'true');
+      row.setAttribute('theta-start', (opts.thetaStart == null ? DETAIL_THETA_START : opts.thetaStart).toFixed(3));
+      row.setAttribute('theta-length', (opts.thetaLength == null ? DETAIL_THETA_LENGTH : opts.thetaLength).toFixed(3));
+      row.setAttribute('position', '0 ' + opts.y.toFixed(3) + ' 0');
+      if (opts.color) {
+        row.setAttribute('material',
+          'shader: flat; side: double; color: ' + opts.color + '; opacity: 1.0');
+      } else {
+        // Metadata rows need an interaction surface but no extra visible
+        // stripe; the shared panel background supplies the Stash dark shell.
+        row.setAttribute('material',
+          'shader: flat; side: double; transparent: true; opacity: 0; depthWrite: false');
+      }
+      root.appendChild(row);
+      attachDetailRowLabel(row, opts.label, {
+        thetaStart: opts.thetaStart == null ? DETAIL_THETA_START : opts.thetaStart,
+        thetaLength: opts.thetaLength == null ? DETAIL_THETA_LENGTH : opts.thetaLength,
+        height: opts.height || 0.10,
+        textColor: opts.textColor,
+        align: opts.align,
+        fontPx: opts.fontPx,
+        fontScale: opts.fontScale,
+        bold: opts.bold,
+      });
+      if (interactive) row.addEventListener('click', opts.onClick);
+      return row;
+    }
+
+    function detailChipSpan(name) {
+      return Math.max(6.0, Math.min(16.0, 4.0 + String(name || '').length * 1.05));
+    }
+
+    function renderDetailChips(root, refs, y, kind, color, startTheta) {
+      let cursor = startTheta == null ? DETAIL_THETA_START : startTheta;
+      refs.forEach(function(ref) {
+        if (!ref || !ref.id || !ref.name) return;
+        const span = detailChipSpan(ref.name);
+        if (cursor + span > DETAIL_THETA_START + DETAIL_THETA_LENGTH) return;
+        addDetailRow(root, {
+          y: y, height: 0.105, thetaStart: cursor, thetaLength: span,
+          color: color, textColor: '#10232e', label: ref.name, fontPx: 46,
+          onClick: function() { applyDetailFilter(kind, ref); }
+        });
+        cursor += span + 1.4;
+      });
+      return cursor;
+    }
+
+    function renderEditableRelationChips(root, refs, y, kind, color) {
+      let cursor = DETAIL_THETA_START;
+      (refs || []).forEach(function(ref) {
+        if (!ref || !ref.id || !ref.name) return;
+        const span = detailChipSpan(ref.name + ' ×');
+        if (cursor + span > DETAIL_THETA_START + DETAIL_THETA_LENGTH) return;
+        addDetailRow(root, {
+          y: y, height: 0.095, thetaStart: cursor, thetaLength: span,
+          color: color, textColor: '#10232e', label: ref.name + '  ×', fontPx: 42,
+          onClick: function() {
+            requestDetailConfirmation('Remove ' + ref.name + ' from this scene?', function() {
+              postDetailMutation('/relations', {
+                kind: kind,
+                action: kind === 'studio' ? 'clear' : 'remove',
+                entityID: ref.id
+              });
+            });
+          }
+        });
+        cursor += span + 1.2;
+      });
+      return cursor;
+    }
+
+    function addDetailCloseControl(root) {
+      // This uses a direct click handler because these rows are created after
+      // the static .vr-btn router is bound at scene startup.
+      return addDetailRow(root, {
+        y: 1.00, height: 0.16, thetaStart: 262.0, thetaLength: 6.0,
+        color: '#a01010', textColor: '#ffffff', label: '✕', fontPx: 52,
+        onClick: closeDetailPanel
+      });
+    }
+
+    function formatDetailDateTime(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return String(value);
+      return date.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+      });
+    }
+
+    function renderDetailTabs(root) {
+      const gap = 0.34;
+      const width = (DETAIL_THETA_LENGTH - gap * (DETAIL_TABS.length - 1)) / DETAIL_TABS.length;
+      let theta = DETAIL_THETA_START;
+      DETAIL_TABS.forEach(function(tab) {
+        const selected = detailState.activeTab === tab.id;
+        addDetailRow(root, {
+          y: 0.18, height: 0.115, thetaStart: theta, thetaLength: width,
+          color: selected ? '#267bb5' : '#293a46',
+          textColor: selected ? '#ffffff' : '#c8d4dc', label: tab.label,
+          fontScale: 0.38, bold: selected,
+          onClick: function() { selectDetailTab(tab.id); }
+        });
+        theta += width + gap;
+      });
+    }
+
+    function selectDetailTab(tabID) {
+      if (!DETAIL_TABS.some(tab => tab.id === tabID) || !detailState.meta) return;
+      detailState.activeTab = tabID;
+      detailState.descriptionOffset = 0;
+      detailState.status = '';
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function formatDetailFileSize(bytes) {
+      const value = Number(bytes) || 0;
+      if (value <= 0) return '—';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+      const amount = value / Math.pow(1024, index);
+      return (amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)) + ' ' + units[index];
+    }
+
+    function detailRow(root, y, label, opts) {
+      opts = opts || {};
+      return addDetailRow(root, {
+        y: y, height: opts.height || 0.09, color: opts.color,
+        textColor: opts.textColor || '#d9e2e8', label: label,
+        fontScale: opts.fontScale || 0.48, bold: opts.bold,
+        thetaStart: opts.thetaStart, thetaLength: opts.thetaLength,
+        onClick: opts.onClick
+      });
+    }
+
+    // WebXR has no DOM overlay in the Meta Browser, but focusing the hidden
+    // input still opens the platform keyboard. These helpers turn it into a
+    // real field editor with explicit Save/Cancel controls on the curved
+    // panel. The keyboard starts blank on Quest, so edits deliberately
+    // replace the old value instead of relying on a fake caret.
+    function beginDetailTextEntry(label, currentValue, onSave, hint) {
+      detailState.relationPicker = null;
+      detailState.stashBoxPicker = null;
+      detailState.textEntry = {
+        label: label,
+        currentValue: String(currentValue == null ? '' : currentValue),
+        draft: '',
+        hint: hint || 'Type a replacement using the VR keyboard',
+        onSave: onSave
+      };
+      const input = document.getElementById('vrSearchInput');
+      if (input) {
+        input.value = '';
+        window._vrDetailTextEntry = {
+          active: true,
+          onInput: function(value) {
+            if (!detailState.textEntry) return;
+            detailState.textEntry.draft = value;
+            renderCurvedDetailPanel(detailState.meta);
+          }
+        };
+        input.focus();
+      }
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function endDetailTextEntry(save) {
+      const entry = detailState.textEntry;
+      const input = document.getElementById('vrSearchInput');
+      if (input) input.blur();
+      if (window._vrDetailTextEntry) window._vrDetailTextEntry.active = false;
+      window._vrDetailTextEntry = null;
+      detailState.textEntry = null;
+      if (save && entry && typeof entry.onSave === 'function') {
+        entry.onSave(entry.draft);
+        return;
+      }
+      if (detailState.meta) renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function renderDetailTextEntry(root, meta) {
+      const entry = detailState.textEntry;
+      if (!entry) return false;
+      detailRow(root, 0.02, entry.label, { textColor: '#ffffff', bold: true, height: 0.09 });
+      detailRow(root, -0.13, entry.hint, { textColor: '#a8bcc9', height: 0.09, fontScale: 0.36 });
+      detailRow(root, -0.27, 'Current: ' + (entry.currentValue || '—'), {
+        textColor: '#c8d4dc', height: 0.09, fontScale: 0.36
+      });
+      detailRow(root, -0.41, 'New: ' + (entry.draft || '…'), {
+        color: '#223944', textColor: '#ffffff', height: 0.11, fontScale: 0.38,
+        onClick: function() {
+          const input = document.getElementById('vrSearchInput');
+          if (input) input.focus();
+        }
+      });
+      detailRow(root, -0.67, 'Save', {
+        height: 0.14, thetaStart: 222.5, thetaLength: 21.8,
+        color: '#267bb5', textColor: '#ffffff', fontScale: 0.38, bold: true,
+        onClick: function() { endDetailTextEntry(true); }
+      });
+      detailRow(root, -0.67, 'Cancel', {
+        height: 0.14, thetaStart: 246.2, thetaLength: 21.8,
+        color: '#293a46', textColor: '#ffffff', fontScale: 0.38,
+        onClick: function() { endDetailTextEntry(false); }
+      });
+      return true;
+    }
+
+    function requestDetailConfirmation(message, onConfirm) {
+      detailState.confirmation = { message: message, onConfirm: onConfirm };
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function renderDetailConfirmation(root, meta) {
+      const confirmation = detailState.confirmation;
+      if (!confirmation) return false;
+      detailRow(root, 0.02, 'Confirm action', { textColor: '#ffb3b3', bold: true, height: 0.10 });
+      detailRow(root, -0.15, confirmation.message, { textColor: '#ffffff', height: 0.15, fontScale: 0.36 });
+      detailRow(root, -0.46, 'Confirm', {
+        height: 0.15, thetaStart: 222.5, thetaLength: 21.8,
+        color: '#a01010', textColor: '#ffffff', fontScale: 0.38, bold: true,
+        onClick: function() {
+          const action = confirmation.onConfirm;
+          detailState.confirmation = null;
+          if (typeof action === 'function') action();
+        }
+      });
+      detailRow(root, -0.46, 'Cancel', {
+        height: 0.15, thetaStart: 246.2, thetaLength: 21.8,
+        color: '#293a46', textColor: '#ffffff', fontScale: 0.38,
+        onClick: function() {
+          detailState.confirmation = null;
+          renderCurvedDetailPanel(meta);
+        }
+      });
+      return true;
+    }
+
+    function startRelationPicker(kind, action) {
+      const picker = { kind: kind, action: action, query: '', options: [], loading: true };
+      detailState.textEntry = null;
+      detailState.relationPicker = picker;
+      const input = document.getElementById('vrSearchInput');
+      if (input) {
+        input.value = '';
+        window._vrDetailTextEntry = {
+          active: true,
+          onInput: function(value) {
+            if (!detailState.relationPicker) return;
+            detailState.relationPicker.query = value;
+            loadRelationPickerOptions(value);
+            renderCurvedDetailPanel(detailState.meta);
+          }
+        };
+        input.focus();
+      }
+      loadRelationPickerOptions('');
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function loadRelationPickerOptions(query) {
+      const picker = detailState.relationPicker;
+      if (!picker) return;
+      picker.loading = true;
+      const path = '/browse/scene-options/' + encodeURIComponent(picker.kind) +
+        (query ? '?q=' + encodeURIComponent(query) : '');
+      fetch(path, { headers: { 'Accept': 'application/json' } })
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        }).then(function(options) {
+          if (picker !== detailState.relationPicker) return;
+          const needle = String(picker.query || '').toLocaleLowerCase();
+          picker.options = (Array.isArray(options) ? options : []).filter(function(option) {
+            return !needle || String(option.name || '').toLocaleLowerCase().indexOf(needle) !== -1;
+          }).slice(0, 6);
+          picker.loading = false;
+          renderCurvedDetailPanel(detailState.meta);
+        }).catch(function(err) {
+          console.warn('stash-vr: relation options failed', err);
+          if (picker !== detailState.relationPicker) return;
+          picker.loading = false;
+          picker.options = [];
+          renderCurvedDetailPanel(detailState.meta);
+        });
+    }
+
+    function closeRelationPicker() {
+      const input = document.getElementById('vrSearchInput');
+      if (input) input.blur();
+      if (window._vrDetailTextEntry) window._vrDetailTextEntry.active = false;
+      window._vrDetailTextEntry = null;
+      detailState.relationPicker = null;
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function startStashBoxPicker() {
+      const picker = { boxes: [], loading: true };
+      detailState.textEntry = null;
+      detailState.relationPicker = null;
+      detailState.stashBoxPicker = picker;
+      fetch('/browse/scene/' + encodeURIComponent(detailState.sceneId) + '/stash-boxes', {
+        headers: { 'Accept': 'application/json' }
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      }).then(function(boxes) {
+        if (picker !== detailState.stashBoxPicker) return;
+        picker.boxes = Array.isArray(boxes) ? boxes : [];
+        picker.loading = false;
+        renderCurvedDetailPanel(detailState.meta);
+      }).catch(function(err) {
+        console.warn('stash-vr: Stash Box options failed', err);
+        if (picker !== detailState.stashBoxPicker) return;
+        picker.loading = false;
+        picker.boxes = [];
+        renderCurvedDetailPanel(detailState.meta);
+      });
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function closeStashBoxPicker() {
+      detailState.stashBoxPicker = null;
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function renderStashBoxPicker(root, meta) {
+      const picker = detailState.stashBoxPicker;
+      if (!picker) return false;
+      detailRow(root, 0.02, 'Submit to Stash Box', { textColor: '#ffffff', bold: true, height: 0.10 });
+      if (picker.loading) {
+        detailRow(root, -0.18, 'Loading configured Stash Boxes…', { textColor: '#a8bcc9' });
+      } else if (!picker.boxes.length) {
+        detailRow(root, -0.18, 'No Stash Boxes are configured in Stash', { textColor: '#a8bcc9', fontScale: 0.34 });
+      } else {
+        picker.boxes.slice(0, 6).forEach(function(box, index) {
+          detailRow(root, -0.18 - index * 0.13, box.name || box.endpoint, {
+            height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.35,
+            onClick: function() {
+              const endpoint = String(box.endpoint || '');
+              if (!endpoint) return;
+              requestDetailConfirmation('Submit this scene as a draft to ' + (box.name || endpoint) + '?', function() {
+                detailState.stashBoxPicker = null;
+                postDetailMutation('/operation/submit-stash-box', { endpoint: endpoint });
+              });
+            }
+          });
+        });
+      }
+      detailRow(root, -1.06, 'Cancel', {
+        height: 0.11, color: '#293a46', textColor: '#ffffff', fontScale: 0.36,
+        onClick: closeStashBoxPicker
+      });
+      return true;
+    }
+
+    function renderRelationPicker(root, meta) {
+      const picker = detailState.relationPicker;
+      if (!picker) return false;
+      detailRow(root, 0.02, 'Select ' + picker.kind, { textColor: '#ffffff', bold: true, height: 0.10 });
+      detailRow(root, -0.13, 'Search: ' + (picker.query || 'all'), {
+        color: '#223944', textColor: '#ffffff', height: 0.11, fontScale: 0.38,
+        onClick: function() { document.getElementById('vrSearchInput')?.focus(); }
+      });
+      if (picker.loading) {
+        detailRow(root, -0.29, 'Loading Stash options…', { textColor: '#a8bcc9' });
+      } else if (!picker.options.length) {
+        detailRow(root, -0.29, 'No matching Stash items', { textColor: '#a8bcc9' });
+      } else {
+        picker.options.forEach(function(option, index) {
+          detailRow(root, -0.29 - index * 0.12, option.name || 'Untitled', {
+            height: 0.095, color: '#293a46', textColor: '#ffffff', fontScale: 0.36,
+            onClick: function() {
+              const relation = detailState.relationPicker;
+              closeRelationPicker();
+              postDetailMutation('/relations', {
+                kind: relation.kind,
+                action: relation.action,
+                entityID: option.id
+              });
+            }
+          });
+        });
+      }
+      if (picker.kind === 'tag' && picker.query) {
+        detailRow(root, -0.91, '+ Create and add “' + picker.query + '”', {
+          height: 0.11, color: '#267bb5', textColor: '#ffffff', fontScale: 0.32,
+          onClick: function() {
+            const tagName = picker.query;
+            closeRelationPicker();
+            postDetailMutation('/tags/add', { tag: tagName });
+          }
+        });
+      }
+      detailRow(root, -1.06, 'Cancel', {
+        height: 0.11, color: '#293a46', textColor: '#ffffff', fontScale: 0.36,
+        onClick: closeRelationPicker
+      });
+      return true;
+    }
+
+    function renderDetailRatingButtons(root, y, rating) {
+      const gap = 0.55;
+      const width = (DETAIL_THETA_LENGTH - gap * 4) / 5;
+      let theta = DETAIL_THETA_START;
+      for (let value = 1; value <= 5; value++) {
+        const selected = value <= rating;
+        addDetailRow(root, {
+          y: y, height: 0.13, thetaStart: theta, thetaLength: width,
+          color: selected ? '#bd7a29' : '#293a46', textColor: '#ffffff',
+          label: '★ ' + value, fontScale: 0.34, bold: true,
+          onClick: function() { postDetailMutation('/rating', { value: String(value) }); }
+        });
+        theta += width + gap;
+      }
+    }
+
+    function renderDetailDetailsTab(root, meta) {
+      const performerNames = (meta.performers || []).map(p => p && p.name).filter(Boolean);
+      detailRow(root, 0.02,
+        'Created: ' + formatDetailDate(meta.createdAt) + '   Updated: ' + formatDetailDate(meta.updatedAt));
+      detailRow(root, -0.10,
+        'Code: ' + (meta.code || '—') + '   Director: ' + (meta.director || '—'));
+      detailRow(root, -0.22, 'Performers: ' + (performerNames.join(', ') || '—'));
+      detailRow(root, -0.34, 'Description', { textColor: '#ffffff', bold: true, height: 0.08 });
+      const maxOffset = Math.max(0, detailState.descriptionLines.length - DETAIL_DESCRIPTION_VISIBLE_LINES);
+      detailState.descriptionOffset = Math.max(0, Math.min(detailState.descriptionOffset, maxOffset));
+      detailState.descriptionLines.slice(detailState.descriptionOffset,
+        detailState.descriptionOffset + DETAIL_DESCRIPTION_VISIBLE_LINES).forEach(function(line, index) {
+        detailRow(root, -0.46 - index * 0.10, line, { height: 0.085 });
+      });
+      const tags = (meta.tags || []).filter(tag => tag && tag.name);
+      if (tags.length) {
+        renderDetailChips(root, tags.slice(0, 5), -0.72, 'tag', '#cad7e1');
+      } else {
+        detailRow(root, -0.72, 'Tags: none', { textColor: '#8296a4' });
+      }
+      const isCurrentScene = String(detailState.sceneId || '') === String(sceneId || '');
+      detailRow(root, -1.03, isCurrentScene ? 'Close details' : '▶  Preview this scene', {
+        height: 0.16, thetaStart: 230.0, thetaLength: 30.0,
+        color: '#267bb5', textColor: '#ffffff', fontScale: 0.36, bold: true,
+        onClick: isCurrentScene ? closeDetailPanel : playDetailScene
+      });
+    }
+
+    function queueCurrentScene() {
+      if (!detailState.meta || !detailState.sceneId) return;
+      if (detailQueue.some(item => item.id === detailState.sceneId)) {
+        detailState.status = 'Already in session queue';
+        renderCurvedDetailPanel(detailState.meta);
+        return;
+      }
+      const source = detailState.sourceTile || Array.from(document.querySelectorAll('.vr-tile'))
+        .find(tile => tile.dataset.sceneId === detailState.sceneId);
+      const projection = source && source.dataset.projection ? source.dataset.projection : JSON.stringify({
+        Geometry: scene.dataset.geometry || '', FOV: Number(scene.dataset.fov) || 0,
+        Stereo: scene.dataset.stereo || '', Cant: 0
+      });
+      detailQueue.push({
+        id: detailState.sceneId, title: detailState.meta.title || 'Untitled scene',
+        projection: projection, streamUrl: source && source.dataset.streamUrl ||
+          '/browse/scene/' + encodeURIComponent(detailState.sceneId) + '/stream'
+      });
+      detailState.status = 'Added to session queue';
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function activeQueueItems() {
+      // Stash's desktop Queue is driven by the current list query. The VR
+      // equivalent is the presently filtered browse grid; explicit session
+      // additions remain available when the grid has not loaded yet.
+      const seen = Object.create(null);
+      const items = [];
+      (browseState.tiles || []).forEach(function(tile) {
+        if (!tile || !tile.id || seen[tile.id]) return;
+        seen[tile.id] = true;
+        const source = Array.from(document.querySelectorAll('.vr-tile'))
+          .find(function(el) { return el.dataset.sceneId === String(tile.id); });
+        items.push({
+          id: String(tile.id), title: tile.title || 'Untitled scene',
+          projection: source && source.dataset.projection || '{}',
+          streamUrl: source && source.dataset.streamUrl || '/browse/scene/' + encodeURIComponent(tile.id) + '/stream'
+        });
+      });
+      detailQueue.forEach(function(item) {
+        if (!item || !item.id || seen[item.id]) return;
+        seen[item.id] = true;
+        items.push(item);
+      });
+      return items;
+    }
+
+    function playQueuedScene(item) {
+      if (!item || !item.id) return;
+      if (item.id === sceneId) {
+        const promise = video.play();
+        if (promise && promise.catch) promise.catch(err => console.warn('stash-vr: queue resume failed', err));
+        closeDetailPanel();
+        return;
+      }
+      const tile = document.createElement('a-entity');
+      tile.dataset.sceneId = item.id;
+      tile.dataset.tileTitle = item.title || '';
+      tile.dataset.projection = item.projection || '{}';
+      tile.dataset.streamUrl = item.streamUrl || '/browse/scene/' + encodeURIComponent(item.id) + '/stream';
+      closeDetailPanel();
+      swapToScene(tile);
+    }
+
+    function queuePlayRelative(delta, random) {
+      const items = activeQueueItems();
+      if (!items.length) return;
+      let index = items.findIndex(function(item) { return String(item.id) === String(sceneId); });
+      if (random) {
+        index = Math.floor(Math.random() * items.length);
+      } else {
+        if (index < 0) index = delta > 0 ? -1 : 0;
+        index = (index + delta + items.length) % items.length;
+      }
+      playQueuedScene(items[index]);
+    }
+
+    video.addEventListener('ended', function() {
+      if (detailState.queueContinue) queuePlayRelative(1, false);
+    });
+
+    function renderDetailQueueTab(root, meta) {
+      const items = activeQueueItems();
+      const count = items.length;
+      const canPrevious = count > 1;
+      const width = (DETAIL_THETA_LENGTH - 1.2) / 3;
+      addDetailRow(root, {
+        y: 0.02, height: 0.12, thetaStart: DETAIL_THETA_START, thetaLength: width,
+        color: detailState.queueContinue ? '#2e6b53' : '#293a46', textColor: '#ffffff',
+        label: detailState.queueContinue ? '✓ Continue' : 'Continue', fontScale: 0.32,
+        onClick: function() { detailState.queueContinue = !detailState.queueContinue; renderCurvedDetailPanel(meta); }
+      });
+      addDetailRow(root, {
+        y: 0.02, height: 0.12, thetaStart: DETAIL_THETA_START + width + 0.6, thetaLength: width / 2 - 0.3,
+        color: '#293a46', textColor: '#ffffff', label: '◀', fontScale: 0.44,
+        onClick: function() { if (canPrevious) queuePlayRelative(-1, false); }
+      });
+      addDetailRow(root, {
+        y: 0.02, height: 0.12, thetaStart: DETAIL_THETA_START + width * 1.5 + 0.9, thetaLength: width / 2 - 0.3,
+        color: '#293a46', textColor: '#ffffff', label: '▶', fontScale: 0.44,
+        onClick: function() { if (count) queuePlayRelative(1, false); }
+      });
+      addDetailRow(root, {
+        y: 0.02, height: 0.12, thetaStart: DETAIL_THETA_START + width * 2 + 1.2, thetaLength: width,
+        color: '#293a46', textColor: '#ffffff', label: '⇄ Random', fontScale: 0.32,
+        onClick: function() { if (count) queuePlayRelative(0, true); }
+      });
+      detailRow(root, -0.15, count ? 'Browse queue · ' + count + ' scenes' : 'No browse scenes are loaded yet', {
+        textColor: '#a8bcc9', height: 0.08, fontScale: 0.34
+      });
+      const maxOffset = Math.max(0, count - 4);
+      detailState.queueOffset = Math.max(0, Math.min(detailState.queueOffset, maxOffset));
+      items.slice(detailState.queueOffset, detailState.queueOffset + 4).forEach(function(item, index) {
+        const current = String(item.id) === String(sceneId);
+        detailRow(root, -0.28 - index * 0.13, (current ? '● ' : '▶ ') + item.title, {
+          height: 0.10, color: current ? '#267bb5' : '#223944', textColor: '#ffffff', fontScale: 0.35,
+          onClick: function() { playQueuedScene(item); }
+        });
+      });
+      detailRow(root, -0.86, '↑ Previous items', {
+        height: 0.10, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', fontScale: 0.32,
+        onClick: function() { detailState.queueOffset = Math.max(0, detailState.queueOffset - 4); renderCurvedDetailPanel(meta); }
+      });
+      detailRow(root, -0.86, '↓ More items', {
+        height: 0.10, thetaStart: 246.2, thetaLength: 21.8, color: '#293a46', fontScale: 0.32,
+        onClick: function() {
+          if (detailState.queueOffset + 4 < count) {
+            detailState.queueOffset += 4;
+            renderCurvedDetailPanel(meta);
+          } else if (browseState.hasMore) {
+            fetchGrid(false).then(function() { renderCurvedDetailPanel(meta); });
+          }
+        }
+      });
+      detailRow(root, -1.03, '+ Add current to session queue', {
+        height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.30,
+        onClick: queueCurrentScene
+      });
+      detailRow(root, -1.03, 'Clear session additions', {
+        height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#722d2d', textColor: '#ffffff', fontScale: 0.30,
+        onClick: function() { detailQueue.length = 0; renderCurvedDetailPanel(meta); }
+      });
+    }
+
+    function seekToDetailMarker(marker) {
+      if (!marker || !isFinite(marker.seconds)) return;
+      video.currentTime = Math.max(0, Number(marker.seconds));
+      const promise = video.play();
+      if (promise && promise.catch) promise.catch(err => console.warn('stash-vr: marker seek play failed', err));
+      detailState.status = 'Jumped to ' + formatDetailDuration(marker.seconds);
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function setDetailMarkerLoop(marker) {
+      if (!marker || marker.endSeconds == null || !isFinite(marker.seconds) || !isFinite(marker.endSeconds)) {
+        detailState.status = 'This marker has no end time to loop';
+        renderCurvedDetailPanel(detailState.meta);
+        return;
+      }
+      const start = Math.min(Number(marker.seconds), Number(marker.endSeconds));
+      const end = Math.max(Number(marker.seconds), Number(marker.endSeconds));
+      detailState.markerLoop = { start: start, end: end, markerID: marker.id };
+      video.currentTime = start;
+      const playing = video.play();
+      if (playing && playing.catch) playing.catch(function() {});
+      detailState.status = 'Looping ' + formatDetailDuration(start) + '–' + formatDetailDuration(end);
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    video.addEventListener('timeupdate', function() {
+      const loop = detailState.markerLoop;
+      if (loop && video.currentTime >= loop.end) video.currentTime = loop.start;
+    });
+
+    function beginMarkerEditor(marker) {
+      const tagNames = (marker && marker.tags || []).map(function(tag) { return tag && tag.name; }).filter(Boolean);
+      detailState.markerEditor = {
+        id: marker && marker.id || '',
+        title: marker && marker.title || '',
+        primaryTag: marker && marker.primaryTag && marker.primaryTag.name ||
+          (detailState.meta.tags && detailState.meta.tags[0] && detailState.meta.tags[0].name) || 'Marker',
+        seconds: marker && isFinite(marker.seconds) ? Number(marker.seconds) : Math.round(video.currentTime || 0),
+        endSeconds: marker && marker.endSeconds != null ? Number(marker.endSeconds) : '',
+        tags: tagNames.join(', ')
+      };
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function beginMarkerField(field, label, hint) {
+      const editor = detailState.markerEditor;
+      if (!editor) return;
+      beginDetailTextEntry(label, editor[field], function(value) {
+        if (!detailState.markerEditor) return;
+        if (field === 'seconds' || field === 'endSeconds') {
+          const trimmed = String(value || '').trim();
+          if (!trimmed && field === 'endSeconds') {
+            detailState.markerEditor.endSeconds = '';
+          } else {
+            const numeric = Number(trimmed);
+            if (!isFinite(numeric) || numeric < 0) {
+              detailState.status = 'Enter a non-negative number of seconds';
+            } else {
+              detailState.markerEditor[field] = numeric;
+            }
+          }
+        } else {
+          detailState.markerEditor[field] = value;
+        }
+        renderCurvedDetailPanel(detailState.meta);
+      }, hint);
+    }
+
+    function saveMarkerEditor() {
+      const editor = detailState.markerEditor;
+      if (!editor) return;
+      if (!String(editor.primaryTag || '').trim()) {
+        detailState.status = 'A primary tag is required';
+        renderCurvedDetailPanel(detailState.meta);
+        return;
+      }
+      const seconds = Number(editor.seconds);
+      const end = editor.endSeconds === '' ? '' : Number(editor.endSeconds);
+      if (!isFinite(seconds) || seconds < 0 || (end !== '' && (!isFinite(end) || end < seconds))) {
+        detailState.status = 'Marker times are invalid';
+        renderCurvedDetailPanel(detailState.meta);
+        return;
+      }
+      const path = editor.id ? '/marker/' + encodeURIComponent(editor.id) : '/marker';
+      detailState.markerEditor = null;
+      postDetailMutation(path, {
+        title: editor.title || '', primaryTag: editor.primaryTag || '', seconds: String(seconds),
+        endSeconds: end === '' ? '' : String(end), tags: editor.tags || ''
+      });
+    }
+
+    function renderMarkerEditor(root, meta) {
+      const editor = detailState.markerEditor;
+      if (!editor) return false;
+      detailRow(root, 0.02, editor.id ? 'Edit marker' : 'Create marker', { textColor: '#ffffff', bold: true, height: 0.09 });
+      detailRow(root, -0.11, 'Title: ' + (editor.title || '—'), {
+        color: '#223944', height: 0.10, fontScale: 0.36,
+        onClick: function() { beginMarkerField('title', 'Marker title'); }
+      });
+      detailRow(root, -0.23, 'Primary tag: ' + (editor.primaryTag || '—'), {
+        color: '#223944', height: 0.10, fontScale: 0.36,
+        onClick: function() { beginMarkerField('primaryTag', 'Primary marker tag'); }
+      });
+      detailRow(root, -0.35, 'Start: ' + formatDetailDuration(Number(editor.seconds)), {
+        color: '#223944', height: 0.10, thetaStart: 222.5, thetaLength: 29.5, fontScale: 0.36,
+        onClick: function() { beginMarkerField('seconds', 'Marker start seconds', 'Type seconds, e.g. 90.5'); }
+      });
+      detailRow(root, -0.35, 'Use current', {
+        color: '#293a46', height: 0.10, thetaStart: 254.0, thetaLength: 14.0, fontScale: 0.30,
+        onClick: function() { editor.seconds = Math.round(video.currentTime || 0); renderCurvedDetailPanel(meta); }
+      });
+      detailRow(root, -0.47, 'End: ' + (editor.endSeconds === '' ? 'none' : formatDetailDuration(Number(editor.endSeconds))), {
+        color: '#223944', height: 0.10, thetaStart: 222.5, thetaLength: 29.5, fontScale: 0.36,
+        onClick: function() { beginMarkerField('endSeconds', 'Marker end seconds', 'Leave blank to remove the end time'); }
+      });
+      detailRow(root, -0.47, 'Use current', {
+        color: '#293a46', height: 0.10, thetaStart: 254.0, thetaLength: 14.0, fontScale: 0.30,
+        onClick: function() { editor.endSeconds = Math.round(video.currentTime || 0); renderCurvedDetailPanel(meta); }
+      });
+      detailRow(root, -0.59, 'Tags: ' + (editor.tags || 'none'), {
+        color: '#223944', height: 0.10, fontScale: 0.34,
+        onClick: function() { beginMarkerField('tags', 'Marker tags', 'Separate tag names with commas'); }
+      });
+      detailRow(root, -0.79, 'Save marker', {
+        height: 0.13, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.34,
+        onClick: saveMarkerEditor
+      });
+      detailRow(root, -0.79, 'Cancel', {
+        height: 0.13, thetaStart: 246.2, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.34,
+        onClick: function() { detailState.markerEditor = null; renderCurvedDetailPanel(meta); }
+      });
+      if (editor.id) {
+        detailRow(root, -0.98, 'Delete marker', {
+          height: 0.11, color: '#a01010', textColor: '#ffffff', fontScale: 0.34,
+          onClick: function() {
+            requestDetailConfirmation('Delete this marker from Stash?', function() {
+              detailState.markerEditor = null;
+              postDetailMutation('/marker/' + encodeURIComponent(editor.id) + '/delete');
+            });
+          }
+        });
+      }
+      return true;
+    }
+
+    function renderDetailMarkersTab(root, meta) {
+      const markers = meta.sceneMarkers || [];
+      detailRow(root, 0.02, '+ Create marker at current video time', {
+        height: 0.12, color: '#267bb5', textColor: '#ffffff', fontScale: 0.34,
+        onClick: function() { beginMarkerEditor(null); }
+      });
+      if (!markers.length) {
+        detailRow(root, -0.16, 'No scene markers in Stash', { textColor: '#a8bcc9', height: 0.09 });
+        return;
+      }
+      markers.slice(0, 5).forEach(function(marker, index) {
+        const name = marker.title || (marker.primaryTag && marker.primaryTag.name) || 'Marker';
+        const y = -0.15 - index * 0.14;
+        detailRow(root, y,
+          '▶  ' + formatDetailDuration(marker.seconds) + '   ' + name, {
+            height: 0.105, thetaStart: 222.5, thetaLength: 29.5, color: '#223944', fontScale: 0.33,
+            onClick: function() { seekToDetailMarker(marker); }
+          });
+        if (marker.endSeconds != null) {
+          detailRow(root, y, 'Loop', {
+            height: 0.105, thetaStart: 253.3, thetaLength: 7.0, color: '#2e6b53', textColor: '#ffffff', fontScale: 0.28,
+            onClick: function() { setDetailMarkerLoop(marker); }
+          });
+        }
+        detailRow(root, y, 'Edit', {
+          height: 0.105, thetaStart: 261.5, thetaLength: 6.5, color: '#293a46', textColor: '#ffffff', fontScale: 0.25,
+          onClick: function() { beginMarkerEditor(marker); }
+        });
+      });
+      if (detailState.markerLoop) {
+        detailRow(root, -0.92, 'Stop marker loop', {
+          height: 0.11, color: '#293a46', textColor: '#ffffff', fontScale: 0.34,
+          onClick: function() { detailState.markerLoop = null; renderCurvedDetailPanel(meta); }
+        });
+      }
+    }
+
+    function clearDetailFilters() {
+      browseState.q = '';
+      browseState.filters = { performer: [], studio: [], tag: [], favorite: '', stars: 0, ocount: 0 };
+      browseState.filterNames = { performer: [], studio: [], tag: [] };
+      browseState.pickerQuery = { performer: '', studio: '', tag: '' };
+      const input = document.getElementById('vrSearchInput');
+      if (input) input.value = '';
+      rerenderAllFacetColumns();
+      renderActiveChips();
+      renderValuesRow();
+      fetchGrid(true);
+      detailState.status = 'Browse filters cleared';
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function updateDetailEffect(key, amount) {
+      const effects = detailState.effects;
+      const ranges = {
+        brightness: [0, 200], contrast: [0, 200], gamma: [25, 250], saturation: [0, 200],
+        hue: [-180, 180], warmth: [-100, 100], red: [0, 200], green: [0, 200], blue: [0, 200],
+        blur: [0, 20], rotate: [-180, 180], scale: [50, 200], aspect: [50, 200]
+      };
+      if (!ranges[key]) return;
+      effects[key] = Math.max(ranges[key][0], Math.min(ranges[key][1], Number(effects[key]) + amount));
+      applyVideoEffects();
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function resetDetailEffects(kind) {
+      const effects = detailState.effects;
+      if (kind === 'filters') {
+        ['brightness', 'contrast', 'gamma', 'saturation', 'hue', 'warmth', 'red', 'green', 'blue', 'blur']
+          .forEach(function(key) { effects[key] = key === 'hue' || key === 'warmth' || key === 'blur' ? 0 : 100; });
+      } else {
+        effects.rotate = 0;
+        effects.scale = 100;
+        effects.aspect = 100;
+      }
+      applyVideoEffects();
+      renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function formatDetailEffect(key, value) {
+      if (key === 'hue' || key === 'rotate') return String(value) + '°';
+      if (key === 'blur') return String(value) + ' px';
+      if (key === 'gamma') return (Number(value) / 100).toFixed(2);
+      return String(value) + '%';
+    }
+
+    function renderDetailEffectRow(root, y, key, label, step) {
+      const value = detailState.effects[key];
+      detailRow(root, y, '−', {
+        height: 0.10, thetaStart: 222.5, thetaLength: 7.0, color: '#293a46', textColor: '#ffffff', fontScale: 0.40,
+        onClick: function() { updateDetailEffect(key, -step); }
+      });
+      detailRow(root, y, label + '  ' + formatDetailEffect(key, value), {
+        height: 0.10, thetaStart: 230.7, thetaLength: 29.2, color: '#223944', textColor: '#ffffff', fontScale: 0.33,
+        onClick: function() { updateDetailEffect(key, step); }
+      });
+      detailRow(root, y, '+', {
+        height: 0.10, thetaStart: 261.1, thetaLength: 6.9, color: '#293a46', textColor: '#ffffff', fontScale: 0.40,
+        onClick: function() { updateDetailEffect(key, step); }
+      });
+    }
+
+    function renderDetailFiltersTab(root, meta) {
+      const pages = [
+        { title: 'Video effects 1/3', fields: [['brightness', 'Brightness', 5], ['contrast', 'Contrast', 5], ['gamma', 'Gamma', 5], ['saturation', 'Saturation', 5], ['hue', 'Hue', 5]] },
+        { title: 'Video effects 2/3', fields: [['warmth', 'Warmth', 5], ['red', 'Red', 5], ['green', 'Green', 5], ['blue', 'Blue', 5], ['blur', 'Blur', 1]] },
+        { title: 'Transforms 3/3', fields: [['rotate', 'Rotate', 5], ['scale', 'Scale', 5], ['aspect', 'Aspect', 5]] }
+      ];
+      const page = pages[detailState.effectsPage] || pages[0];
+      detailRow(root, 0.02, page.title, { textColor: '#ffffff', bold: true, height: 0.09 });
+      page.fields.forEach(function(field, index) {
+        renderDetailEffectRow(root, -0.12 - index * 0.12, field[0], field[1], field[2]);
+      });
+      detailRow(root, -0.78, '‹ Previous', {
+        height: 0.12, thetaStart: 222.5, thetaLength: 14.5, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
+        onClick: function() { detailState.effectsPage = (detailState.effectsPage + pages.length - 1) % pages.length; renderCurvedDetailPanel(meta); }
+      });
+      detailRow(root, -0.78, 'Reset ' + (detailState.effectsPage === 2 ? 'transforms' : 'filters'), {
+        height: 0.12, thetaStart: 238.0, thetaLength: 14.5, color: '#267bb5', textColor: '#ffffff', fontScale: 0.30,
+        onClick: function() { resetDetailEffects(detailState.effectsPage === 2 ? 'transforms' : 'filters'); }
+      });
+      detailRow(root, -0.78, 'Next ›', {
+        height: 0.12, thetaStart: 254.0, thetaLength: 14.0, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
+        onClick: function() { detailState.effectsPage = (detailState.effectsPage + 1) % pages.length; renderCurvedDetailPanel(meta); }
+      });
+      if (detailState.effectsPage === 2) {
+        detailRow(root, -0.96, '↶ Rotate left + fit', {
+          height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.29,
+          onClick: function() { detailState.effects.rotate = (detailState.effects.rotate - 90 + 360) % 360; detailState.effects.scale = 100; applyVideoEffects(); renderCurvedDetailPanel(meta); }
+        });
+        detailRow(root, -0.96, '↷ Rotate right + fit', {
+          height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.29,
+          onClick: function() { detailState.effects.rotate = (detailState.effects.rotate + 90) % 360; detailState.effects.scale = 100; applyVideoEffects(); renderCurvedDetailPanel(meta); }
+        });
+      }
+    }
+
+    function renderDetailFilesTab(root, meta) {
+      const files = meta.files || [];
+      if (detailState.fileIndex >= files.length) detailState.fileIndex = Math.max(0, files.length - 1);
+      const file = files[detailState.fileIndex];
+      if (!file) {
+        detailRow(root, 0.02, 'No file information available', { textColor: '#a8bcc9' });
+        return;
+      }
+      detailRow(root, 0.02, (files.length > 1 ? '‹ ' : '') + 'File ' + (detailState.fileIndex + 1) + ' / ' + files.length + (files.length > 1 ? ' ›' : ''), {
+        height: 0.10, color: files.length > 1 ? '#293a46' : undefined, textColor: '#ffffff', bold: true, fontScale: 0.34,
+        onClick: files.length > 1 ? function() {
+          detailState.fileIndex = (detailState.fileIndex + 1) % files.length;
+          renderCurvedDetailPanel(meta);
+        } : undefined
+      });
+      detailRow(root, -0.11, file.basename || 'Video file', { textColor: '#ffffff', bold: true, height: 0.10 });
+      detailRow(root, -0.23, (file.width || '—') + ' × ' + (file.height || '—') +
+        '   ' + formatDetailDuration(file.duration) + '   ' + formatDetailFileSize(file.size));
+      detailRow(root, -0.35, 'Video: ' + (file.videoCodec || '—') + '   Audio: ' + (file.audioCodec || '—'));
+      detailRow(root, -0.47, 'Format: ' + (file.format || '—') + '   ' +
+        (Number(file.frameRate) ? Number(file.frameRate).toFixed(2) + ' fps' : '—'));
+      detailRow(root, -0.59, 'Bitrate: ' + (Number(file.bitRate) ? Math.round(file.bitRate / 1000) + ' kbps' : '—'));
+      const fingerprints = (file.fingerprints || []).map(function(fp) { return fp.type + ': ' + fp.value; }).join(' · ');
+      detailRow(root, -0.71, fingerprints || 'Modified: ' + formatDetailDate(file.modifiedAt), { textColor: '#a8bcc9', fontScale: 0.30 });
+      detailRow(root, -0.82, 'Reveal in file manager', {
+        height: 0.09, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+        onClick: function() { postDetailMutation('/file/' + encodeURIComponent(file.id) + '/reveal'); }
+      });
+      if (files.length > 1 && detailState.fileIndex > 0) {
+        detailRow(root, -0.94, 'Make primary', {
+          height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() { postDetailMutation('/file/' + encodeURIComponent(file.id) + '/primary'); }
+        });
+      }
+      detailRow(root, -0.94, 'Reassign file', {
+        height: 0.11, thetaStart: files.length > 1 && detailState.fileIndex > 0 ? 246.2 : 222.5,
+        thetaLength: files.length > 1 && detailState.fileIndex > 0 ? 21.8 : 45.5, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+        onClick: function() {
+          beginDetailTextEntry('Reassign file', '', function(targetSceneID) {
+            if (!String(targetSceneID || '').trim()) {
+              detailState.status = 'Enter the target Stash scene ID';
+              renderCurvedDetailPanel(meta);
+              return;
+            }
+            postDetailMutation('/file/' + encodeURIComponent(file.id) + '/reassign', { targetSceneID: targetSceneID.trim() });
+          }, 'Type the destination Stash scene ID');
+        }
+      });
+      detailRow(root, -1.08, 'Split to new scene', {
+        height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.30,
+        onClick: function() {
+          beginDetailTextEntry('New scene title', file.basename || '', function(title) {
+            requestDetailConfirmation('Move this file into a new Stash scene?', function() {
+              postDetailMutation('/file/' + encodeURIComponent(file.id) + '/split', { title: title });
+            });
+          }, 'Type an optional title for the new scene');
+        }
+      });
+      detailRow(root, -1.08, 'Delete file', {
+        height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#a01010', textColor: '#ffffff', fontScale: 0.32,
+        onClick: function() {
+          requestDetailConfirmation('Delete this file through Stash? This can remove the underlying media.', function() {
+            postDetailMutation('/file/' + encodeURIComponent(file.id) + '/delete');
+          });
+        }
+      });
+    }
+
+    function renderDetailHistoryTab(root, meta) {
+      const playHistory = (meta.playHistory || []).slice().reverse();
+      const oHistory = (meta.oHistory || []).slice().reverse();
+      detailRow(root, 0.02, 'Play history · ' + playHistory.length + '   O history · ' + oHistory.length, { textColor: '#ffffff', bold: true, height: 0.09, fontScale: 0.33 });
+      detailRow(root, -0.11, 'Resume ' + formatDetailDuration(meta.resumeTime) + '   Total played ' + formatDetailDuration(meta.playDuration), {
+        textColor: '#a8bcc9', height: 0.08, fontScale: 0.32
+      });
+      detailRow(root, -0.24, '+ Play now', {
+        height: 0.11, thetaStart: 222.5, thetaLength: 14.5, color: '#267bb5', textColor: '#ffffff', fontScale: 0.30,
+        onClick: function() { postDetailMutation('/history/play/add'); }
+      });
+      detailRow(root, -0.24, '+ Manual play', {
+        height: 0.11, thetaStart: 238.0, thetaLength: 14.5, color: '#293a46', textColor: '#ffffff', fontScale: 0.29,
+        onClick: function() {
+          beginDetailTextEntry('Add play date', '', function(value) {
+            postDetailMutation('/history/play/add', { time: value });
+          }, 'Type ISO time, YYYY-MM-DD HH:MM, or YYYY-MM-DD');
+        }
+      });
+      detailRow(root, -0.24, '+ O now', {
+        height: 0.11, thetaStart: 254.0, thetaLength: 14.0, color: '#8b5b23', textColor: '#ffffff', fontScale: 0.30,
+        onClick: function() { postDetailMutation('/history/o/add'); }
+      });
+      const recentPlay = playHistory.slice(0, 2);
+      const recentO = oHistory.slice(0, 2);
+      recentPlay.forEach(function(date, index) {
+        detailRow(root, -0.39 - index * 0.11, 'Play · ' + formatDetailDateTime(date) + '  ✕', {
+          height: 0.09, color: '#223944', textColor: '#ffffff', fontScale: 0.30,
+          onClick: function() { requestDetailConfirmation('Remove this play date?', function() { postDetailMutation('/history/play/remove', { time: date }); }); }
+        });
+      });
+      recentO.forEach(function(date, index) {
+        detailRow(root, -0.62 - index * 0.11, 'O · ' + formatDetailDateTime(date) + '  ✕', {
+          height: 0.09, color: '#223944', textColor: '#ffffff', fontScale: 0.30,
+          onClick: function() { requestDetailConfirmation('Remove this O date?', function() { postDetailMutation('/history/o/remove', { time: date }); }); }
+        });
+      });
+      detailRow(root, -0.88, 'Clear plays', {
+        height: 0.10, thetaStart: 222.5, thetaLength: 10.7, color: '#722d2d', textColor: '#ffffff', fontScale: 0.27,
+        onClick: function() { requestDetailConfirmation('Clear all play history?', function() { postDetailMutation('/history/play/clear'); }); }
+      });
+      detailRow(root, -0.88, 'Reset resume', {
+        height: 0.10, thetaStart: 234.4, thetaLength: 10.7, color: '#293a46', textColor: '#ffffff', fontScale: 0.26,
+        onClick: function() { postDetailMutation('/history/play/reset-resume'); }
+      });
+      detailRow(root, -0.88, 'Reset duration', {
+        height: 0.10, thetaStart: 246.3, thetaLength: 10.7, color: '#293a46', textColor: '#ffffff', fontScale: 0.25,
+        onClick: function() { postDetailMutation('/history/play/reset-duration'); }
+      });
+      detailRow(root, -0.88, 'Clear O', {
+        height: 0.10, thetaStart: 258.2, thetaLength: 9.8, color: '#722d2d', textColor: '#ffffff', fontScale: 0.27,
+        onClick: function() { requestDetailConfirmation('Clear all O history?', function() { postDetailMutation('/history/o/clear'); }); }
+      });
+    }
+
+    function editSceneTextField(field, label, value, hint) {
+      beginDetailTextEntry(label, value, function(nextValue) {
+        postDetailMutation('/update', { field: field, value: nextValue });
+      }, hint);
+    }
+
+    function renderDetailOperations(root, meta) {
+      detailRow(root, 0.02, 'Scene operations', { textColor: '#ffffff', bold: true, height: 0.09 });
+      detailRow(root, -0.12, 'Rescan file', {
+        height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.33,
+        onClick: function() { postDetailMutation('/operation/rescan'); }
+      });
+      detailRow(root, -0.12, 'Thumbnail at current', {
+        height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.29,
+        onClick: function() { postDetailMutation('/operation/screenshot-current', { seconds: String(Math.max(0, video.currentTime || 0)) }); }
+      });
+      detailRow(root, -0.25, 'Default thumbnail', {
+        height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.31,
+        onClick: function() { postDetailMutation('/operation/screenshot-default'); }
+      });
+      detailRow(root, -0.25, 'Generate…', {
+        height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.33,
+        onClick: function() { detailState.operationsOpen = 'generate'; renderCurvedDetailPanel(meta); }
+      });
+      if (detailState.operationsOpen === 'generate') {
+        const generators = [['covers', 'Covers'], ['sprites', 'Sprites'], ['previews', 'Previews'], ['markers', 'Markers'], ['transcodes', 'Transcodes'], ['all', 'All media']];
+        generators.forEach(function(item, index) {
+          detailRow(root, -0.40 - index * 0.10, item[1], {
+            height: 0.085, color: '#223944', textColor: '#ffffff', fontScale: 0.30,
+            onClick: function() { detailState.operationsOpen = true; postDetailMutation('/operation/generate', { kind: item[0] }); }
+          });
+        });
+      } else {
+        detailRow(root, -0.40, 'Submit to Stash Box…', {
+          height: 0.11, color: '#2e6b53', textColor: '#ffffff', fontScale: 0.31,
+          onClick: startStashBoxPicker
+        });
+        detailRow(root, -0.56, 'Merge into scene…', {
+          height: 0.11, color: '#293a46', textColor: '#ffffff', fontScale: 0.33,
+          onClick: function() {
+            beginDetailTextEntry('Merge destination', '', function(destinationID) {
+              requestDetailConfirmation('Merge this scene into the selected Stash scene?', function() {
+                postDetailRequest('/operation/merge', { destinationID: destinationID }).then(function(result) {
+                  const mergedID = result && result.sceneID;
+                  if (mergedID) openDetailPanel(mergedID);
+                  else closeDetailPanel();
+                }).catch(function(err) {
+                  console.warn('stash-vr: merge failed', err);
+                  detailState.status = 'Action failed — try again';
+                  if (detailState.meta) renderCurvedDetailPanel(detailState.meta);
+                });
+              });
+            }, 'Type the destination Stash scene ID');
+          }
+        });
+        detailRow(root, -0.73, 'Delete scene', {
+          height: 0.12, color: '#a01010', textColor: '#ffffff', fontScale: 0.35,
+          onClick: function() {
+            requestDetailConfirmation('Delete this scene and its media through Stash?', function() {
+              postDetailRequest('/delete').then(function() {
+                closeDetailPanel();
+                detailState.status = 'Scene deleted';
+              }).catch(function() {});
+            });
+          }
+        });
+      }
+      detailRow(root, -1.05, 'Back to Edit', {
+        height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.34,
+        onClick: function() { detailState.operationsOpen = false; renderCurvedDetailPanel(meta); }
+      });
+    }
+
+    function renderDetailEditTab(root, meta) {
+      if (detailState.operationsOpen) {
+        renderDetailOperations(root, meta);
+        return;
+      }
+      const pages = ['Status', 'Info', 'People & tags', 'Galleries & groups'];
+      detailState.editPage = Math.max(0, Math.min(detailState.editPage, pages.length - 1));
+      detailRow(root, 0.02, 'Edit · ' + pages[detailState.editPage], { textColor: '#ffffff', bold: true, height: 0.09 });
+      if (detailState.editPage === 0) {
+        const rating = Math.max(0, Math.min(5, Number(meta.rating1to5) || 0));
+        renderDetailRatingButtons(root, -0.13, rating);
+        if (rating) {
+          detailRow(root, -0.34, 'Clear rating', {
+            height: 0.12, thetaStart: 222.5, thetaLength: 15.0, color: '#293a46', textColor: '#ffffff', fontScale: 0.30,
+            onClick: function() { postDetailMutation('/rating', { value: '0' }); }
+          });
+        }
+        detailRow(root, -0.34, (meta.isFavorite ? '♥ Favorited' : '♡ Favorite'), {
+          height: 0.12,
+          thetaStart: rating ? 239.2 : undefined, thetaLength: rating ? 28.8 : undefined,
+          color: meta.isFavorite ? '#8b2d53' : '#293a46', textColor: '#ffffff', fontScale: 0.34,
+          onClick: function() { postDetailMutation('/favorite'); }
+        });
+        detailRow(root, -0.49, meta.organized ? '✓ Organized' : 'Mark organized', {
+          height: 0.12, color: meta.organized ? '#2e6b53' : '#293a46', textColor: '#ffffff', fontScale: 0.34,
+          onClick: function() { postDetailMutation('/organized'); }
+        });
+        detailRow(root, -0.65, '− O', {
+          height: 0.12, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.36,
+          onClick: function() { postDetailMutation('/o/decrement'); }
+        });
+        detailRow(root, -0.65, '+ O', {
+          height: 0.12, thetaStart: 246.2, thetaLength: 21.8, color: '#8b5b23', textColor: '#ffffff', fontScale: 0.36,
+          onClick: function() { postDetailMutation('/o/increment'); }
+        });
+        detailRow(root, -0.86, '⋮ Scene operations', {
+          height: 0.12, color: '#293a46', textColor: '#ffffff', fontScale: 0.35,
+          onClick: function() { detailState.operationsOpen = true; renderCurvedDetailPanel(meta); }
+        });
+      } else if (detailState.editPage === 1) {
+        const fields = [
+          ['title', 'Title', meta.title || '', 'Type the full scene title'],
+          ['code', 'Code', meta.code || '', 'Type the studio or scene code'],
+          ['date', 'Date', meta.date || '', 'Type YYYY-MM-DD'],
+          ['director', 'Director', meta.director || '', 'Type the director name'],
+          ['urls', 'URLs', (meta.urls || []).join(', '), 'Separate URLs with commas'],
+          ['details', 'Details', meta.description || '', 'Type replacement details'],
+          ['coverImage', 'Cover image URL', '', 'Type an image URL or data URL'],
+          ['customFields', 'Custom fields JSON', JSON.stringify(meta.customFields || {}), 'Type a JSON object to replace custom fields']
+        ];
+        fields.forEach(function(field, index) {
+          detailRow(root, -0.12 - index * 0.12, field[1] + ': ' + (field[2] || '—'), {
+            height: 0.10, color: '#223944', textColor: '#ffffff', fontScale: 0.32,
+            onClick: function() { editSceneTextField(field[0], field[1], field[2], field[3]); }
+          });
+        });
+      } else if (detailState.editPage === 2) {
+        const studio = meta.studio ? [meta.studio] : [];
+        detailRow(root, -0.12, 'Studio', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+        renderEditableRelationChips(root, studio, -0.22, 'studio', '#a8d9f5');
+        detailRow(root, -0.34, meta.studio ? 'Change / clear studio' : '+ Set studio', {
+          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() {
+            if (meta.studio) {
+              requestDetailConfirmation('Clear the studio from this scene?', function() { postDetailMutation('/relations', { kind: 'studio', action: 'clear' }); });
+            } else startRelationPicker('studio', 'set');
+          }
+        });
+        detailRow(root, -0.47, 'Performers', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+        renderEditableRelationChips(root, meta.performers || [], -0.57, 'performer', '#d2e0e8');
+        detailRow(root, -0.69, '+ Add performer', {
+          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() { startRelationPicker('performer', 'add'); }
+        });
+        detailRow(root, -0.82, 'Tags', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+        renderEditableRelationChips(root, meta.tags || [], -0.92, 'tag', '#cad7e1');
+        detailRow(root, -1.04, '+ Add tag', {
+          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() { startRelationPicker('tag', 'add'); }
+        });
+      } else {
+        detailRow(root, -0.12, 'Galleries', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+        renderEditableRelationChips(root, meta.galleries || [], -0.22, 'gallery', '#d9cae8');
+        detailRow(root, -0.34, '+ Add gallery', {
+          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() { startRelationPicker('gallery', 'add'); }
+        });
+        detailRow(root, -0.49, 'Groups', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+        renderEditableRelationChips(root, meta.groups || [], -0.59, 'group', '#d9cae8');
+        detailRow(root, -0.71, '+ Add group', {
+          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() { startRelationPicker('group', 'add'); }
+        });
+      }
+      detailRow(root, -1.18, '‹ Previous', {
+        height: 0.10, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
+        onClick: function() { detailState.editPage = (detailState.editPage + pages.length - 1) % pages.length; renderCurvedDetailPanel(meta); }
+      });
+      detailRow(root, -1.18, 'Next ›', {
+        height: 0.10, thetaStart: 246.2, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
+        onClick: function() { detailState.editPage = (detailState.editPage + 1) % pages.length; renderCurvedDetailPanel(meta); }
+      });
+    }
+
+    function renderDetailTabContent(root, meta) {
+      if (renderDetailConfirmation(root, meta)) return;
+      if (renderDetailTextEntry(root, meta)) return;
+      if (renderRelationPicker(root, meta)) return;
+      if (renderStashBoxPicker(root, meta)) return;
+      if (renderMarkerEditor(root, meta)) return;
+      if (detailState.activeTab === 'queue') return renderDetailQueueTab(root, meta);
+      if (detailState.activeTab === 'markers') return renderDetailMarkersTab(root, meta);
+      if (detailState.activeTab === 'filters') return renderDetailFiltersTab(root, meta);
+      if (detailState.activeTab === 'files') return renderDetailFilesTab(root, meta);
+      if (detailState.activeTab === 'history') return renderDetailHistoryTab(root, meta);
+      if (detailState.activeTab === 'edit') return renderDetailEditTab(root, meta);
+      renderDetailDetailsTab(root, meta);
+    }
+
+    function renderCurvedDetailPanel(meta) {
+      const root = clearDetailChildren('vrDetailRows');
+      if (!root || !meta) return;
+      const studioName = meta.studio && meta.studio.name ? String(meta.studio.name).toUpperCase() : 'STASH';
+      const date = meta.date || formatDetailDate(meta.createdAt);
+      const duration = formatDetailDuration(meta.durationSec);
+      const rating = Math.max(0, Math.min(5, Number(meta.rating1to5) || 0));
+
+      addDetailRow(root, { y: 1.00, height: 0.16, color: '#1a365d', textColor: '#ffffff',
+        label: studioName, fontScale: 0.34, bold: true });
+      addDetailCloseControl(root);
+      addDetailRow(root, { y: 0.80, height: 0.14, textColor: '#ffffff',
+        label: compactDetailTitle(meta.title), fontScale: 0.42, bold: true });
+
+      let peopleCursor = DETAIL_THETA_START;
+      if (meta.studio && meta.studio.id) {
+        peopleCursor = renderDetailChips(root, [meta.studio], 0.62, 'studio', '#a8d9f5', peopleCursor);
+      }
+      renderDetailChips(root, (meta.performers || []).slice(0, 3), 0.62, 'performer', '#d2e0e8', peopleCursor);
+
+      detailRow(root, 0.46, [date, duration, detailState.status].filter(Boolean).join('  ·  '), { textColor: detailState.status ? '#9dd8ff' : '#c8d4dc' });
+      // Match the desktop scene toolbar: these are live controls, rather
+      // than a decorative stats line. Full editors remain available below.
+      const toolbarGap = 0.28;
+      const toolbarWidth = (DETAIL_THETA_LENGTH - toolbarGap * 4) / 5;
+      let toolbarTheta = DETAIL_THETA_START;
+      [
+        {
+          label: '★ ' + rating + '/5', color: '#5c4725',
+          onClick: function() { detailState.editPage = 0; selectDetailTab('edit'); }
+        },
+        {
+          label: '▶ ' + (Number(meta.playCount) || 0), color: '#223944',
+          onClick: function() { postDetailMutation('/play/increment'); }
+        },
+        {
+          label: '● ' + (Number(meta.oCounter) || 0), color: '#223944',
+          onClick: function() { postDetailMutation('/o/increment'); }
+        },
+        {
+          label: meta.organized ? '✓' : '□', color: meta.organized ? '#2e6b53' : '#293a46',
+          onClick: function() { postDetailMutation('/organized'); }
+        },
+        {
+          label: '⋮', color: '#293a46',
+          onClick: function() { detailState.editPage = 0; detailState.operationsOpen = true; selectDetailTab('edit'); }
+        }
+      ].forEach(function(control) {
+        addDetailRow(root, {
+          y: 0.34, height: 0.10, thetaStart: toolbarTheta, thetaLength: toolbarWidth,
+          color: control.color, textColor: '#ffffff', label: control.label, fontScale: 0.31,
+          onClick: control.onClick
+        });
+        toolbarTheta += toolbarWidth + toolbarGap;
+      });
+      renderDetailTabs(root);
+      renderDetailTabContent(root, meta);
+      updateRaycasterTargets();
+    }
+
+    function renderDetailDescription() {
+      if (detailState.meta) renderCurvedDetailPanel(detailState.meta);
+    }
+
+    function renderDetailPanel(meta) {
+      if (!meta) return;
+      detailState.descriptionLines = wrapDetailDescription(meta.description, 52);
+      detailState.descriptionOffset = 0;
+      renderCurvedDetailPanel(meta);
+    }
+
+    function fetchDetailMeta(sceneID) {
+      return fetch('/browse/scene/' + encodeURIComponent(sceneID) + '/meta?detail=1', {
+        headers: { 'Accept': 'application/json' }
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      });
+    }
+
+    function refreshDetailMeta() {
+      const requestedID = detailState.sceneId;
+      if (!requestedID) return Promise.resolve();
+      return fetchDetailMeta(requestedID).then(function(meta) {
+        if (detailState.sceneId !== requestedID || !isDetailPanelVisible()) return;
+        detailState.meta = meta;
+        detailState.descriptionLines = wrapDetailDescription(meta.description, 52);
+        detailState.descriptionOffset = 0;
+        detailState.status = '';
+        renderCurvedDetailPanel(meta);
+      });
+    }
+
+    function postDetailRequest(path, fields) {
+      const requestedID = detailState.sceneId;
+      if (!requestedID || !detailState.meta) return Promise.reject(new Error('no scene selected'));
+      detailState.status = 'Saving to Stash…';
+      renderCurvedDetailPanel(detailState.meta);
+      const body = new URLSearchParams(fields || {});
+      return fetch('/browse/scene/' + encodeURIComponent(requestedID) + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+        body: body.toString()
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      });
+    }
+
+    function postDetailMutation(path, fields) {
+      const requestedID = detailState.sceneId;
+      if (!requestedID || !detailState.meta) return Promise.reject(new Error('no scene selected'));
+      return postDetailRequest(path, fields).then(function(state) {
+        if (state && state.err) throw new Error(state.err);
+        return refreshDetailMeta();
+      }).catch(function(err) {
+        console.warn('stash-vr: detail mutation failed', err);
+        if (detailState.sceneId !== requestedID || !detailState.meta) return;
+        detailState.status = 'Action failed — try again';
+        renderCurvedDetailPanel(detailState.meta);
+        return null;
+      });
+    }
+
+    function openDetailPanel(sceneID, sourceTile) {
+      if (!sceneID) return;
+      detailState.sceneId = String(sceneID);
+      detailState.meta = null;
+      detailState.sourceTile = sourceTile || null;
+      detailState.activeTab = 'details';
+      detailState.status = '';
+      detailState.descriptionLines = [];
+      detailState.descriptionOffset = 0;
+      detailState.textEntry = null;
+      detailState.relationPicker = null;
+      detailState.stashBoxPicker = null;
+      detailState.markerEditor = null;
+      detailState.confirmation = null;
+      detailState.operationsOpen = false;
+      detailState.fileIndex = 0;
+      detailState.editPage = 0;
+
+      setSubpanelVisible('vrDetailPanel', true);
+      const root = clearDetailChildren('vrDetailRows');
+      if (root) {
+        addDetailRow(root, { y: 1.0, height: 0.16, color: '#1a365d', textColor: '#ffffff',
+          label: 'STASH', fontPx: 56, bold: true });
+        addDetailCloseControl(root);
+        addDetailRow(root, { y: 0.10, height: 0.12, color: '#202c34', textColor: '#a8bcc9',
+          label: 'Loading Stash details…', fontPx: 48 });
+      }
+      updateRaycasterTargets();
+
+      fetchDetailMeta(detailState.sceneId).then(function(meta) {
+        // A slower request for a previously selected tile must not overwrite
+        // the panel after the user has moved to another tile or closed it.
+        if (detailState.sceneId !== String(sceneID) || !isDetailPanelVisible()) return;
+        detailState.meta = meta;
+        renderDetailPanel(meta);
+      }).catch(function(err) {
+        console.warn('stash-vr: detail meta fetch failed', err);
+        if (detailState.sceneId !== String(sceneID)) return;
+        const errorRoot = clearDetailChildren('vrDetailRows');
+        if (errorRoot) {
+          addDetailRow(errorRoot, { y: 1.0, height: 0.16, color: '#1a365d', textColor: '#ffffff',
+            label: 'STASH', fontPx: 56, bold: true });
+          addDetailCloseControl(errorRoot);
+          addDetailRow(errorRoot, { y: 0.10, height: 0.12, color: '#202c34', textColor: '#ffb3b3',
+            label: 'Could not load Stash details', fontPx: 48 });
+          updateRaycasterTargets();
+        }
+      });
+    }
+
+    function closeDetailPanel() {
+      detailState.sceneId = '';
+      detailState.meta = null;
+      detailState.sourceTile = null;
+      detailState.activeTab = 'details';
+      detailState.status = '';
+      detailState.descriptionLines = [];
+      detailState.descriptionOffset = 0;
+      detailState.textEntry = null;
+      detailState.relationPicker = null;
+      detailState.stashBoxPicker = null;
+      detailState.markerEditor = null;
+      detailState.confirmation = null;
+      detailState.operationsOpen = false;
+      const input = document.getElementById('vrSearchInput');
+      if (input) input.blur();
+      window._vrDetailTextEntry = null;
+      setSubpanelVisible('vrDetailPanel', false);
+    }
+
+    function applyDetailFilter(kind, ref) {
+      if (!ref || !ref.id || !browseState.filters[kind]) return;
+      // Opening a Stash entity from the detail panel means "show this
+      // entity", not toggle it out when it happened to be selected already.
+      browseState.filters[kind] = [String(ref.id)];
+      browseState.filterNames[kind] = [String(ref.name || '')];
+      browseState.lastScrollFocus = 'grid';
+      closeDetailPanel();
+      rerenderAllFacetColumns();
+      renderActiveChips();
+      fetchGrid(true);
+    }
+
+    function playDetailScene() {
+      const sourceTile = detailState.sourceTile || Array.from(document.querySelectorAll('.vr-tile'))
+        .find(tile => tile.dataset.sceneId === detailState.sceneId);
+      if (!detailState.meta || !detailState.sceneId || !sourceTile) return;
+      sourceTile.dataset.tileTitle = detailState.meta.title || sourceTile.dataset.tileTitle || '';
+      closeDetailPanel();
+      swapToScene(sourceTile);
+    }
+
+    // The tile event delegate calls the public hook so the detail feature
+    // remains isolated from the virtualized grid's creation lifecycle.
+    window.openDetailPanel = openDetailPanel;
+
     function perfMark(name) {
       try { performance.mark('vrbrowse.' + name); } catch (e) {}
     }
@@ -1824,7 +3609,7 @@ a.chip:hover { background: #3a3a3a; }
         sentinel.setAttribute('value', 'Loading…');
         sentinel.setAttribute('visible', 'true');
       }
-      fetch('/browse/grid?' + buildGridParams().toString(), {
+      return fetch('/browse/grid?' + buildGridParams().toString(), {
         headers: { 'Accept': 'application/json' }
       })
         .then(r => r.json())
@@ -3519,12 +5304,22 @@ a.chip:hover { background: #3a3a3a; }
           const willShow = !(visible === true || visible === 'true');
           if (willShow) closeAllSubpanels('vrBrowsePanel');
           setSubpanelVisible('vrBrowsePanel', willShow);
-          if (willShow) onBrowsePanelOpen();
+          if (willShow) {
+            onBrowsePanelOpen();
+            // Browse is a scene companion: when a video is already playing,
+            // show its metadata immediately instead of an empty grid only.
+            openDetailPanel(sceneId);
+          }
         }
       } else if (action === 'browse-close') {
         // Cascade closes the filters extension too via the
         // setSubpanelVisible traverse (filters is a child of browse).
         setSubpanelVisible('vrBrowsePanel', false);
+        closeDetailPanel();
+      } else if (action === 'detail-close') {
+        closeDetailPanel();
+      } else if (action === 'detail-play') {
+        playDetailScene();
       } else if (action === 'picker-search-focus') {
         // Step 5: retarget the hidden <input> at the tapped column.
         // Tap-to-clear: wipe target's state slot + curved label + input
@@ -3716,6 +5511,19 @@ a.chip:hover { background: #3a3a3a; }
       }
       return false;
     }
+    function _laserIsOnDetailPanel(laserEl) {
+      if (!laserEl || !isDetailPanelVisible()) return false;
+      const rc = laserEl.components && laserEl.components.raycaster;
+      if (!rc) return false;
+      const its = rc.intersections || [];
+      if (!its.length) return false;
+      let target = its[0].el || (its[0].object && its[0].object.el);
+      while (target) {
+        if (target.id === 'vrDetailPanel') return true;
+        target = target.parentElement;
+      }
+      return false;
+    }
     // M4c Task 7 Step 6: figure out which surface the laser is over so the
     // thumbstick scrolls the right list. Walks up the DOM from the first
     // intersection: a #vrFiltersList-{kind} ancestor under #vrBrowsePanel
@@ -3787,11 +5595,26 @@ a.chip:hover { background: #3a3a3a; }
       const bp = document.getElementById('vrBrowsePanel');
       const bpVis = bp && (bp.getAttribute('visible') === true || bp.getAttribute('visible') === 'true');
 
-      // Pick whichever laser is currently on a browse-panel surface.
+      // Detail panel gets priority when the laser lands on it; otherwise
+      // retain the browse grid / filter-column routing exactly as before.
       const lasers = ['vrLaserRight', 'vrLaserLeft'].map(id => document.getElementById(id));
       let activeLaser = null;
+      let activeSurface = '';
       for (let i = 0; i < lasers.length; i++) {
-        if (_laserIsOnBrowsePanel(lasers[i])) { activeLaser = lasers[i]; break; }
+        if (_laserIsOnDetailPanel(lasers[i])) {
+          activeLaser = lasers[i];
+          activeSurface = 'detail';
+          break;
+        }
+      }
+      if (!activeLaser) {
+        for (let i = 0; i < lasers.length; i++) {
+          if (_laserIsOnBrowsePanel(lasers[i])) {
+            activeLaser = lasers[i];
+            activeSurface = 'browse';
+            break;
+          }
+        }
       }
 
       // Update diagnostic overlay only if it's currently visible (toggled
@@ -3836,6 +5659,25 @@ a.chip:hover { background: #3a3a3a; }
       const now = performance.now();
       const dt = browseLastScrollTickMs ? Math.min(0.1, (now - browseLastScrollTickMs) / 1000) : 1 / 60;
       browseLastScrollTickMs = now;
+
+      if (activeSurface === 'detail') {
+        const maxOffset = Math.max(0, detailState.descriptionLines.length - DETAIL_DESCRIPTION_VISIBLE_LINES);
+        if (maxOffset > 0 && Math.abs(ts.y) > 0.30) {
+          const previous = detailState.descriptionOffset;
+          // Stick down shows later detail lines; stick up returns toward the
+          // top, consistent with the browse grid's scroll direction.
+          detailState.descriptionOffset = Math.max(0, Math.min(maxOffset,
+            previous + ts.y * 3.5 * dt));
+          const rounded = Math.round(detailState.descriptionOffset);
+          if (rounded !== Math.round(previous)) {
+            detailState.descriptionOffset = rounded;
+            renderDetailDescription();
+          }
+        }
+        gridSmoother.reset();
+        Object.values(columnSmoothers).forEach(s => s.reset());
+        return;
+      }
 
       // Route the scroll to whichever surface the laser is hovering on.
       // Pointing at a filter column → scroll that column's option list;
@@ -4847,6 +6689,18 @@ a.chip:hover { background: #3a3a3a; }
 
         try { await video.play(); } catch (e) { console.warn('stash-vr: post-swap play', e); }
 
+        // Re-establish the M5 media layer against the now-loaded video.
+        // applyPickerState above already invoked syncMediaLayer, but at
+        // that point the swapped-in <video> src hadn't fetched any frames
+        // yet — XRMediaBinding.createEquirectLayer against an empty video
+        // element silently produces a layer the Quest 3 XR runtime drops
+        // from renderState on the next frame. Calling again now (video
+        // readyState >= HAVE_ENOUGH_DATA, first frames decoded) creates a
+        // layer the runtime accepts. Without this, every mid-VR scene
+        // swap kicked us back onto the VideoTexture fallback path — where
+        // the 8K V-flash artifact returns.
+        try { if (window.syncMediaLayer) window.syncMediaLayer(); } catch (e) { console.warn('stash-vr: post-swap syncMediaLayer', e); }
+
         // Refresh M4b state from the new scene's metadata.
         try { await refreshSceneMeta(sceneId); } catch (e) { console.warn('stash-vr: refreshSceneMeta', e); }
       } finally {
@@ -4891,7 +6745,7 @@ a.chip:hover { background: #3a3a3a; }
         if (!isBrowseGridIntersectionWithinBand(evt.detail && evt.detail.intersection)) return;
         if (evt.target.closest('.vr-tile-detail')) {
           if (typeof window.openDetailPanel === 'function') {
-            window.openDetailPanel(tileEl.dataset.sceneId);
+            window.openDetailPanel(tileEl.dataset.sceneId, tileEl);
           }
           return;
         }
@@ -4997,6 +6851,22 @@ a.chip:hover { background: #3a3a3a; }
         try { return xr.getSession() || null; } catch (_) { return null; }
       }
 
+      // Fisheye has no native XR layer type and keeps its shader path.
+      // Every other projection wants a media layer.
+      function geomWantsLayer() {
+        return (scene.dataset.activeGeom || 'vrFlat') !== 'vrFisheye';
+      }
+
+      // XRMediaBinding.create*Layer THROWS ("One or more of the video
+      // dimensions are zero, is the video ready?") when the <video> has
+      // not decoded a frame yet. That is a routine, transient state:
+      // entering VR while the stream is still buffering, immediately
+      // after a scene swap, or on a cold page load. Treat it as
+      // "not yet", never as a permanent failure.
+      function videoReadyForLayer() {
+        return !!video && video.videoWidth > 0 && video.videoHeight > 0;
+      }
+
       function buildOrGetLayer() {
         if (!mediaBinding || !refSpace) return null;
         const stereo = scene.dataset.stereo || '';
@@ -5005,36 +6875,43 @@ a.chip:hover { background: #3a3a3a; }
         const key = geomId + ':' + (stereo || 'mono');
         const cached = layerCache.get(key);
         if (cached) return cached;
+        if (!videoReadyForLayer()) return null;
         const layout = stereo === 'sbs' ? 'stereo-left-right' :
                        stereo === 'tb'  ? 'stereo-top-bottom' :
                        'mono';
         let layer = null;
-        if (geomId === 'vrSphere180') {
-          layer = mediaBinding.createEquirectLayer(video, {
-            space: refSpace,
-            layout: layout,
-            centralHorizontalAngle: Math.PI,
-            upperVerticalAngle: Math.PI / 2,
-            lowerVerticalAngle: -Math.PI / 2,
-            radius: 0
-          });
-        } else if (geomId === 'vrSphere360') {
-          layer = mediaBinding.createEquirectLayer(video, {
-            space: refSpace,
-            layout: layout,
-            centralHorizontalAngle: 2 * Math.PI,
-            upperVerticalAngle: Math.PI / 2,
-            lowerVerticalAngle: -Math.PI / 2,
-            radius: 0
-          });
-        } else if (geomId === 'vrFlat') {
-          layer = mediaBinding.createQuadLayer(video, {
-            space: refSpace,
-            layout: layout,
-            width: 4.0,
-            height: 2.25,
-            transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
-          });
+        try {
+          if (geomId === 'vrSphere180') {
+            layer = mediaBinding.createEquirectLayer(video, {
+              space: refSpace,
+              layout: layout,
+              centralHorizontalAngle: Math.PI,
+              upperVerticalAngle: Math.PI / 2,
+              lowerVerticalAngle: -Math.PI / 2,
+              radius: 0
+            });
+          } else if (geomId === 'vrSphere360') {
+            layer = mediaBinding.createEquirectLayer(video, {
+              space: refSpace,
+              layout: layout,
+              centralHorizontalAngle: 2 * Math.PI,
+              upperVerticalAngle: Math.PI / 2,
+              lowerVerticalAngle: -Math.PI / 2,
+              radius: 0
+            });
+          } else if (geomId === 'vrFlat') {
+            layer = mediaBinding.createQuadLayer(video, {
+              space: refSpace,
+              layout: layout,
+              width: 4.0,
+              height: 2.25,
+              transform: new XRRigidTransform({ x: 0, y: 1.6, z: -3 })
+            });
+          }
+        } catch (err) {
+          // Swallow: the reconcile loop retries once the video is ready.
+          console.warn('media-layer: create failed, will retry', err);
+          return null;
         }
         if (layer) {
           layerCache.set(key, layer);
@@ -5048,8 +6925,8 @@ a.chip:hover { background: #3a3a3a; }
       // entity. Called on exit-vr and on scene swap (where cached
       // layers reference the old video state and would crash the
       // compositor if reused).
-      function dropCache() {
-        const session = getXRSession();
+      function dropCache(sessionEnded) {
+        const session = sessionEnded ? null : getXRSession();
         layerCache.forEach(function(layer) {
           try { layer.destroy(); } catch (_) {}
           // Keep in knownMediaLayers so syncLayer's filter still
@@ -5109,64 +6986,130 @@ a.chip:hover { background: #3a3a3a; }
       }
       window.syncMediaLayer = syncLayer;
 
-      // Unified poll for: session attached, 'layers' feature granted,
-      // and renderState.layers populated. A-Frame's enter-vr can fire
-      // before Three.js's WebXRManager finishes setting up the session
-      // OR populating the projection layer, so we poll for up to 2s
-      // rather than read-once and silently bail.
-      function activateOnceReady() {
+      // Reconciliation loop.
+      //
+      // This manager used to be fire-once at enter-vr: if layer creation
+      // failed for any reason, `supported` was cleared and we silently
+      // rode the THREE.VideoTexture fallback for the rest of the
+      // session — which is exactly where the 8K V-flash artifact lives.
+      // The common trigger is entering VR before the video has decoded a
+      // frame, so create*Layer throws (see videoReadyForLayer above).
+      // Only exiting and re-entering VR recovered it.
+      //
+      // Instead of guessing every way the layer can go missing (cold
+      // start, scene swap, GL context loss, runtime-side drop), state is
+      // reconciled: while presenting, check that the layer we want is
+      // actually in renderState, and re-sync when it isn't. setInterval
+      // keeps firing during an XR session (unlike window.rAF), and the
+      // check is a cheap array lookup.
+      // CRITICAL: everything below must be driven by setInterval, never
+      // requestAnimationFrame. window.rAF callbacks do NOT fire while an
+      // XRSession is presenting (verified on Quest 3 / Meta Browser: an
+      // rAF scheduled in-session never ran, while a setTimeout scheduled
+      // in the same call did). The previous implementation polled for
+      // readiness with rAF, so the first time it needed a retry — i.e.
+      // whenever renderState.layers wasn't populated yet at enter-vr —
+      // it stalled forever, emitting no log at all. M5 then never
+      // activated and the whole session silently rode the
+      // THREE.VideoTexture fallback, which is where the 8K V-flash
+      // artifact lives. Exiting and re-entering VR was the only recovery
+      // (re-entry happens to find layers already populated on tick one).
+      let reconcileTimer = null;
+      // Set only for conditions that can never become true later, so we
+      // log once and stop retrying instead of spamming every 500ms.
+      let activationImpossible = false;
+
+      // Idempotent: returns true once the media binding exists.
+      function tryActivate() {
+        if (mediaBinding) return true;
+        if (activationImpossible) return false;
         if (typeof XRMediaBinding === 'undefined') {
           console.log('media-layer: XRMediaBinding unavailable; staying on VideoTexture path');
-          return;
+          activationImpossible = true;
+          return false;
         }
-        const deadline = Date.now() + 2000;
-        function tick() {
-          const session = getXRSession();
-          if (!session) {
-            if (Date.now() < deadline) { requestAnimationFrame(tick); return; }
-            console.log('media-layer: no session by deadline; staying on VideoTexture path');
-            return;
-          }
-          const ef = session.enabledFeatures ? Array.from(session.enabledFeatures) : [];
-          if (!ef.includes('layers')) {
-            console.log('media-layer: layers feature not granted; staying on VideoTexture path');
-            return;
-          }
-          const layersArr = session.renderState && session.renderState.layers;
-          if (!layersArr || !layersArr.length) {
-            if (Date.now() < deadline) { requestAnimationFrame(tick); return; }
-            console.log('media-layer: renderState.layers stayed empty after 2s; staying on VideoTexture path');
-            return;
-          }
-          try {
-            const xr = scene.renderer.xr;
-            mediaBinding = new XRMediaBinding(session);
-            refSpace = xr.getReferenceSpace();
-            supported = true;
-            // The projection layer carries the HUD; make its clear
-            // color transparent so the media layer behind it shows
-            // through anywhere the HUD doesn't draw. Requires
-            // <a-scene renderer="alpha: true"> so the layer has an
-            // alpha buffer.
-            try { scene.renderer.setClearColor(0x000000, 0); } catch (_) {}
-            syncLayer();
-            console.log('media-layer: active');
-          } catch (err) {
-            console.warn('media-layer: setup failed', err);
-            mediaBinding = null;
-            refSpace = null;
-            supported = false;
-          }
+        const session = getXRSession();
+        if (!session) return false; // not presenting yet; try next tick
+        const ef = session.enabledFeatures ? Array.from(session.enabledFeatures) : [];
+        if (!ef.includes('layers')) {
+          console.log('media-layer: layers feature not granted; staying on VideoTexture path');
+          activationImpossible = true;
+          return false;
         }
-        tick();
+        // Three.js's WebXRManager creates the projection layer
+        // asynchronously, so this is commonly empty for the first few
+        // ticks after enter-vr. Keep waiting — no deadline, because a
+        // slow cold start must not permanently disable the layer path.
+        const layersArr = session.renderState && session.renderState.layers;
+        if (!layersArr || !layersArr.length) return false;
+        // Both of these can be unavailable for the first few ticks. Check
+        // the reference space BEFORE committing to mediaBinding, so we
+        // never latch into an activated-but-unusable state (a null
+        // refSpace would make buildOrGetLayer bail on every later call).
+        const rs = scene.renderer.xr.getReferenceSpace();
+        if (!rs) return false;
+        try {
+          mediaBinding = new XRMediaBinding(session);
+          refSpace = rs;
+          supported = true;
+          // The projection layer carries the HUD; make its clear color
+          // transparent so the media layer behind it shows through
+          // anywhere the HUD doesn't draw. Requires
+          // <a-scene renderer="alpha: true"> so the layer has an alpha
+          // buffer.
+          try { scene.renderer.setClearColor(0x000000, 0); } catch (_) {}
+          console.log('media-layer: activated');
+          return true;
+        } catch (err) {
+          console.warn('media-layer: activation failed, will retry', err);
+          mediaBinding = null;
+          refSpace = null;
+          supported = false;
+          return false;
+        }
       }
-      scene.addEventListener('enter-vr', activateOnceReady);
+
+      // Single state-machine tick: activate if needed, then make sure the
+      // layer we want is actually in renderState. Covers cold start,
+      // video-not-decoded-yet, scene swap, GL context loss, and any
+      // runtime-side drop with one mechanism.
+      function reconcile() {
+        if (!tryActivate()) return;
+        if (!geomWantsLayer()) return;
+        const session = getXRSession();
+        if (!session) return;
+        const layers = Array.from((session.renderState && session.renderState.layers) || []);
+        if (activeMediaLayer && layers.indexOf(activeMediaLayer) !== -1) return;
+        // Nothing buildable yet — wait for frames rather than churning
+        // updateRenderState every tick.
+        if (!videoReadyForLayer()) return;
+        console.log('media-layer: syncing (layer missing)');
+        syncLayer();
+      }
+      function startReconcile() {
+        if (reconcileTimer) return;
+        reconcileTimer = setInterval(reconcile, 500);
+        reconcile(); // don't wait 500ms for the common ready-already case
+      }
+      function stopReconcile() {
+        if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
+      }
+
+      scene.addEventListener('enter-vr', function() {
+        activationImpossible = false;
+        startReconcile();
+      });
 
       scene.addEventListener('exit-vr', function() {
-        dropCache();
+        stopReconcile();
+        // exit-vr fires after the XRSession has already ended, so
+        // updateRenderState would throw InvalidStateError. Destroy the
+        // layers, skip the renderState edit.
+        dropCache(true);
         mediaBinding = null;
         refSpace = null;
         supported = false;
+        activationImpossible = false;
       });
     })();
 
@@ -5180,55 +7123,159 @@ a.chip:hover { background: #3a3a3a; }
     // layer behind shows through).
     //
     // On Quest 3, this triggers a periodic "V-flash" — the
-    // compositor intermittently drops the media layer behind. Best
-    // current understanding: the XR runtime / compositor activates a
-    // cache for projection layers whose framebuffer is byte-identical
-    // between submissions, and once latched it stops compositing the
-    // layer correctly. Defeating this requires the framebuffer to
-    // actually change between frames.
+    // compositor intermittently drops the media layer behind. The XR
+    // runtime / compositor caches projection layers whose framebuffer
+    // doesn't change meaningfully between submissions; once latched
+    // it stops compositing correctly against the media layer.
+    // Defeating it requires the framebuffer to vary across a
+    // substantial portion of its area, frame-to-frame.
     //
-    // Empirical observations that triangulate the mechanism:
-    //  - Opaque 1mm pin parented to camera (static NDC position →
-    //    byte-identical framebuffer): suppresses for ~10min then
-    //    flash returns. Cache latches even with one opaque pixel.
-    //  - Transparent 1mm pin (opacity=0): suppresses briefly, fails
-    //    fast — driver elides alpha=0 writes as no-ops.
-    //  - In-VR diag overlay re-setting text via setAttribute every
-    //    500ms: suppressed indefinitely. A-Frame rebuilds text
-    //    geometry on each setAttribute, varying framebuffer content.
+    // Iterations that DIDN'T hold (each fails because the per-frame
+    // framebuffer delta falls below the cache's threshold — which
+    // can reset/recalibrate on a cold boot / power cycle):
+    //  - Opaque 1mm static pin: ~10 min then flash.
+    //  - Opacity-0 1mm pin: fails fast (driver elides alpha=0).
+    //  - 1mm pin + window.rAF color toggle: rAF paused in XR.
+    //  - 1mm pin + A-Frame tick color toggle (1/255 R delta): below
+    //    cache threshold; flash returns after power-cycle.
+    //  - 4×4m noise-shader quad with single float uFrame uniform
+    //    incremented each tick + vertex jitter every 36 frames:
+    //    works for ~3-10 min, then fails. Root cause: GLSL float32
+    //    loses integer precision at 2^24 (~16M); at 72fps that's
+    //    ~3.7 min. The hash's t*0.01 factor collapses even sooner.
+    //    Once uFrame precision degrades, every frame's noise pattern
+    //    becomes identical and the cache re-latches. The infrequent
+    //    vertex jitter (every 36 frames, single vertex, ±0.0001)
+    //    wasn't enough structural change to keep the cache broken.
     //
-    // Fix: pin's material color alternates between two near-black
-    // values (1/255 R delta — below visual acuity) every frame.
+    // The DID-work reference: the M5 diagnostic overlay — a
+    // ~300×150px green text panel rebuilt via setAttribute every
+    // 500ms. That varies thousands of pixels per refresh.
     //
-    // Tick MUST be driven by A-Frame's component-tick mechanism, not
+    // Current fix (v3): 4×4m camera-attached quad with a custom
+    // ShaderMaterial + two-uniform hash + per-frame vertex jitter.
+    // Key differences from the v2 noise shader that failed:
+    //  1. Two coprime-cycled uniforms uA (mod 97) and uB (mod 89)
+    //     instead of a single incrementing uFrame. Values stay < 100
+    //     so float32 has full integer precision; 97×89 = 8633
+    //     distinct (uA,uB) pairs before any repeat.
+    //  2. Two-round hash: h1 = sin(p+uA), h2 = sin(p*h1+uB).
+    //     Even when one uniform wraps, the other is mid-cycle, so
+    //     the composed output stays distinct frame-to-frame.
+    //  3. Per-frame vertex jitter cycling through all 4 vertices
+    //     of the PlaneGeometry, alternating ±0.0002 on the z axis.
+    //     Forces a GPU vertex-buffer re-upload every single tick,
+    //     matching (and exceeding) the diagnostic overlay's
+    //     per-500ms geometry rebuild that worked indefinitely.
+    //  4. Wider alpha range [0.005, 0.045] spans ~10 distinct 8-bit
+    //     values, harder for the compositor to collapse.
+    //
+    // Tick MUST go through A-Frame's component-tick mechanism, not
     // window.requestAnimationFrame: per the WebXR spec, window.rAF
     // callbacks are deferred indefinitely while an XRSession is
     // presenting. A-Frame's component tick is driven by Three.js's
     // WebXRManager animation loop and fires on every XR frame.
-    // (Same precedent: panel-tickers above.)
+    //
+    // Heartbeat console.log every ~30s of XR time confirms via
+    // chrome://inspect that the tick is firing in VR.
     if (typeof AFRAME !== 'undefined') {
       AFRAME.registerComponent('vflash-keepalive', {
-        init: function() { this.alt = false; },
-        tick: function() {
-          const mesh = this.el.getObject3D('mesh');
-          if (mesh && mesh.material && mesh.material.color) {
-            mesh.material.color.setRGB(this.alt ? 1/255 : 0, 0, 0);
-            this.alt = !this.alt;
+        init: function() {
+          this.frameCount = 0;
+          this.lastHeartbeatAt = 0;
+        },
+        tick: function(time) {
+          var mesh = this.el.getObject3D('mesh');
+          if (!mesh || !mesh.material || !mesh.material.uniforms) return;
+          // Two coprime counters that stay in ranges safe for float
+          // precision (always < 100, so no integer quantization).
+          // 97 × 89 = 8633 distinct (uA,uB) pairs before full
+          // repeat, but crucially every single frame produces a
+          // unique pair — the hash never collapses due to float
+          // precision loss because both values stay small.
+          var u = mesh.material.uniforms;
+          u.uA.value = this.frameCount % 97;
+          u.uB.value = this.frameCount % 89;
+
+          // Jitter a vertex EVERY frame (alternating two vertices)
+          // to force a GPU vertex-buffer re-upload each tick. The
+          // diagnostic overlay that worked indefinitely rebuilt its
+          // geometry every 500ms — we go further and do it every
+          // frame. The jitter magnitude (±0.0002) is sub-pixel at
+          // the overlay's distance and visually imperceptible.
+          if (mesh.geometry) {
+            var pos = mesh.geometry.attributes.position;
+            // PlaneGeometry(4,4) has 4 vertices (indices 0-3).
+            // Alternate which vertex we jitter, and alternate the
+            // direction, so 4 consecutive frames touch 4 different
+            // (vertex, direction) combos — maximizing the vertex
+            // buffer difference seen by the driver.
+            var vtx = (this.frameCount % 4) * 3 + 2; // z of vertex 0-3
+            pos.array[vtx] = (this.frameCount % 2 === 0) ? 0.0002 : -0.0002;
+            // Reset the previously-jittered vertex back to 0
+            var prevVtx = ((this.frameCount + 3) % 4) * 3 + 2;
+            pos.array[prevVtx] = 0;
+            pos.needsUpdate = true;
+          }
+
+          this.frameCount++;
+          if (time - this.lastHeartbeatAt > 30000) {
+            console.log('vflash-keepalive: frame #' + this.frameCount +
+                        ' uA=' + u.uA.value + ' uB=' + u.uB.value);
+            this.lastHeartbeatAt = time;
           }
         }
       });
     }
     (function projectionLayerKeepAlive() {
       scene.addEventListener('loaded', function() {
-        const cam = scene.querySelector('[camera]');
+        var cam = scene.querySelector('[camera]');
         if (!cam) return;
-        const pin = document.createElement('a-entity');
-        pin.setAttribute('id', 'projectionLayerKeepAlivePin');
-        pin.setAttribute('geometry', 'primitive: plane; width: 0.001; height: 0.001');
-        pin.setAttribute('material', 'shader: flat; color: #000; opacity: 1; transparent: false');
-        pin.setAttribute('position', '0 -0.35 -1');
-        pin.setAttribute('vflash-keepalive', '');
-        cam.appendChild(pin);
+        var THREE = AFRAME.THREE;
+        var noiseMat = new THREE.ShaderMaterial({
+          uniforms: {
+            uA: { value: 0.0 },
+            uB: { value: 0.0 }
+          },
+          vertexShader: [
+            'void main() {',
+            '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+            '}'
+          ].join('\n'),
+          fragmentShader: [
+            'uniform float uA;',
+            'uniform float uB;',
+            // Two-round hash: each round uses a different seed vec2
+            // and mixes in a different uniform, so even if one
+            // uniform wraps while the other is mid-cycle, the output
+            // is still distinct. Both uniforms stay < 100 so no
+            // float precision issues.
+            'float hash2(vec2 p, float a, float b) {',
+            '  float h1 = fract(sin(dot(p + a, vec2(127.1, 311.7))) * 43758.5453);',
+            '  float h2 = fract(sin(dot(p * h1 + b, vec2(269.5, 183.3))) * 28461.6513);',
+            '  return h2;',
+            '}',
+            'void main() {',
+            '  float n = hash2(gl_FragCoord.xy, uA, uB);',
+            // Alpha in [0.005, 0.045] spans ~10 distinct 8-bit
+            // values (1-11 out of 255), enough that the compositor
+            // can't collapse them to a single byte value.
+            '  gl_FragColor = vec4(n, n, n, 0.005 + n * 0.04);',
+            '}'
+          ].join('\n'),
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        });
+        var geom = new THREE.PlaneGeometry(4, 4);
+        var mesh = new THREE.Mesh(geom, noiseMat);
+        var overlay = document.createElement('a-entity');
+        overlay.setAttribute('id', 'projectionLayerKeepAlivePin');
+        overlay.setAttribute('position', '0 0 -1');
+        overlay.setObject3D('mesh', mesh);
+        overlay.setAttribute('vflash-keepalive', '');
+        cam.appendChild(overlay);
       });
     })();
   })();

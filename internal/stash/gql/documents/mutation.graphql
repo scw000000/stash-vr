@@ -57,3 +57,142 @@ mutation SceneUpdateOrganized($id: ID!, $isOrganized: Boolean){
 mutation SceneAddPlayDurationSeconds($id: ID!, $seconds: Float){
     sceneSaveActivity(id: $id, playDuration: $seconds)
 }
+
+# Each VR editor mutation explicitly names the one field it changes. Sending a
+# generated SceneUpdateInput as a GraphQL variable serializes its other fields
+# as null, which Stash correctly interprets as a request to clear them.
+mutation SceneUpdateTitleVR($id: ID!, $value: String) {
+    sceneUpdate(input: {id: $id, title: $value}) { id }
+}
+
+mutation SceneUpdateCodeVR($id: ID!, $value: String) {
+    sceneUpdate(input: {id: $id, code: $value}) { id }
+}
+
+mutation SceneUpdateDateVR($id: ID!, $value: String) {
+    sceneUpdate(input: {id: $id, date: $value}) { id }
+}
+
+mutation SceneUpdateDirectorVR($id: ID!, $value: String) {
+    sceneUpdate(input: {id: $id, director: $value}) { id }
+}
+
+mutation SceneUpdateDetailsVR($id: ID!, $value: String) {
+    sceneUpdate(input: {id: $id, details: $value}) { id }
+}
+
+mutation SceneUpdateURLsVR($id: ID!, $values: [String!]!) {
+    sceneUpdate(input: {id: $id, urls: $values}) { id }
+}
+
+mutation SceneUpdateCoverImageVR($id: ID!, $value: String) {
+    sceneUpdate(input: {id: $id, cover_image: $value}) { id }
+}
+
+mutation SceneUpdateCustomFieldsVR($id: ID!, $value: CustomFieldsInput!) {
+    sceneUpdate(input: {id: $id, custom_fields: $value}) { id }
+}
+
+mutation SceneUpdateTagsVR($id: ID!, $values: [ID!]!) {
+    sceneUpdate(input: {id: $id, tag_ids: $values}) { id }
+}
+
+mutation SceneUpdatePerformersVR($id: ID!, $values: [ID!]!) {
+    sceneUpdate(input: {id: $id, performer_ids: $values}) { id }
+}
+
+mutation SceneUpdateGalleryVR($id: ID!, $values: [ID!]!) {
+    sceneUpdate(input: {id: $id, gallery_ids: $values}) { id }
+}
+
+mutation SceneUpdateGroupsVR($id: ID!, $values: [SceneGroupInput!]!) {
+    sceneUpdate(input: {id: $id, groups: $values}) { id }
+}
+
+mutation SceneSetStudioVR($id: ID!, $studio_id: ID!) {
+    sceneUpdate(input: {id: $id, studio_id: $studio_id}) { id }
+}
+
+mutation SceneClearStudioVR($id: ID!) {
+    sceneUpdate(input: {id: $id, studio_id: null}) { id }
+}
+
+mutation SceneDeleteFilesVR($ids: [ID!]!) {
+    deleteFiles(ids: $ids)
+}
+
+mutation SceneSetPrimaryFileVR($scene_id: ID!, $file_id: ID!) {
+    sceneUpdate(input: {id: $scene_id, primary_file_id: $file_id}) { id }
+}
+
+mutation SceneAssignFileVR($input: AssignSceneFileInput!) {
+    sceneAssignFile(input: $input)
+}
+
+mutation SceneCreateFromFileVR($input: SceneCreateInput!) {
+    sceneCreate(input: $input) { id }
+}
+
+mutation SceneMarkerCreateVR($input: SceneMarkerCreateInput!) {
+    sceneMarkerCreate(input: $input) { id }
+}
+
+mutation SceneMarkerUpdateVR($input: SceneMarkerUpdateInput!) {
+    sceneMarkerUpdate(input: $input) { id }
+}
+
+mutation SceneMarkerDeleteVR($id: ID!) {
+    sceneMarkerDestroy(id: $id)
+}
+
+mutation SceneAddPlayVR($id: ID!, $times: [Timestamp!]) {
+    sceneAddPlay(id: $id, times: $times) { count history }
+}
+
+mutation SceneDeletePlayVR($id: ID!, $times: [Timestamp!]) {
+    sceneDeletePlay(id: $id, times: $times) { count history }
+}
+
+mutation SceneResetPlayVR($id: ID!) {
+    sceneResetPlayCount(id: $id)
+}
+
+mutation SceneAddOVR($id: ID!, $times: [Timestamp!]) {
+    sceneAddO(id: $id, times: $times) { count history }
+}
+
+mutation SceneDeleteOVR($id: ID!, $times: [Timestamp!]) {
+    sceneDeleteO(id: $id, times: $times) { count history }
+}
+
+mutation SceneResetOVR($id: ID!) {
+    sceneResetO(id: $id)
+}
+
+mutation SceneResetActivityVR($id: ID!, $reset_resume: Boolean, $reset_duration: Boolean) {
+    sceneResetActivity(id: $id, reset_resume: $reset_resume, reset_duration: $reset_duration)
+}
+
+mutation SceneGenerateScreenshotVR($id: ID!, $at: Float) {
+    sceneGenerateScreenshot(id: $id, at: $at)
+}
+
+mutation SceneRescanVR($input: ScanMetadataInput!) {
+    metadataScan(input: $input)
+}
+
+mutation SceneGenerateVR($input: GenerateMetadataInput!) {
+    metadataGenerate(input: $input)
+}
+
+mutation SceneMergeVR($input: SceneMergeInput!) {
+    sceneMerge(input: $input) { id }
+}
+
+mutation SceneRevealFileVR($id: ID!) {
+    revealFileInFileManager(id: $id)
+}
+
+mutation SceneSubmitStashBoxVR($input: StashBoxDraftSubmissionInput!) {
+    submitStashBoxSceneDraft(input: $input)
+}

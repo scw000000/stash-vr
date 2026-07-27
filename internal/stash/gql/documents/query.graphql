@@ -163,6 +163,36 @@ query FindPerformersByIDs($ids: [ID!]!){
     }
 }
 
+query FindSceneActivity($id: ID!) {
+    findScene(id: $id) {
+        play_history
+        o_history
+        play_duration
+        resume_time
+        last_played_at
+    }
+}
+
+query FindGroupsForSceneEditor($q: String) {
+    findGroups(filter: {per_page: 100, q: $q, sort: "name", direction: ASC}) {
+        groups { id name }
+    }
+}
+
+query FindGalleriesForSceneEditor($q: String) {
+  findGalleries(filter: {per_page: 100, q: $q, sort: "title", direction: ASC}) {
+    galleries { id title }
+  }
+}
+
+query FindSceneStashBoxesVR {
+  configuration {
+    general {
+      stashBoxes { name endpoint }
+    }
+  }
+}
+
 query FindTagsByIDs($ids: [ID!]!){
     findTags(ids: $ids){
         tags {
@@ -177,8 +207,8 @@ fragment SavedFilterParts on SavedFilter{
 
 
 fragment SceneParts on Scene{
-    id, title, rating100, created_at, date
-    files{basename, duration, path, height, video_codec}
+    id, title, code, details, director, rating100, created_at, updated_at, date, urls, custom_fields
+    files{id, basename, duration, path, height, width, size, bit_rate, format, frame_rate, audio_codec, video_codec, mod_time, fingerprints { type value }}
     studio{
         id
         name
@@ -192,9 +222,16 @@ fragment SceneParts on Scene{
     },
     groups {
         group {
+            id
             name
         }
+        scene_index
     }
+    galleries {
+        id
+        title
+    }
+    stash_ids { endpoint stash_id }
     play_count,
     o_counter,
     organized
@@ -210,6 +247,9 @@ fragment SceneParts on Scene{
 
 fragment SceneMarkerParts on SceneMarker{
     id, seconds, end_seconds, title, primary_tag {
+        id, name
+    }
+    tags {
         id, name
     }
 }

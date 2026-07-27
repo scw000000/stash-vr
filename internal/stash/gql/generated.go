@@ -10,6 +10,17 @@ import (
 	"github.com/Khan/genqlient/graphql"
 )
 
+type AssignSceneFileInput struct {
+	File_id  string `json:"file_id"`
+	Scene_id string `json:"scene_id"`
+}
+
+// GetFile_id returns AssignSceneFileInput.File_id, and is useful for accessing the field via an interface.
+func (v *AssignSceneFileInput) GetFile_id() string { return v.File_id }
+
+// GetScene_id returns AssignSceneFileInput.Scene_id, and is useful for accessing the field via an interface.
+func (v *AssignSceneFileInput) GetScene_id() string { return v.Scene_id }
+
 type CircumcisedEnum string
 
 const (
@@ -92,6 +103,24 @@ func (v *CustomFieldCriterionInput) GetModifier() CriterionModifier { return v.M
 
 // GetValue returns CustomFieldCriterionInput.Value, and is useful for accessing the field via an interface.
 func (v *CustomFieldCriterionInput) GetValue() []any { return v.Value }
+
+type CustomFieldsInput struct {
+	// If populated, the entire custom fields map will be replaced with this value
+	Full *map[string]interface{} `json:"full"`
+	// If populated, only the keys in this map will be updated
+	Partial *map[string]interface{} `json:"partial"`
+	// Remove any keys in this list
+	Remove []string `json:"remove"`
+}
+
+// GetFull returns CustomFieldsInput.Full, and is useful for accessing the field via an interface.
+func (v *CustomFieldsInput) GetFull() *map[string]interface{} { return v.Full }
+
+// GetPartial returns CustomFieldsInput.Partial, and is useful for accessing the field via an interface.
+func (v *CustomFieldsInput) GetPartial() *map[string]interface{} { return v.Partial }
+
+// GetRemove returns CustomFieldsInput.Remove, and is useful for accessing the field via an interface.
+func (v *CustomFieldsInput) GetRemove() []string { return v.Remove }
 
 type DateCriterionInput struct {
 	Modifier CriterionModifier `json:"modifier"`
@@ -532,6 +561,82 @@ func (v *FindFilterType) GetQ() *string { return v.Q }
 // GetSort returns FindFilterType.Sort, and is useful for accessing the field via an interface.
 func (v *FindFilterType) GetSort() *string { return v.Sort }
 
+// FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultType includes the requested fields of the GraphQL type FindGalleriesResultType.
+type FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultType struct {
+	Galleries []*FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery `json:"galleries"`
+}
+
+// GetGalleries returns FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultType.Galleries, and is useful for accessing the field via an interface.
+func (v *FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultType) GetGalleries() []*FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery {
+	return v.Galleries
+}
+
+// FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery includes the requested fields of the GraphQL type Gallery.
+// The GraphQL type's documentation follows.
+//
+// Gallery type
+type FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery struct {
+	Id    string  `json:"id"`
+	Title *string `json:"title"`
+}
+
+// GetId returns FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery.Id, and is useful for accessing the field via an interface.
+func (v *FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery) GetId() string {
+	return v.Id
+}
+
+// GetTitle returns FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery.Title, and is useful for accessing the field via an interface.
+func (v *FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultTypeGalleriesGallery) GetTitle() *string {
+	return v.Title
+}
+
+// FindGalleriesForSceneEditorResponse is returned by FindGalleriesForSceneEditor on success.
+type FindGalleriesForSceneEditorResponse struct {
+	FindGalleries *FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultType `json:"findGalleries"`
+}
+
+// GetFindGalleries returns FindGalleriesForSceneEditorResponse.FindGalleries, and is useful for accessing the field via an interface.
+func (v *FindGalleriesForSceneEditorResponse) GetFindGalleries() *FindGalleriesForSceneEditorFindGalleriesFindGalleriesResultType {
+	return v.FindGalleries
+}
+
+// FindGroupsForSceneEditorFindGroupsFindGroupsResultType includes the requested fields of the GraphQL type FindGroupsResultType.
+type FindGroupsForSceneEditorFindGroupsFindGroupsResultType struct {
+	Groups []*FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup `json:"groups"`
+}
+
+// GetGroups returns FindGroupsForSceneEditorFindGroupsFindGroupsResultType.Groups, and is useful for accessing the field via an interface.
+func (v *FindGroupsForSceneEditorFindGroupsFindGroupsResultType) GetGroups() []*FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup {
+	return v.Groups
+}
+
+// FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup includes the requested fields of the GraphQL type Group.
+type FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetId returns FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup.Id, and is useful for accessing the field via an interface.
+func (v *FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup) GetId() string {
+	return v.Id
+}
+
+// GetName returns FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup.Name, and is useful for accessing the field via an interface.
+func (v *FindGroupsForSceneEditorFindGroupsFindGroupsResultTypeGroupsGroup) GetName() string {
+	return v.Name
+}
+
+// FindGroupsForSceneEditorResponse is returned by FindGroupsForSceneEditor on success.
+type FindGroupsForSceneEditorResponse struct {
+	// A function which queries Group objects
+	FindGroups *FindGroupsForSceneEditorFindGroupsFindGroupsResultType `json:"findGroups"`
+}
+
+// GetFindGroups returns FindGroupsForSceneEditorResponse.FindGroups, and is useful for accessing the field via an interface.
+func (v *FindGroupsForSceneEditorResponse) GetFindGroups() *FindGroupsForSceneEditorFindGroupsFindGroupsResultType {
+	return v.FindGroups
+}
+
 // FindPerformerByNameFindPerformersFindPerformersResultType includes the requested fields of the GraphQL type FindPerformersResultType.
 type FindPerformerByNameFindPerformersFindPerformersResultType struct {
 	Performers []*FindPerformerByNameFindPerformersFindPerformersResultTypePerformersPerformer `json:"performers"`
@@ -780,6 +885,44 @@ func (v *FindSavedSceneFiltersResponse) GetFindSavedFilters() []*FindSavedSceneF
 	return v.FindSavedFilters
 }
 
+// FindSceneActivityFindScene includes the requested fields of the GraphQL type Scene.
+type FindSceneActivityFindScene struct {
+	// Times a scene was played
+	Play_history []time.Time `json:"play_history"`
+	// Times the o counter was incremented
+	O_history []time.Time `json:"o_history"`
+	// The total time a scene has spent playing
+	Play_duration *float64 `json:"play_duration"`
+	// The time index a scene was left at
+	Resume_time *float64 `json:"resume_time"`
+	// The last time play count was updated
+	Last_played_at *time.Time `json:"last_played_at"`
+}
+
+// GetPlay_history returns FindSceneActivityFindScene.Play_history, and is useful for accessing the field via an interface.
+func (v *FindSceneActivityFindScene) GetPlay_history() []time.Time { return v.Play_history }
+
+// GetO_history returns FindSceneActivityFindScene.O_history, and is useful for accessing the field via an interface.
+func (v *FindSceneActivityFindScene) GetO_history() []time.Time { return v.O_history }
+
+// GetPlay_duration returns FindSceneActivityFindScene.Play_duration, and is useful for accessing the field via an interface.
+func (v *FindSceneActivityFindScene) GetPlay_duration() *float64 { return v.Play_duration }
+
+// GetResume_time returns FindSceneActivityFindScene.Resume_time, and is useful for accessing the field via an interface.
+func (v *FindSceneActivityFindScene) GetResume_time() *float64 { return v.Resume_time }
+
+// GetLast_played_at returns FindSceneActivityFindScene.Last_played_at, and is useful for accessing the field via an interface.
+func (v *FindSceneActivityFindScene) GetLast_played_at() *time.Time { return v.Last_played_at }
+
+// FindSceneActivityResponse is returned by FindSceneActivity on success.
+type FindSceneActivityResponse struct {
+	// Find a scene by ID or Checksum
+	FindScene *FindSceneActivityFindScene `json:"findScene"`
+}
+
+// GetFindScene returns FindSceneActivityResponse.FindScene, and is useful for accessing the field via an interface.
+func (v *FindSceneActivityResponse) GetFindScene() *FindSceneActivityFindScene { return v.FindScene }
+
 // FindSceneIdsByFilterFindScenesFindScenesResultType includes the requested fields of the GraphQL type FindScenesResultType.
 type FindSceneIdsByFilterFindScenesFindScenesResultType struct {
 	Count  int                                                              `json:"count"`
@@ -853,6 +996,11 @@ func (v *FindSceneMarkersFindSceneMarkersFindSceneMarkersResultTypeScene_markers
 	return v.SceneMarkerParts.Primary_tag
 }
 
+// GetTags returns FindSceneMarkersFindSceneMarkersFindSceneMarkersResultTypeScene_markersSceneMarker.Tags, and is useful for accessing the field via an interface.
+func (v *FindSceneMarkersFindSceneMarkersFindSceneMarkersResultTypeScene_markersSceneMarker) GetTags() []*SceneMarkerPartsTagsTag {
+	return v.SceneMarkerParts.Tags
+}
+
 func (v *FindSceneMarkersFindSceneMarkersFindSceneMarkersResultTypeScene_markersSceneMarker) UnmarshalJSON(b []byte) error {
 
 	if string(b) == "null" {
@@ -888,6 +1036,8 @@ type __premarshalFindSceneMarkersFindSceneMarkersFindSceneMarkersResultTypeScene
 	Title string `json:"title"`
 
 	Primary_tag *SceneMarkerPartsPrimary_tagTag `json:"primary_tag"`
+
+	Tags []*SceneMarkerPartsTagsTag `json:"tags"`
 }
 
 func (v *FindSceneMarkersFindSceneMarkersFindSceneMarkersResultTypeScene_markersSceneMarker) MarshalJSON() ([]byte, error) {
@@ -906,6 +1056,7 @@ func (v *FindSceneMarkersFindSceneMarkersFindSceneMarkersResultTypeScene_markers
 	retval.End_seconds = v.SceneMarkerParts.End_seconds
 	retval.Title = v.SceneMarkerParts.Title
 	retval.Primary_tag = v.SceneMarkerParts.Primary_tag
+	retval.Tags = v.SceneMarkerParts.Tags
 	return &retval, nil
 }
 
@@ -918,6 +1069,57 @@ type FindSceneMarkersResponse struct {
 // GetFindSceneMarkers returns FindSceneMarkersResponse.FindSceneMarkers, and is useful for accessing the field via an interface.
 func (v *FindSceneMarkersResponse) GetFindSceneMarkers() *FindSceneMarkersFindSceneMarkersFindSceneMarkersResultType {
 	return v.FindSceneMarkers
+}
+
+// FindSceneStashBoxesVRConfigurationConfigResult includes the requested fields of the GraphQL type ConfigResult.
+// The GraphQL type's documentation follows.
+//
+// All configuration settings
+type FindSceneStashBoxesVRConfigurationConfigResult struct {
+	General *FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResult `json:"general"`
+}
+
+// GetGeneral returns FindSceneStashBoxesVRConfigurationConfigResult.General, and is useful for accessing the field via an interface.
+func (v *FindSceneStashBoxesVRConfigurationConfigResult) GetGeneral() *FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResult {
+	return v.General
+}
+
+// FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResult includes the requested fields of the GraphQL type ConfigGeneralResult.
+type FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResult struct {
+	// Stash-box instances used for tagging
+	StashBoxes []*FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox `json:"stashBoxes"`
+}
+
+// GetStashBoxes returns FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResult.StashBoxes, and is useful for accessing the field via an interface.
+func (v *FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResult) GetStashBoxes() []*FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox {
+	return v.StashBoxes
+}
+
+// FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox includes the requested fields of the GraphQL type StashBox.
+type FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox struct {
+	Name     string `json:"name"`
+	Endpoint string `json:"endpoint"`
+}
+
+// GetName returns FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox.Name, and is useful for accessing the field via an interface.
+func (v *FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox) GetName() string {
+	return v.Name
+}
+
+// GetEndpoint returns FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox.Endpoint, and is useful for accessing the field via an interface.
+func (v *FindSceneStashBoxesVRConfigurationConfigResultGeneralConfigGeneralResultStashBoxesStashBox) GetEndpoint() string {
+	return v.Endpoint
+}
+
+// FindSceneStashBoxesVRResponse is returned by FindSceneStashBoxesVR on success.
+type FindSceneStashBoxesVRResponse struct {
+	// Returns the current, complete configuration
+	Configuration *FindSceneStashBoxesVRConfigurationConfigResult `json:"configuration"`
+}
+
+// GetConfiguration returns FindSceneStashBoxesVRResponse.Configuration, and is useful for accessing the field via an interface.
+func (v *FindSceneStashBoxesVRResponse) GetConfiguration() *FindSceneStashBoxesVRConfigurationConfigResult {
+	return v.Configuration
 }
 
 // FindSceneTagsFindScene includes the requested fields of the GraphQL type Scene.
@@ -1004,6 +1206,21 @@ func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetTitle() *string
 	return v.SceneParts.Title
 }
 
+// GetCode returns FindScenesFindScenesFindScenesResultTypeScenesScene.Code, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetCode() *string {
+	return v.SceneParts.Code
+}
+
+// GetDetails returns FindScenesFindScenesFindScenesResultTypeScenesScene.Details, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetDetails() *string {
+	return v.SceneParts.Details
+}
+
+// GetDirector returns FindScenesFindScenesFindScenesResultTypeScenesScene.Director, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetDirector() *string {
+	return v.SceneParts.Director
+}
+
 // GetRating100 returns FindScenesFindScenesFindScenesResultTypeScenesScene.Rating100, and is useful for accessing the field via an interface.
 func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetRating100() *int {
 	return v.SceneParts.Rating100
@@ -1014,9 +1231,24 @@ func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetCreated_at() ti
 	return v.SceneParts.Created_at
 }
 
+// GetUpdated_at returns FindScenesFindScenesFindScenesResultTypeScenesScene.Updated_at, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetUpdated_at() time.Time {
+	return v.SceneParts.Updated_at
+}
+
 // GetDate returns FindScenesFindScenesFindScenesResultTypeScenesScene.Date, and is useful for accessing the field via an interface.
 func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetDate() *string {
 	return v.SceneParts.Date
+}
+
+// GetUrls returns FindScenesFindScenesFindScenesResultTypeScenesScene.Urls, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetUrls() []string {
+	return v.SceneParts.Urls
+}
+
+// GetCustom_fields returns FindScenesFindScenesFindScenesResultTypeScenesScene.Custom_fields, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetCustom_fields() map[string]interface{} {
+	return v.SceneParts.Custom_fields
 }
 
 // GetFiles returns FindScenesFindScenesFindScenesResultTypeScenesScene.Files, and is useful for accessing the field via an interface.
@@ -1042,6 +1274,16 @@ func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetPerformers() []
 // GetGroups returns FindScenesFindScenesFindScenesResultTypeScenesScene.Groups, and is useful for accessing the field via an interface.
 func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetGroups() []*ScenePartsGroupsSceneGroup {
 	return v.SceneParts.Groups
+}
+
+// GetGalleries returns FindScenesFindScenesFindScenesResultTypeScenesScene.Galleries, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetGalleries() []*ScenePartsGalleriesGallery {
+	return v.SceneParts.Galleries
+}
+
+// GetStash_ids returns FindScenesFindScenesFindScenesResultTypeScenesScene.Stash_ids, and is useful for accessing the field via an interface.
+func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) GetStash_ids() []*ScenePartsStash_idsStashID {
+	return v.SceneParts.Stash_ids
 }
 
 // GetPlay_count returns FindScenesFindScenesFindScenesResultTypeScenesScene.Play_count, and is useful for accessing the field via an interface.
@@ -1114,11 +1356,23 @@ type __premarshalFindScenesFindScenesFindScenesResultTypeScenesScene struct {
 
 	Title *string `json:"title"`
 
+	Code *string `json:"code"`
+
+	Details *string `json:"details"`
+
+	Director *string `json:"director"`
+
 	Rating100 *int `json:"rating100"`
 
 	Created_at time.Time `json:"created_at"`
 
+	Updated_at time.Time `json:"updated_at"`
+
 	Date *string `json:"date"`
+
+	Urls []string `json:"urls"`
+
+	Custom_fields map[string]interface{} `json:"custom_fields"`
 
 	Files []*ScenePartsFilesVideoFile `json:"files"`
 
@@ -1129,6 +1383,10 @@ type __premarshalFindScenesFindScenesFindScenesResultTypeScenesScene struct {
 	Performers []*ScenePartsPerformersPerformer `json:"performers"`
 
 	Groups []*ScenePartsGroupsSceneGroup `json:"groups"`
+
+	Galleries []*ScenePartsGalleriesGallery `json:"galleries"`
+
+	Stash_ids []*ScenePartsStash_idsStashID `json:"stash_ids"`
 
 	Play_count *int `json:"play_count"`
 
@@ -1160,14 +1418,22 @@ func (v *FindScenesFindScenesFindScenesResultTypeScenesScene) __premarshalJSON()
 
 	retval.Id = v.SceneParts.Id
 	retval.Title = v.SceneParts.Title
+	retval.Code = v.SceneParts.Code
+	retval.Details = v.SceneParts.Details
+	retval.Director = v.SceneParts.Director
 	retval.Rating100 = v.SceneParts.Rating100
 	retval.Created_at = v.SceneParts.Created_at
+	retval.Updated_at = v.SceneParts.Updated_at
 	retval.Date = v.SceneParts.Date
+	retval.Urls = v.SceneParts.Urls
+	retval.Custom_fields = v.SceneParts.Custom_fields
 	retval.Files = v.SceneParts.Files
 	retval.Studio = v.SceneParts.Studio
 	retval.Scene_markers = v.SceneParts.Scene_markers
 	retval.Performers = v.SceneParts.Performers
 	retval.Groups = v.SceneParts.Groups
+	retval.Galleries = v.SceneParts.Galleries
+	retval.Stash_ids = v.SceneParts.Stash_ids
 	retval.Play_count = v.SceneParts.Play_count
 	retval.O_counter = v.SceneParts.O_counter
 	retval.Organized = v.SceneParts.Organized
@@ -1810,6 +2076,136 @@ var AllGenderEnum = []GenderEnum{
 	GenderEnumTransgenderFemale,
 	GenderEnumTransgenderMale,
 }
+
+type GenerateMetadataInput struct {
+	ClipPreviews *bool `json:"clipPreviews"`
+	Covers       *bool `json:"covers"`
+	// Generate transcodes even if not required
+	ForceTranscodes *bool `json:"forceTranscodes"`
+	// gallery ids to generate for
+	GalleryIDs []string `json:"galleryIDs"`
+	// image ids to generate for
+	ImageIDs []string `json:"imageIDs"`
+	// Generate image phashes during scan
+	ImagePhashes              *bool `json:"imagePhashes"`
+	ImagePreviews             *bool `json:"imagePreviews"`
+	ImageThumbnails           *bool `json:"imageThumbnails"`
+	InteractiveHeatmapsSpeeds *bool `json:"interactiveHeatmapsSpeeds"`
+	// marker ids to generate for
+	MarkerIDs           []string `json:"markerIDs"`
+	MarkerImagePreviews *bool    `json:"markerImagePreviews"`
+	MarkerScreenshots   *bool    `json:"markerScreenshots"`
+	Markers             *bool    `json:"markers"`
+	// overwrite existing media
+	Overwrite *bool `json:"overwrite"`
+	// paths to run generate on, in addition to the other ID lists
+	Paths []string `json:"paths"`
+	// Generate video phashes during scan
+	Phashes        *bool                        `json:"phashes"`
+	PreviewOptions *GeneratePreviewOptionsInput `json:"previewOptions,omitempty"`
+	Previews       *bool                        `json:"previews"`
+	// scene ids to generate for
+	SceneIDs   []string `json:"sceneIDs"`
+	Sprites    *bool    `json:"sprites"`
+	Transcodes *bool    `json:"transcodes"`
+}
+
+// GetClipPreviews returns GenerateMetadataInput.ClipPreviews, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetClipPreviews() *bool { return v.ClipPreviews }
+
+// GetCovers returns GenerateMetadataInput.Covers, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetCovers() *bool { return v.Covers }
+
+// GetForceTranscodes returns GenerateMetadataInput.ForceTranscodes, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetForceTranscodes() *bool { return v.ForceTranscodes }
+
+// GetGalleryIDs returns GenerateMetadataInput.GalleryIDs, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetGalleryIDs() []string { return v.GalleryIDs }
+
+// GetImageIDs returns GenerateMetadataInput.ImageIDs, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetImageIDs() []string { return v.ImageIDs }
+
+// GetImagePhashes returns GenerateMetadataInput.ImagePhashes, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetImagePhashes() *bool { return v.ImagePhashes }
+
+// GetImagePreviews returns GenerateMetadataInput.ImagePreviews, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetImagePreviews() *bool { return v.ImagePreviews }
+
+// GetImageThumbnails returns GenerateMetadataInput.ImageThumbnails, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetImageThumbnails() *bool { return v.ImageThumbnails }
+
+// GetInteractiveHeatmapsSpeeds returns GenerateMetadataInput.InteractiveHeatmapsSpeeds, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetInteractiveHeatmapsSpeeds() *bool {
+	return v.InteractiveHeatmapsSpeeds
+}
+
+// GetMarkerIDs returns GenerateMetadataInput.MarkerIDs, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetMarkerIDs() []string { return v.MarkerIDs }
+
+// GetMarkerImagePreviews returns GenerateMetadataInput.MarkerImagePreviews, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetMarkerImagePreviews() *bool { return v.MarkerImagePreviews }
+
+// GetMarkerScreenshots returns GenerateMetadataInput.MarkerScreenshots, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetMarkerScreenshots() *bool { return v.MarkerScreenshots }
+
+// GetMarkers returns GenerateMetadataInput.Markers, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetMarkers() *bool { return v.Markers }
+
+// GetOverwrite returns GenerateMetadataInput.Overwrite, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetOverwrite() *bool { return v.Overwrite }
+
+// GetPaths returns GenerateMetadataInput.Paths, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetPaths() []string { return v.Paths }
+
+// GetPhashes returns GenerateMetadataInput.Phashes, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetPhashes() *bool { return v.Phashes }
+
+// GetPreviewOptions returns GenerateMetadataInput.PreviewOptions, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetPreviewOptions() *GeneratePreviewOptionsInput {
+	return v.PreviewOptions
+}
+
+// GetPreviews returns GenerateMetadataInput.Previews, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetPreviews() *bool { return v.Previews }
+
+// GetSceneIDs returns GenerateMetadataInput.SceneIDs, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetSceneIDs() []string { return v.SceneIDs }
+
+// GetSprites returns GenerateMetadataInput.Sprites, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetSprites() *bool { return v.Sprites }
+
+// GetTranscodes returns GenerateMetadataInput.Transcodes, and is useful for accessing the field via an interface.
+func (v *GenerateMetadataInput) GetTranscodes() *bool { return v.Transcodes }
+
+type GeneratePreviewOptionsInput struct {
+	// Duration of end of video to exclude when generating previews
+	PreviewExcludeEnd *string `json:"previewExcludeEnd"`
+	// Duration of start of video to exclude when generating previews
+	PreviewExcludeStart *string `json:"previewExcludeStart"`
+	// Preset when generating preview
+	PreviewPreset *PreviewPreset `json:"previewPreset"`
+	// Preview segment duration, in seconds
+	PreviewSegmentDuration *float64 `json:"previewSegmentDuration"`
+	// Number of segments in a preview file
+	PreviewSegments *int `json:"previewSegments"`
+}
+
+// GetPreviewExcludeEnd returns GeneratePreviewOptionsInput.PreviewExcludeEnd, and is useful for accessing the field via an interface.
+func (v *GeneratePreviewOptionsInput) GetPreviewExcludeEnd() *string { return v.PreviewExcludeEnd }
+
+// GetPreviewExcludeStart returns GeneratePreviewOptionsInput.PreviewExcludeStart, and is useful for accessing the field via an interface.
+func (v *GeneratePreviewOptionsInput) GetPreviewExcludeStart() *string { return v.PreviewExcludeStart }
+
+// GetPreviewPreset returns GeneratePreviewOptionsInput.PreviewPreset, and is useful for accessing the field via an interface.
+func (v *GeneratePreviewOptionsInput) GetPreviewPreset() *PreviewPreset { return v.PreviewPreset }
+
+// GetPreviewSegmentDuration returns GeneratePreviewOptionsInput.PreviewSegmentDuration, and is useful for accessing the field via an interface.
+func (v *GeneratePreviewOptionsInput) GetPreviewSegmentDuration() *float64 {
+	return v.PreviewSegmentDuration
+}
+
+// GetPreviewSegments returns GeneratePreviewOptionsInput.PreviewSegments, and is useful for accessing the field via an interface.
+func (v *GeneratePreviewOptionsInput) GetPreviewSegments() *int { return v.PreviewSegments }
 
 type GroupFilterType struct {
 	AND *GroupFilterType `json:"AND,omitempty"`
@@ -2605,6 +3001,35 @@ func (v *PhashDistanceCriterionInput) GetModifier() CriterionModifier { return v
 // GetValue returns PhashDistanceCriterionInput.Value, and is useful for accessing the field via an interface.
 func (v *PhashDistanceCriterionInput) GetValue() string { return v.Value }
 
+type PreviewPreset string
+
+const (
+	// X264_FAST
+	PreviewPresetFast PreviewPreset = "fast"
+	// X264_MEDIUM
+	PreviewPresetMedium PreviewPreset = "medium"
+	// X264_SLOW
+	PreviewPresetSlow PreviewPreset = "slow"
+	// X264_SLOWER
+	PreviewPresetSlower PreviewPreset = "slower"
+	// X264_ULTRAFAST
+	PreviewPresetUltrafast PreviewPreset = "ultrafast"
+	// X264_VERYFAST
+	PreviewPresetVeryfast PreviewPreset = "veryfast"
+	// X264_VERYSLOW
+	PreviewPresetVeryslow PreviewPreset = "veryslow"
+)
+
+var AllPreviewPreset = []PreviewPreset{
+	PreviewPresetFast,
+	PreviewPresetMedium,
+	PreviewPresetSlow,
+	PreviewPresetSlower,
+	PreviewPresetUltrafast,
+	PreviewPresetVeryfast,
+	PreviewPresetVeryslow,
+}
+
 type ResolutionCriterionInput struct {
 	Modifier CriterionModifier `json:"modifier"`
 	Value    ResolutionEnum    `json:"value"`
@@ -2709,6 +3134,95 @@ func (v *SavedFilterPartsFind_filterSavedFindFilterType) GetDirection() *SortDir
 	return v.Direction
 }
 
+// Filter options for meta data scannning
+type ScanMetaDataFilterInput struct {
+	// If set, files with a modification time before this time point are ignored by the scan
+	MinModTime *time.Time `json:"minModTime"`
+}
+
+// GetMinModTime returns ScanMetaDataFilterInput.MinModTime, and is useful for accessing the field via an interface.
+func (v *ScanMetaDataFilterInput) GetMinModTime() *time.Time { return v.MinModTime }
+
+type ScanMetadataInput struct {
+	// Filter options for the scan
+	Filter *ScanMetaDataFilterInput `json:"filter,omitempty"`
+	Paths  []string                 `json:"paths"`
+	// Forces a rescan on files even if modification time is unchanged
+	Rescan *bool `json:"rescan"`
+	// Generate image clip previews during scan
+	ScanGenerateClipPreviews *bool `json:"scanGenerateClipPreviews"`
+	// Generate covers during scan
+	ScanGenerateCovers *bool `json:"scanGenerateCovers"`
+	// Generate image phashes during scan
+	ScanGenerateImagePhashes *bool `json:"scanGenerateImagePhashes"`
+	// Generate image previews during scan
+	ScanGenerateImagePreviews *bool `json:"scanGenerateImagePreviews"`
+	// Generate video phashes during scan
+	ScanGeneratePhashes *bool `json:"scanGeneratePhashes"`
+	// Generate previews during scan
+	ScanGeneratePreviews *bool `json:"scanGeneratePreviews"`
+	// Generate sprites during scan
+	ScanGenerateSprites *bool `json:"scanGenerateSprites"`
+	// Generate image thumbnails during scan
+	ScanGenerateThumbnails *bool `json:"scanGenerateThumbnails"`
+}
+
+// GetFilter returns ScanMetadataInput.Filter, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetFilter() *ScanMetaDataFilterInput { return v.Filter }
+
+// GetPaths returns ScanMetadataInput.Paths, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetPaths() []string { return v.Paths }
+
+// GetRescan returns ScanMetadataInput.Rescan, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetRescan() *bool { return v.Rescan }
+
+// GetScanGenerateClipPreviews returns ScanMetadataInput.ScanGenerateClipPreviews, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGenerateClipPreviews() *bool { return v.ScanGenerateClipPreviews }
+
+// GetScanGenerateCovers returns ScanMetadataInput.ScanGenerateCovers, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGenerateCovers() *bool { return v.ScanGenerateCovers }
+
+// GetScanGenerateImagePhashes returns ScanMetadataInput.ScanGenerateImagePhashes, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGenerateImagePhashes() *bool { return v.ScanGenerateImagePhashes }
+
+// GetScanGenerateImagePreviews returns ScanMetadataInput.ScanGenerateImagePreviews, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGenerateImagePreviews() *bool { return v.ScanGenerateImagePreviews }
+
+// GetScanGeneratePhashes returns ScanMetadataInput.ScanGeneratePhashes, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGeneratePhashes() *bool { return v.ScanGeneratePhashes }
+
+// GetScanGeneratePreviews returns ScanMetadataInput.ScanGeneratePreviews, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGeneratePreviews() *bool { return v.ScanGeneratePreviews }
+
+// GetScanGenerateSprites returns ScanMetadataInput.ScanGenerateSprites, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGenerateSprites() *bool { return v.ScanGenerateSprites }
+
+// GetScanGenerateThumbnails returns ScanMetadataInput.ScanGenerateThumbnails, and is useful for accessing the field via an interface.
+func (v *ScanMetadataInput) GetScanGenerateThumbnails() *bool { return v.ScanGenerateThumbnails }
+
+// SceneAddOVRResponse is returned by SceneAddOVR on success.
+type SceneAddOVRResponse struct {
+	// Increments the o-counter for a scene. Uses the current time if none provided.
+	SceneAddO *SceneAddOVRSceneAddOHistoryMutationResult `json:"sceneAddO"`
+}
+
+// GetSceneAddO returns SceneAddOVRResponse.SceneAddO, and is useful for accessing the field via an interface.
+func (v *SceneAddOVRResponse) GetSceneAddO() *SceneAddOVRSceneAddOHistoryMutationResult {
+	return v.SceneAddO
+}
+
+// SceneAddOVRSceneAddOHistoryMutationResult includes the requested fields of the GraphQL type HistoryMutationResult.
+type SceneAddOVRSceneAddOHistoryMutationResult struct {
+	Count   int         `json:"count"`
+	History []time.Time `json:"history"`
+}
+
+// GetCount returns SceneAddOVRSceneAddOHistoryMutationResult.Count, and is useful for accessing the field via an interface.
+func (v *SceneAddOVRSceneAddOHistoryMutationResult) GetCount() int { return v.Count }
+
+// GetHistory returns SceneAddOVRSceneAddOHistoryMutationResult.History, and is useful for accessing the field via an interface.
+func (v *SceneAddOVRSceneAddOHistoryMutationResult) GetHistory() []time.Time { return v.History }
+
 // SceneAddPlayDurationSecondsResponse is returned by SceneAddPlayDurationSeconds on success.
 type SceneAddPlayDurationSecondsResponse struct {
 	// Sets the resume time point (if provided) and adds the provided duration to the scene's play duration
@@ -2717,6 +3231,156 @@ type SceneAddPlayDurationSecondsResponse struct {
 
 // GetSceneSaveActivity returns SceneAddPlayDurationSecondsResponse.SceneSaveActivity, and is useful for accessing the field via an interface.
 func (v *SceneAddPlayDurationSecondsResponse) GetSceneSaveActivity() bool { return v.SceneSaveActivity }
+
+// SceneAddPlayVRResponse is returned by SceneAddPlayVR on success.
+type SceneAddPlayVRResponse struct {
+	// Increments the play count for the scene. Uses the current time if none provided.
+	SceneAddPlay *SceneAddPlayVRSceneAddPlayHistoryMutationResult `json:"sceneAddPlay"`
+}
+
+// GetSceneAddPlay returns SceneAddPlayVRResponse.SceneAddPlay, and is useful for accessing the field via an interface.
+func (v *SceneAddPlayVRResponse) GetSceneAddPlay() *SceneAddPlayVRSceneAddPlayHistoryMutationResult {
+	return v.SceneAddPlay
+}
+
+// SceneAddPlayVRSceneAddPlayHistoryMutationResult includes the requested fields of the GraphQL type HistoryMutationResult.
+type SceneAddPlayVRSceneAddPlayHistoryMutationResult struct {
+	Count   int         `json:"count"`
+	History []time.Time `json:"history"`
+}
+
+// GetCount returns SceneAddPlayVRSceneAddPlayHistoryMutationResult.Count, and is useful for accessing the field via an interface.
+func (v *SceneAddPlayVRSceneAddPlayHistoryMutationResult) GetCount() int { return v.Count }
+
+// GetHistory returns SceneAddPlayVRSceneAddPlayHistoryMutationResult.History, and is useful for accessing the field via an interface.
+func (v *SceneAddPlayVRSceneAddPlayHistoryMutationResult) GetHistory() []time.Time { return v.History }
+
+// SceneAssignFileVRResponse is returned by SceneAssignFileVR on success.
+type SceneAssignFileVRResponse struct {
+	SceneAssignFile bool `json:"sceneAssignFile"`
+}
+
+// GetSceneAssignFile returns SceneAssignFileVRResponse.SceneAssignFile, and is useful for accessing the field via an interface.
+func (v *SceneAssignFileVRResponse) GetSceneAssignFile() bool { return v.SceneAssignFile }
+
+// SceneClearStudioVRResponse is returned by SceneClearStudioVR on success.
+type SceneClearStudioVRResponse struct {
+	SceneUpdate *SceneClearStudioVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneClearStudioVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneClearStudioVRResponse) GetSceneUpdate() *SceneClearStudioVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneClearStudioVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneClearStudioVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneClearStudioVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneClearStudioVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneCreateFromFileVRResponse is returned by SceneCreateFromFileVR on success.
+type SceneCreateFromFileVRResponse struct {
+	SceneCreate *SceneCreateFromFileVRSceneCreateScene `json:"sceneCreate"`
+}
+
+// GetSceneCreate returns SceneCreateFromFileVRResponse.SceneCreate, and is useful for accessing the field via an interface.
+func (v *SceneCreateFromFileVRResponse) GetSceneCreate() *SceneCreateFromFileVRSceneCreateScene {
+	return v.SceneCreate
+}
+
+// SceneCreateFromFileVRSceneCreateScene includes the requested fields of the GraphQL type Scene.
+type SceneCreateFromFileVRSceneCreateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneCreateFromFileVRSceneCreateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneCreateFromFileVRSceneCreateScene) GetId() string { return v.Id }
+
+type SceneCreateInput struct {
+	Code *string `json:"code"`
+	// This should be a URL or a base64 encoded data URL
+	Cover_image   *string                 `json:"cover_image"`
+	Custom_fields *map[string]interface{} `json:"custom_fields"`
+	Date          *string                 `json:"date"`
+	Details       *string                 `json:"details"`
+	Director      *string                 `json:"director"`
+	// The first id will be assigned as primary.
+	// Files will be reassigned from existing scenes if applicable.
+	// Files must not already be primary for another scene.
+	File_ids      []string           `json:"file_ids"`
+	Gallery_ids   []string           `json:"gallery_ids"`
+	Groups        []*SceneGroupInput `json:"groups,omitempty"`
+	Movies        []*SceneMovieInput `json:"movies,omitempty"`
+	Organized     *bool              `json:"organized"`
+	Performer_ids []string           `json:"performer_ids"`
+	Rating100     *int               `json:"rating100"`
+	Stash_ids     []*StashIDInput    `json:"stash_ids,omitempty"`
+	Studio_id     *string            `json:"studio_id"`
+	Tag_ids       []string           `json:"tag_ids"`
+	Title         *string            `json:"title"`
+	Url           *string            `json:"url"`
+	Urls          []string           `json:"urls"`
+}
+
+// GetCode returns SceneCreateInput.Code, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetCode() *string { return v.Code }
+
+// GetCover_image returns SceneCreateInput.Cover_image, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetCover_image() *string { return v.Cover_image }
+
+// GetCustom_fields returns SceneCreateInput.Custom_fields, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetCustom_fields() *map[string]interface{} { return v.Custom_fields }
+
+// GetDate returns SceneCreateInput.Date, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetDate() *string { return v.Date }
+
+// GetDetails returns SceneCreateInput.Details, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetDetails() *string { return v.Details }
+
+// GetDirector returns SceneCreateInput.Director, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetDirector() *string { return v.Director }
+
+// GetFile_ids returns SceneCreateInput.File_ids, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetFile_ids() []string { return v.File_ids }
+
+// GetGallery_ids returns SceneCreateInput.Gallery_ids, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetGallery_ids() []string { return v.Gallery_ids }
+
+// GetGroups returns SceneCreateInput.Groups, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetGroups() []*SceneGroupInput { return v.Groups }
+
+// GetMovies returns SceneCreateInput.Movies, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetMovies() []*SceneMovieInput { return v.Movies }
+
+// GetOrganized returns SceneCreateInput.Organized, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetOrganized() *bool { return v.Organized }
+
+// GetPerformer_ids returns SceneCreateInput.Performer_ids, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetPerformer_ids() []string { return v.Performer_ids }
+
+// GetRating100 returns SceneCreateInput.Rating100, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetRating100() *int { return v.Rating100 }
+
+// GetStash_ids returns SceneCreateInput.Stash_ids, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetStash_ids() []*StashIDInput { return v.Stash_ids }
+
+// GetStudio_id returns SceneCreateInput.Studio_id, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetStudio_id() *string { return v.Studio_id }
+
+// GetTag_ids returns SceneCreateInput.Tag_ids, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetTag_ids() []string { return v.Tag_ids }
+
+// GetTitle returns SceneCreateInput.Title, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetTitle() *string { return v.Title }
+
+// GetUrl returns SceneCreateInput.Url, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetUrl() *string { return v.Url }
+
+// GetUrls returns SceneCreateInput.Urls, and is useful for accessing the field via an interface.
+func (v *SceneCreateInput) GetUrls() []string { return v.Urls }
 
 // SceneDecrementOResponse is returned by SceneDecrementO on success.
 type SceneDecrementOResponse struct {
@@ -2755,6 +3419,62 @@ type SceneDecrementPlayCountSceneDeletePlayHistoryMutationResult struct {
 
 // GetCount returns SceneDecrementPlayCountSceneDeletePlayHistoryMutationResult.Count, and is useful for accessing the field via an interface.
 func (v *SceneDecrementPlayCountSceneDeletePlayHistoryMutationResult) GetCount() int { return v.Count }
+
+// SceneDeleteFilesVRResponse is returned by SceneDeleteFilesVR on success.
+type SceneDeleteFilesVRResponse struct {
+	DeleteFiles bool `json:"deleteFiles"`
+}
+
+// GetDeleteFiles returns SceneDeleteFilesVRResponse.DeleteFiles, and is useful for accessing the field via an interface.
+func (v *SceneDeleteFilesVRResponse) GetDeleteFiles() bool { return v.DeleteFiles }
+
+// SceneDeleteOVRResponse is returned by SceneDeleteOVR on success.
+type SceneDeleteOVRResponse struct {
+	// Decrements the o-counter for a scene, removing the last recorded time if specific time not provided. Returns the new value
+	SceneDeleteO *SceneDeleteOVRSceneDeleteOHistoryMutationResult `json:"sceneDeleteO"`
+}
+
+// GetSceneDeleteO returns SceneDeleteOVRResponse.SceneDeleteO, and is useful for accessing the field via an interface.
+func (v *SceneDeleteOVRResponse) GetSceneDeleteO() *SceneDeleteOVRSceneDeleteOHistoryMutationResult {
+	return v.SceneDeleteO
+}
+
+// SceneDeleteOVRSceneDeleteOHistoryMutationResult includes the requested fields of the GraphQL type HistoryMutationResult.
+type SceneDeleteOVRSceneDeleteOHistoryMutationResult struct {
+	Count   int         `json:"count"`
+	History []time.Time `json:"history"`
+}
+
+// GetCount returns SceneDeleteOVRSceneDeleteOHistoryMutationResult.Count, and is useful for accessing the field via an interface.
+func (v *SceneDeleteOVRSceneDeleteOHistoryMutationResult) GetCount() int { return v.Count }
+
+// GetHistory returns SceneDeleteOVRSceneDeleteOHistoryMutationResult.History, and is useful for accessing the field via an interface.
+func (v *SceneDeleteOVRSceneDeleteOHistoryMutationResult) GetHistory() []time.Time { return v.History }
+
+// SceneDeletePlayVRResponse is returned by SceneDeletePlayVR on success.
+type SceneDeletePlayVRResponse struct {
+	// Decrements the play count for the scene, removing the specific times or the last recorded time if not provided.
+	SceneDeletePlay *SceneDeletePlayVRSceneDeletePlayHistoryMutationResult `json:"sceneDeletePlay"`
+}
+
+// GetSceneDeletePlay returns SceneDeletePlayVRResponse.SceneDeletePlay, and is useful for accessing the field via an interface.
+func (v *SceneDeletePlayVRResponse) GetSceneDeletePlay() *SceneDeletePlayVRSceneDeletePlayHistoryMutationResult {
+	return v.SceneDeletePlay
+}
+
+// SceneDeletePlayVRSceneDeletePlayHistoryMutationResult includes the requested fields of the GraphQL type HistoryMutationResult.
+type SceneDeletePlayVRSceneDeletePlayHistoryMutationResult struct {
+	Count   int         `json:"count"`
+	History []time.Time `json:"history"`
+}
+
+// GetCount returns SceneDeletePlayVRSceneDeletePlayHistoryMutationResult.Count, and is useful for accessing the field via an interface.
+func (v *SceneDeletePlayVRSceneDeletePlayHistoryMutationResult) GetCount() int { return v.Count }
+
+// GetHistory returns SceneDeletePlayVRSceneDeletePlayHistoryMutationResult.History, and is useful for accessing the field via an interface.
+func (v *SceneDeletePlayVRSceneDeletePlayHistoryMutationResult) GetHistory() []time.Time {
+	return v.History
+}
 
 // SceneDestroyResponse is returned by SceneDestroy on success.
 type SceneDestroyResponse struct {
@@ -3066,6 +3786,37 @@ func (v *SceneFilterType) GetUrl() *StringCriterionInput { return v.Url }
 // GetVideo_codec returns SceneFilterType.Video_codec, and is useful for accessing the field via an interface.
 func (v *SceneFilterType) GetVideo_codec() *StringCriterionInput { return v.Video_codec }
 
+// SceneGenerateScreenshotVRResponse is returned by SceneGenerateScreenshotVR on success.
+type SceneGenerateScreenshotVRResponse struct {
+	// Generates screenshot at specified time in seconds. Leave empty to generate default screenshot
+	SceneGenerateScreenshot string `json:"sceneGenerateScreenshot"`
+}
+
+// GetSceneGenerateScreenshot returns SceneGenerateScreenshotVRResponse.SceneGenerateScreenshot, and is useful for accessing the field via an interface.
+func (v *SceneGenerateScreenshotVRResponse) GetSceneGenerateScreenshot() string {
+	return v.SceneGenerateScreenshot
+}
+
+// SceneGenerateVRResponse is returned by SceneGenerateVR on success.
+type SceneGenerateVRResponse struct {
+	// Start generating content. Returns the job ID
+	MetadataGenerate string `json:"metadataGenerate"`
+}
+
+// GetMetadataGenerate returns SceneGenerateVRResponse.MetadataGenerate, and is useful for accessing the field via an interface.
+func (v *SceneGenerateVRResponse) GetMetadataGenerate() string { return v.MetadataGenerate }
+
+type SceneGroupInput struct {
+	Group_id    string `json:"group_id"`
+	Scene_index *int   `json:"scene_index"`
+}
+
+// GetGroup_id returns SceneGroupInput.Group_id, and is useful for accessing the field via an interface.
+func (v *SceneGroupInput) GetGroup_id() string { return v.Group_id }
+
+// GetScene_index returns SceneGroupInput.Scene_index, and is useful for accessing the field via an interface.
+func (v *SceneGroupInput) GetScene_index() *int { return v.Scene_index }
+
 // SceneIncrementOResponse is returned by SceneIncrementO on success.
 type SceneIncrementOResponse struct {
 	// Increments the o-counter for a scene. Uses the current time if none provided.
@@ -3104,6 +3855,35 @@ type SceneIncrementPlayCountSceneAddPlayHistoryMutationResult struct {
 // GetCount returns SceneIncrementPlayCountSceneAddPlayHistoryMutationResult.Count, and is useful for accessing the field via an interface.
 func (v *SceneIncrementPlayCountSceneAddPlayHistoryMutationResult) GetCount() int { return v.Count }
 
+type SceneMarkerCreateInput struct {
+	// The optional end time of the marker (in seconds). Supports decimals.
+	End_seconds    *float64 `json:"end_seconds"`
+	Primary_tag_id string   `json:"primary_tag_id"`
+	Scene_id       string   `json:"scene_id"`
+	// The required start time of the marker (in seconds). Supports decimals.
+	Seconds float64  `json:"seconds"`
+	Tag_ids []string `json:"tag_ids"`
+	Title   string   `json:"title"`
+}
+
+// GetEnd_seconds returns SceneMarkerCreateInput.End_seconds, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateInput) GetEnd_seconds() *float64 { return v.End_seconds }
+
+// GetPrimary_tag_id returns SceneMarkerCreateInput.Primary_tag_id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateInput) GetPrimary_tag_id() string { return v.Primary_tag_id }
+
+// GetScene_id returns SceneMarkerCreateInput.Scene_id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateInput) GetScene_id() string { return v.Scene_id }
+
+// GetSeconds returns SceneMarkerCreateInput.Seconds, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateInput) GetSeconds() float64 { return v.Seconds }
+
+// GetTag_ids returns SceneMarkerCreateInput.Tag_ids, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateInput) GetTag_ids() []string { return v.Tag_ids }
+
+// GetTitle returns SceneMarkerCreateInput.Title, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateInput) GetTitle() string { return v.Title }
+
 // SceneMarkerCreateResponse is returned by SceneMarkerCreate on success.
 type SceneMarkerCreateResponse struct {
 	SceneMarkerCreate *SceneMarkerCreateSceneMarkerCreateSceneMarker `json:"sceneMarkerCreate"`
@@ -3121,6 +3901,32 @@ type SceneMarkerCreateSceneMarkerCreateSceneMarker struct {
 
 // GetId returns SceneMarkerCreateSceneMarkerCreateSceneMarker.Id, and is useful for accessing the field via an interface.
 func (v *SceneMarkerCreateSceneMarkerCreateSceneMarker) GetId() string { return v.Id }
+
+// SceneMarkerCreateVRResponse is returned by SceneMarkerCreateVR on success.
+type SceneMarkerCreateVRResponse struct {
+	SceneMarkerCreate *SceneMarkerCreateVRSceneMarkerCreateSceneMarker `json:"sceneMarkerCreate"`
+}
+
+// GetSceneMarkerCreate returns SceneMarkerCreateVRResponse.SceneMarkerCreate, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateVRResponse) GetSceneMarkerCreate() *SceneMarkerCreateVRSceneMarkerCreateSceneMarker {
+	return v.SceneMarkerCreate
+}
+
+// SceneMarkerCreateVRSceneMarkerCreateSceneMarker includes the requested fields of the GraphQL type SceneMarker.
+type SceneMarkerCreateVRSceneMarkerCreateSceneMarker struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneMarkerCreateVRSceneMarkerCreateSceneMarker.Id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerCreateVRSceneMarkerCreateSceneMarker) GetId() string { return v.Id }
+
+// SceneMarkerDeleteVRResponse is returned by SceneMarkerDeleteVR on success.
+type SceneMarkerDeleteVRResponse struct {
+	SceneMarkerDestroy bool `json:"sceneMarkerDestroy"`
+}
+
+// GetSceneMarkerDestroy returns SceneMarkerDeleteVRResponse.SceneMarkerDestroy, and is useful for accessing the field via an interface.
+func (v *SceneMarkerDeleteVRResponse) GetSceneMarkerDestroy() bool { return v.SceneMarkerDestroy }
 
 type SceneMarkerFilterType struct {
 	// Filter by creation time
@@ -3193,6 +3999,7 @@ type SceneMarkerParts struct {
 	End_seconds *float64                        `json:"end_seconds"`
 	Title       string                          `json:"title"`
 	Primary_tag *SceneMarkerPartsPrimary_tagTag `json:"primary_tag"`
+	Tags        []*SceneMarkerPartsTagsTag      `json:"tags"`
 }
 
 // GetId returns SceneMarkerParts.Id, and is useful for accessing the field via an interface.
@@ -3210,6 +4017,9 @@ func (v *SceneMarkerParts) GetTitle() string { return v.Title }
 // GetPrimary_tag returns SceneMarkerParts.Primary_tag, and is useful for accessing the field via an interface.
 func (v *SceneMarkerParts) GetPrimary_tag() *SceneMarkerPartsPrimary_tagTag { return v.Primary_tag }
 
+// GetTags returns SceneMarkerParts.Tags, and is useful for accessing the field via an interface.
+func (v *SceneMarkerParts) GetTags() []*SceneMarkerPartsTagsTag { return v.Tags }
+
 // SceneMarkerPartsPrimary_tagTag includes the requested fields of the GraphQL type Tag.
 type SceneMarkerPartsPrimary_tagTag struct {
 	Id   string `json:"id"`
@@ -3221,6 +4031,51 @@ func (v *SceneMarkerPartsPrimary_tagTag) GetId() string { return v.Id }
 
 // GetName returns SceneMarkerPartsPrimary_tagTag.Name, and is useful for accessing the field via an interface.
 func (v *SceneMarkerPartsPrimary_tagTag) GetName() string { return v.Name }
+
+// SceneMarkerPartsTagsTag includes the requested fields of the GraphQL type Tag.
+type SceneMarkerPartsTagsTag struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetId returns SceneMarkerPartsTagsTag.Id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerPartsTagsTag) GetId() string { return v.Id }
+
+// GetName returns SceneMarkerPartsTagsTag.Name, and is useful for accessing the field via an interface.
+func (v *SceneMarkerPartsTagsTag) GetName() string { return v.Name }
+
+type SceneMarkerUpdateInput struct {
+	// The end time of the marker (in seconds). Supports decimals.
+	End_seconds    *float64 `json:"end_seconds"`
+	Id             string   `json:"id"`
+	Primary_tag_id *string  `json:"primary_tag_id"`
+	Scene_id       *string  `json:"scene_id"`
+	// The start time of the marker (in seconds). Supports decimals.
+	Seconds *float64 `json:"seconds"`
+	Tag_ids []string `json:"tag_ids"`
+	Title   *string  `json:"title"`
+}
+
+// GetEnd_seconds returns SceneMarkerUpdateInput.End_seconds, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateInput) GetEnd_seconds() *float64 { return v.End_seconds }
+
+// GetId returns SceneMarkerUpdateInput.Id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateInput) GetId() string { return v.Id }
+
+// GetPrimary_tag_id returns SceneMarkerUpdateInput.Primary_tag_id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateInput) GetPrimary_tag_id() *string { return v.Primary_tag_id }
+
+// GetScene_id returns SceneMarkerUpdateInput.Scene_id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateInput) GetScene_id() *string { return v.Scene_id }
+
+// GetSeconds returns SceneMarkerUpdateInput.Seconds, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateInput) GetSeconds() *float64 { return v.Seconds }
+
+// GetTag_ids returns SceneMarkerUpdateInput.Tag_ids, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateInput) GetTag_ids() []string { return v.Tag_ids }
+
+// GetTitle returns SceneMarkerUpdateInput.Title, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateInput) GetTitle() *string { return v.Title }
 
 // SceneMarkerUpdateResponse is returned by SceneMarkerUpdate on success.
 type SceneMarkerUpdateResponse struct {
@@ -3240,6 +4095,24 @@ type SceneMarkerUpdateSceneMarkerUpdateSceneMarker struct {
 // GetId returns SceneMarkerUpdateSceneMarkerUpdateSceneMarker.Id, and is useful for accessing the field via an interface.
 func (v *SceneMarkerUpdateSceneMarkerUpdateSceneMarker) GetId() string { return v.Id }
 
+// SceneMarkerUpdateVRResponse is returned by SceneMarkerUpdateVR on success.
+type SceneMarkerUpdateVRResponse struct {
+	SceneMarkerUpdate *SceneMarkerUpdateVRSceneMarkerUpdateSceneMarker `json:"sceneMarkerUpdate"`
+}
+
+// GetSceneMarkerUpdate returns SceneMarkerUpdateVRResponse.SceneMarkerUpdate, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateVRResponse) GetSceneMarkerUpdate() *SceneMarkerUpdateVRSceneMarkerUpdateSceneMarker {
+	return v.SceneMarkerUpdate
+}
+
+// SceneMarkerUpdateVRSceneMarkerUpdateSceneMarker includes the requested fields of the GraphQL type SceneMarker.
+type SceneMarkerUpdateVRSceneMarkerUpdateSceneMarker struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneMarkerUpdateVRSceneMarkerUpdateSceneMarker.Id, and is useful for accessing the field via an interface.
+func (v *SceneMarkerUpdateVRSceneMarkerUpdateSceneMarker) GetId() string { return v.Id }
+
 // SceneMarkersDestroyResponse is returned by SceneMarkersDestroy on success.
 type SceneMarkersDestroyResponse struct {
 	SceneMarkersDestroy bool `json:"sceneMarkersDestroy"`
@@ -3248,18 +4121,78 @@ type SceneMarkersDestroyResponse struct {
 // GetSceneMarkersDestroy returns SceneMarkersDestroyResponse.SceneMarkersDestroy, and is useful for accessing the field via an interface.
 func (v *SceneMarkersDestroyResponse) GetSceneMarkersDestroy() bool { return v.SceneMarkersDestroy }
 
+type SceneMergeInput struct {
+	Destination  string `json:"destination"`
+	O_history    *bool  `json:"o_history"`
+	Play_history *bool  `json:"play_history"`
+	// If destination scene has no files, then the primary file of the
+	// first source scene will be assigned as primary
+	Source []string          `json:"source"`
+	Values *SceneUpdateInput `json:"values,omitempty"`
+}
+
+// GetDestination returns SceneMergeInput.Destination, and is useful for accessing the field via an interface.
+func (v *SceneMergeInput) GetDestination() string { return v.Destination }
+
+// GetO_history returns SceneMergeInput.O_history, and is useful for accessing the field via an interface.
+func (v *SceneMergeInput) GetO_history() *bool { return v.O_history }
+
+// GetPlay_history returns SceneMergeInput.Play_history, and is useful for accessing the field via an interface.
+func (v *SceneMergeInput) GetPlay_history() *bool { return v.Play_history }
+
+// GetSource returns SceneMergeInput.Source, and is useful for accessing the field via an interface.
+func (v *SceneMergeInput) GetSource() []string { return v.Source }
+
+// GetValues returns SceneMergeInput.Values, and is useful for accessing the field via an interface.
+func (v *SceneMergeInput) GetValues() *SceneUpdateInput { return v.Values }
+
+// SceneMergeVRResponse is returned by SceneMergeVR on success.
+type SceneMergeVRResponse struct {
+	SceneMerge *SceneMergeVRSceneMergeScene `json:"sceneMerge"`
+}
+
+// GetSceneMerge returns SceneMergeVRResponse.SceneMerge, and is useful for accessing the field via an interface.
+func (v *SceneMergeVRResponse) GetSceneMerge() *SceneMergeVRSceneMergeScene { return v.SceneMerge }
+
+// SceneMergeVRSceneMergeScene includes the requested fields of the GraphQL type Scene.
+type SceneMergeVRSceneMergeScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneMergeVRSceneMergeScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneMergeVRSceneMergeScene) GetId() string { return v.Id }
+
+type SceneMovieInput struct {
+	Movie_id    string `json:"movie_id"`
+	Scene_index *int   `json:"scene_index"`
+}
+
+// GetMovie_id returns SceneMovieInput.Movie_id, and is useful for accessing the field via an interface.
+func (v *SceneMovieInput) GetMovie_id() string { return v.Movie_id }
+
+// GetScene_index returns SceneMovieInput.Scene_index, and is useful for accessing the field via an interface.
+func (v *SceneMovieInput) GetScene_index() *int { return v.Scene_index }
+
 // SceneParts includes the GraphQL fields of Scene requested by the fragment SceneParts.
 type SceneParts struct {
 	Id            string                                `json:"id"`
 	Title         *string                               `json:"title"`
+	Code          *string                               `json:"code"`
+	Details       *string                               `json:"details"`
+	Director      *string                               `json:"director"`
 	Rating100     *int                                  `json:"rating100"`
 	Created_at    time.Time                             `json:"created_at"`
+	Updated_at    time.Time                             `json:"updated_at"`
 	Date          *string                               `json:"date"`
+	Urls          []string                              `json:"urls"`
+	Custom_fields map[string]interface{}                `json:"custom_fields"`
 	Files         []*ScenePartsFilesVideoFile           `json:"files"`
 	Studio        *ScenePartsStudio                     `json:"studio"`
 	Scene_markers []*ScenePartsScene_markersSceneMarker `json:"scene_markers"`
 	Performers    []*ScenePartsPerformersPerformer      `json:"performers"`
 	Groups        []*ScenePartsGroupsSceneGroup         `json:"groups"`
+	Galleries     []*ScenePartsGalleriesGallery         `json:"galleries"`
+	Stash_ids     []*ScenePartsStash_idsStashID         `json:"stash_ids"`
 	// The number ot times a scene has been played
 	Play_count *int                           `json:"play_count"`
 	O_counter  *int                           `json:"o_counter"`
@@ -3278,14 +4211,32 @@ func (v *SceneParts) GetId() string { return v.Id }
 // GetTitle returns SceneParts.Title, and is useful for accessing the field via an interface.
 func (v *SceneParts) GetTitle() *string { return v.Title }
 
+// GetCode returns SceneParts.Code, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetCode() *string { return v.Code }
+
+// GetDetails returns SceneParts.Details, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetDetails() *string { return v.Details }
+
+// GetDirector returns SceneParts.Director, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetDirector() *string { return v.Director }
+
 // GetRating100 returns SceneParts.Rating100, and is useful for accessing the field via an interface.
 func (v *SceneParts) GetRating100() *int { return v.Rating100 }
 
 // GetCreated_at returns SceneParts.Created_at, and is useful for accessing the field via an interface.
 func (v *SceneParts) GetCreated_at() time.Time { return v.Created_at }
 
+// GetUpdated_at returns SceneParts.Updated_at, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetUpdated_at() time.Time { return v.Updated_at }
+
 // GetDate returns SceneParts.Date, and is useful for accessing the field via an interface.
 func (v *SceneParts) GetDate() *string { return v.Date }
+
+// GetUrls returns SceneParts.Urls, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetUrls() []string { return v.Urls }
+
+// GetCustom_fields returns SceneParts.Custom_fields, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetCustom_fields() map[string]interface{} { return v.Custom_fields }
 
 // GetFiles returns SceneParts.Files, and is useful for accessing the field via an interface.
 func (v *SceneParts) GetFiles() []*ScenePartsFilesVideoFile { return v.Files }
@@ -3301,6 +4252,12 @@ func (v *SceneParts) GetPerformers() []*ScenePartsPerformersPerformer { return v
 
 // GetGroups returns SceneParts.Groups, and is useful for accessing the field via an interface.
 func (v *SceneParts) GetGroups() []*ScenePartsGroupsSceneGroup { return v.Groups }
+
+// GetGalleries returns SceneParts.Galleries, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetGalleries() []*ScenePartsGalleriesGallery { return v.Galleries }
+
+// GetStash_ids returns SceneParts.Stash_ids, and is useful for accessing the field via an interface.
+func (v *SceneParts) GetStash_ids() []*ScenePartsStash_idsStashID { return v.Stash_ids }
 
 // GetPlay_count returns SceneParts.Play_count, and is useful for accessing the field via an interface.
 func (v *SceneParts) GetPlay_count() *int { return v.Play_count }
@@ -3358,11 +4315,23 @@ type __premarshalSceneParts struct {
 
 	Title *string `json:"title"`
 
+	Code *string `json:"code"`
+
+	Details *string `json:"details"`
+
+	Director *string `json:"director"`
+
 	Rating100 *int `json:"rating100"`
 
 	Created_at time.Time `json:"created_at"`
 
+	Updated_at time.Time `json:"updated_at"`
+
 	Date *string `json:"date"`
+
+	Urls []string `json:"urls"`
+
+	Custom_fields map[string]interface{} `json:"custom_fields"`
 
 	Files []*ScenePartsFilesVideoFile `json:"files"`
 
@@ -3373,6 +4342,10 @@ type __premarshalSceneParts struct {
 	Performers []*ScenePartsPerformersPerformer `json:"performers"`
 
 	Groups []*ScenePartsGroupsSceneGroup `json:"groups"`
+
+	Galleries []*ScenePartsGalleriesGallery `json:"galleries"`
+
+	Stash_ids []*ScenePartsStash_idsStashID `json:"stash_ids"`
 
 	Play_count *int `json:"play_count"`
 
@@ -3404,14 +4377,22 @@ func (v *SceneParts) __premarshalJSON() (*__premarshalSceneParts, error) {
 
 	retval.Id = v.Id
 	retval.Title = v.Title
+	retval.Code = v.Code
+	retval.Details = v.Details
+	retval.Director = v.Director
 	retval.Rating100 = v.Rating100
 	retval.Created_at = v.Created_at
+	retval.Updated_at = v.Updated_at
 	retval.Date = v.Date
+	retval.Urls = v.Urls
+	retval.Custom_fields = v.Custom_fields
 	retval.Files = v.Files
 	retval.Studio = v.Studio
 	retval.Scene_markers = v.Scene_markers
 	retval.Performers = v.Performers
 	retval.Groups = v.Groups
+	retval.Galleries = v.Galleries
+	retval.Stash_ids = v.Stash_ids
 	retval.Play_count = v.Play_count
 	retval.O_counter = v.O_counter
 	retval.Organized = v.Organized
@@ -3437,12 +4418,24 @@ func (v *ScenePartsCaptionsVideoCaption) GetLanguage_code() string { return v.La
 
 // ScenePartsFilesVideoFile includes the requested fields of the GraphQL type VideoFile.
 type ScenePartsFilesVideoFile struct {
-	Basename    string  `json:"basename"`
-	Duration    float64 `json:"duration"`
-	Path        string  `json:"path"`
-	Height      int     `json:"height"`
-	Video_codec string  `json:"video_codec"`
+	Id           string                                             `json:"id"`
+	Basename     string                                             `json:"basename"`
+	Duration     float64                                            `json:"duration"`
+	Path         string                                             `json:"path"`
+	Height       int                                                `json:"height"`
+	Width        int                                                `json:"width"`
+	Size         int64                                              `json:"size"`
+	Bit_rate     int                                                `json:"bit_rate"`
+	Format       string                                             `json:"format"`
+	Frame_rate   float64                                            `json:"frame_rate"`
+	Audio_codec  string                                             `json:"audio_codec"`
+	Video_codec  string                                             `json:"video_codec"`
+	Mod_time     time.Time                                          `json:"mod_time"`
+	Fingerprints []*ScenePartsFilesVideoFileFingerprintsFingerprint `json:"fingerprints"`
 }
+
+// GetId returns ScenePartsFilesVideoFile.Id, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetId() string { return v.Id }
 
 // GetBasename returns ScenePartsFilesVideoFile.Basename, and is useful for accessing the field via an interface.
 func (v *ScenePartsFilesVideoFile) GetBasename() string { return v.Basename }
@@ -3456,21 +4449,82 @@ func (v *ScenePartsFilesVideoFile) GetPath() string { return v.Path }
 // GetHeight returns ScenePartsFilesVideoFile.Height, and is useful for accessing the field via an interface.
 func (v *ScenePartsFilesVideoFile) GetHeight() int { return v.Height }
 
+// GetWidth returns ScenePartsFilesVideoFile.Width, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetWidth() int { return v.Width }
+
+// GetSize returns ScenePartsFilesVideoFile.Size, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetSize() int64 { return v.Size }
+
+// GetBit_rate returns ScenePartsFilesVideoFile.Bit_rate, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetBit_rate() int { return v.Bit_rate }
+
+// GetFormat returns ScenePartsFilesVideoFile.Format, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetFormat() string { return v.Format }
+
+// GetFrame_rate returns ScenePartsFilesVideoFile.Frame_rate, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetFrame_rate() float64 { return v.Frame_rate }
+
+// GetAudio_codec returns ScenePartsFilesVideoFile.Audio_codec, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetAudio_codec() string { return v.Audio_codec }
+
 // GetVideo_codec returns ScenePartsFilesVideoFile.Video_codec, and is useful for accessing the field via an interface.
 func (v *ScenePartsFilesVideoFile) GetVideo_codec() string { return v.Video_codec }
 
+// GetMod_time returns ScenePartsFilesVideoFile.Mod_time, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetMod_time() time.Time { return v.Mod_time }
+
+// GetFingerprints returns ScenePartsFilesVideoFile.Fingerprints, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFile) GetFingerprints() []*ScenePartsFilesVideoFileFingerprintsFingerprint {
+	return v.Fingerprints
+}
+
+// ScenePartsFilesVideoFileFingerprintsFingerprint includes the requested fields of the GraphQL type Fingerprint.
+type ScenePartsFilesVideoFileFingerprintsFingerprint struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
+// GetType returns ScenePartsFilesVideoFileFingerprintsFingerprint.Type, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFileFingerprintsFingerprint) GetType() string { return v.Type }
+
+// GetValue returns ScenePartsFilesVideoFileFingerprintsFingerprint.Value, and is useful for accessing the field via an interface.
+func (v *ScenePartsFilesVideoFileFingerprintsFingerprint) GetValue() string { return v.Value }
+
+// ScenePartsGalleriesGallery includes the requested fields of the GraphQL type Gallery.
+// The GraphQL type's documentation follows.
+//
+// Gallery type
+type ScenePartsGalleriesGallery struct {
+	Id    string  `json:"id"`
+	Title *string `json:"title"`
+}
+
+// GetId returns ScenePartsGalleriesGallery.Id, and is useful for accessing the field via an interface.
+func (v *ScenePartsGalleriesGallery) GetId() string { return v.Id }
+
+// GetTitle returns ScenePartsGalleriesGallery.Title, and is useful for accessing the field via an interface.
+func (v *ScenePartsGalleriesGallery) GetTitle() *string { return v.Title }
+
 // ScenePartsGroupsSceneGroup includes the requested fields of the GraphQL type SceneGroup.
 type ScenePartsGroupsSceneGroup struct {
-	Group *ScenePartsGroupsSceneGroupGroup `json:"group"`
+	Group       *ScenePartsGroupsSceneGroupGroup `json:"group"`
+	Scene_index *int                             `json:"scene_index"`
 }
 
 // GetGroup returns ScenePartsGroupsSceneGroup.Group, and is useful for accessing the field via an interface.
 func (v *ScenePartsGroupsSceneGroup) GetGroup() *ScenePartsGroupsSceneGroupGroup { return v.Group }
 
+// GetScene_index returns ScenePartsGroupsSceneGroup.Scene_index, and is useful for accessing the field via an interface.
+func (v *ScenePartsGroupsSceneGroup) GetScene_index() *int { return v.Scene_index }
+
 // ScenePartsGroupsSceneGroupGroup includes the requested fields of the GraphQL type Group.
 type ScenePartsGroupsSceneGroupGroup struct {
+	Id   string `json:"id"`
 	Name string `json:"name"`
 }
+
+// GetId returns ScenePartsGroupsSceneGroupGroup.Id, and is useful for accessing the field via an interface.
+func (v *ScenePartsGroupsSceneGroupGroup) GetId() string { return v.Id }
 
 // GetName returns ScenePartsGroupsSceneGroupGroup.Name, and is useful for accessing the field via an interface.
 func (v *ScenePartsGroupsSceneGroupGroup) GetName() string { return v.Name }
@@ -3561,6 +4615,11 @@ func (v *ScenePartsScene_markersSceneMarker) GetPrimary_tag() *SceneMarkerPartsP
 	return v.SceneMarkerParts.Primary_tag
 }
 
+// GetTags returns ScenePartsScene_markersSceneMarker.Tags, and is useful for accessing the field via an interface.
+func (v *ScenePartsScene_markersSceneMarker) GetTags() []*SceneMarkerPartsTagsTag {
+	return v.SceneMarkerParts.Tags
+}
+
 func (v *ScenePartsScene_markersSceneMarker) UnmarshalJSON(b []byte) error {
 
 	if string(b) == "null" {
@@ -3596,6 +4655,8 @@ type __premarshalScenePartsScene_markersSceneMarker struct {
 	Title string `json:"title"`
 
 	Primary_tag *SceneMarkerPartsPrimary_tagTag `json:"primary_tag"`
+
+	Tags []*SceneMarkerPartsTagsTag `json:"tags"`
 }
 
 func (v *ScenePartsScene_markersSceneMarker) MarshalJSON() ([]byte, error) {
@@ -3614,8 +4675,21 @@ func (v *ScenePartsScene_markersSceneMarker) __premarshalJSON() (*__premarshalSc
 	retval.End_seconds = v.SceneMarkerParts.End_seconds
 	retval.Title = v.SceneMarkerParts.Title
 	retval.Primary_tag = v.SceneMarkerParts.Primary_tag
+	retval.Tags = v.SceneMarkerParts.Tags
 	return &retval, nil
 }
+
+// ScenePartsStash_idsStashID includes the requested fields of the GraphQL type StashID.
+type ScenePartsStash_idsStashID struct {
+	Endpoint string `json:"endpoint"`
+	Stash_id string `json:"stash_id"`
+}
+
+// GetEndpoint returns ScenePartsStash_idsStashID.Endpoint, and is useful for accessing the field via an interface.
+func (v *ScenePartsStash_idsStashID) GetEndpoint() string { return v.Endpoint }
+
+// GetStash_id returns ScenePartsStash_idsStashID.Stash_id, and is useful for accessing the field via an interface.
+func (v *ScenePartsStash_idsStashID) GetStash_id() string { return v.Stash_id }
 
 // ScenePartsStudio includes the requested fields of the GraphQL type Studio.
 type ScenePartsStudio struct {
@@ -3628,6 +4702,351 @@ func (v *ScenePartsStudio) GetId() string { return v.Id }
 
 // GetName returns ScenePartsStudio.Name, and is useful for accessing the field via an interface.
 func (v *ScenePartsStudio) GetName() string { return v.Name }
+
+// SceneRescanVRResponse is returned by SceneRescanVR on success.
+type SceneRescanVRResponse struct {
+	// Start a scan. Returns the job ID
+	MetadataScan string `json:"metadataScan"`
+}
+
+// GetMetadataScan returns SceneRescanVRResponse.MetadataScan, and is useful for accessing the field via an interface.
+func (v *SceneRescanVRResponse) GetMetadataScan() string { return v.MetadataScan }
+
+// SceneResetActivityVRResponse is returned by SceneResetActivityVR on success.
+type SceneResetActivityVRResponse struct {
+	// Resets the resume time point and play duration
+	SceneResetActivity bool `json:"sceneResetActivity"`
+}
+
+// GetSceneResetActivity returns SceneResetActivityVRResponse.SceneResetActivity, and is useful for accessing the field via an interface.
+func (v *SceneResetActivityVRResponse) GetSceneResetActivity() bool { return v.SceneResetActivity }
+
+// SceneResetOVRResponse is returned by SceneResetOVR on success.
+type SceneResetOVRResponse struct {
+	// Resets the o-counter for a scene to 0. Returns the new value
+	SceneResetO int `json:"sceneResetO"`
+}
+
+// GetSceneResetO returns SceneResetOVRResponse.SceneResetO, and is useful for accessing the field via an interface.
+func (v *SceneResetOVRResponse) GetSceneResetO() int { return v.SceneResetO }
+
+// SceneResetPlayVRResponse is returned by SceneResetPlayVR on success.
+type SceneResetPlayVRResponse struct {
+	// Resets the play count for a scene to 0. Returns the new play count value.
+	SceneResetPlayCount int `json:"sceneResetPlayCount"`
+}
+
+// GetSceneResetPlayCount returns SceneResetPlayVRResponse.SceneResetPlayCount, and is useful for accessing the field via an interface.
+func (v *SceneResetPlayVRResponse) GetSceneResetPlayCount() int { return v.SceneResetPlayCount }
+
+// SceneRevealFileVRResponse is returned by SceneRevealFileVR on success.
+type SceneRevealFileVRResponse struct {
+	// Reveal the file in the system file manager
+	RevealFileInFileManager bool `json:"revealFileInFileManager"`
+}
+
+// GetRevealFileInFileManager returns SceneRevealFileVRResponse.RevealFileInFileManager, and is useful for accessing the field via an interface.
+func (v *SceneRevealFileVRResponse) GetRevealFileInFileManager() bool {
+	return v.RevealFileInFileManager
+}
+
+// SceneSetPrimaryFileVRResponse is returned by SceneSetPrimaryFileVR on success.
+type SceneSetPrimaryFileVRResponse struct {
+	SceneUpdate *SceneSetPrimaryFileVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneSetPrimaryFileVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneSetPrimaryFileVRResponse) GetSceneUpdate() *SceneSetPrimaryFileVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneSetPrimaryFileVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneSetPrimaryFileVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneSetPrimaryFileVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneSetPrimaryFileVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneSetStudioVRResponse is returned by SceneSetStudioVR on success.
+type SceneSetStudioVRResponse struct {
+	SceneUpdate *SceneSetStudioVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneSetStudioVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneSetStudioVRResponse) GetSceneUpdate() *SceneSetStudioVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneSetStudioVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneSetStudioVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneSetStudioVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneSetStudioVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneSubmitStashBoxVRResponse is returned by SceneSubmitStashBoxVR on success.
+type SceneSubmitStashBoxVRResponse struct {
+	// Submit scene as draft to stash-box instance
+	SubmitStashBoxSceneDraft *string `json:"submitStashBoxSceneDraft"`
+}
+
+// GetSubmitStashBoxSceneDraft returns SceneSubmitStashBoxVRResponse.SubmitStashBoxSceneDraft, and is useful for accessing the field via an interface.
+func (v *SceneSubmitStashBoxVRResponse) GetSubmitStashBoxSceneDraft() *string {
+	return v.SubmitStashBoxSceneDraft
+}
+
+// SceneUpdateCodeVRResponse is returned by SceneUpdateCodeVR on success.
+type SceneUpdateCodeVRResponse struct {
+	SceneUpdate *SceneUpdateCodeVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateCodeVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateCodeVRResponse) GetSceneUpdate() *SceneUpdateCodeVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateCodeVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateCodeVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateCodeVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateCodeVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateCoverImageVRResponse is returned by SceneUpdateCoverImageVR on success.
+type SceneUpdateCoverImageVRResponse struct {
+	SceneUpdate *SceneUpdateCoverImageVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateCoverImageVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateCoverImageVRResponse) GetSceneUpdate() *SceneUpdateCoverImageVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateCoverImageVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateCoverImageVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateCoverImageVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateCoverImageVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateCustomFieldsVRResponse is returned by SceneUpdateCustomFieldsVR on success.
+type SceneUpdateCustomFieldsVRResponse struct {
+	SceneUpdate *SceneUpdateCustomFieldsVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateCustomFieldsVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateCustomFieldsVRResponse) GetSceneUpdate() *SceneUpdateCustomFieldsVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateCustomFieldsVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateCustomFieldsVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateCustomFieldsVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateCustomFieldsVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateDateVRResponse is returned by SceneUpdateDateVR on success.
+type SceneUpdateDateVRResponse struct {
+	SceneUpdate *SceneUpdateDateVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateDateVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateDateVRResponse) GetSceneUpdate() *SceneUpdateDateVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateDateVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateDateVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateDateVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateDateVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateDetailsVRResponse is returned by SceneUpdateDetailsVR on success.
+type SceneUpdateDetailsVRResponse struct {
+	SceneUpdate *SceneUpdateDetailsVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateDetailsVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateDetailsVRResponse) GetSceneUpdate() *SceneUpdateDetailsVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateDetailsVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateDetailsVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateDetailsVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateDetailsVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateDirectorVRResponse is returned by SceneUpdateDirectorVR on success.
+type SceneUpdateDirectorVRResponse struct {
+	SceneUpdate *SceneUpdateDirectorVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateDirectorVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateDirectorVRResponse) GetSceneUpdate() *SceneUpdateDirectorVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateDirectorVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateDirectorVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateDirectorVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateDirectorVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateGalleryVRResponse is returned by SceneUpdateGalleryVR on success.
+type SceneUpdateGalleryVRResponse struct {
+	SceneUpdate *SceneUpdateGalleryVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateGalleryVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateGalleryVRResponse) GetSceneUpdate() *SceneUpdateGalleryVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateGalleryVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateGalleryVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateGalleryVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateGalleryVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateGroupsVRResponse is returned by SceneUpdateGroupsVR on success.
+type SceneUpdateGroupsVRResponse struct {
+	SceneUpdate *SceneUpdateGroupsVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateGroupsVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateGroupsVRResponse) GetSceneUpdate() *SceneUpdateGroupsVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateGroupsVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateGroupsVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateGroupsVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateGroupsVRSceneUpdateScene) GetId() string { return v.Id }
+
+type SceneUpdateInput struct {
+	ClientMutationId *string `json:"clientMutationId"`
+	Code             *string `json:"code"`
+	// This should be a URL or a base64 encoded data URL
+	Cover_image   *string            `json:"cover_image"`
+	Custom_fields *CustomFieldsInput `json:"custom_fields,omitempty"`
+	Date          *string            `json:"date"`
+	Details       *string            `json:"details"`
+	Director      *string            `json:"director"`
+	Gallery_ids   []string           `json:"gallery_ids"`
+	Groups        []*SceneGroupInput `json:"groups,omitempty"`
+	Id            string             `json:"id"`
+	Movies        []*SceneMovieInput `json:"movies,omitempty"`
+	O_counter     *int               `json:"o_counter"`
+	Organized     *bool              `json:"organized"`
+	Performer_ids []string           `json:"performer_ids"`
+	// The number ot times a scene has been played
+	Play_count *int `json:"play_count"`
+	// The total time a scene has spent playing
+	Play_duration   *float64 `json:"play_duration"`
+	Primary_file_id *string  `json:"primary_file_id"`
+	Rating100       *int     `json:"rating100"`
+	// The time index a scene was left at
+	Resume_time *float64        `json:"resume_time"`
+	Stash_ids   []*StashIDInput `json:"stash_ids,omitempty"`
+	Studio_id   *string         `json:"studio_id"`
+	Tag_ids     []string        `json:"tag_ids"`
+	Title       *string         `json:"title"`
+	Url         *string         `json:"url"`
+	Urls        []string        `json:"urls"`
+}
+
+// GetClientMutationId returns SceneUpdateInput.ClientMutationId, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetClientMutationId() *string { return v.ClientMutationId }
+
+// GetCode returns SceneUpdateInput.Code, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetCode() *string { return v.Code }
+
+// GetCover_image returns SceneUpdateInput.Cover_image, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetCover_image() *string { return v.Cover_image }
+
+// GetCustom_fields returns SceneUpdateInput.Custom_fields, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetCustom_fields() *CustomFieldsInput { return v.Custom_fields }
+
+// GetDate returns SceneUpdateInput.Date, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetDate() *string { return v.Date }
+
+// GetDetails returns SceneUpdateInput.Details, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetDetails() *string { return v.Details }
+
+// GetDirector returns SceneUpdateInput.Director, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetDirector() *string { return v.Director }
+
+// GetGallery_ids returns SceneUpdateInput.Gallery_ids, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetGallery_ids() []string { return v.Gallery_ids }
+
+// GetGroups returns SceneUpdateInput.Groups, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetGroups() []*SceneGroupInput { return v.Groups }
+
+// GetId returns SceneUpdateInput.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetId() string { return v.Id }
+
+// GetMovies returns SceneUpdateInput.Movies, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetMovies() []*SceneMovieInput { return v.Movies }
+
+// GetO_counter returns SceneUpdateInput.O_counter, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetO_counter() *int { return v.O_counter }
+
+// GetOrganized returns SceneUpdateInput.Organized, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetOrganized() *bool { return v.Organized }
+
+// GetPerformer_ids returns SceneUpdateInput.Performer_ids, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetPerformer_ids() []string { return v.Performer_ids }
+
+// GetPlay_count returns SceneUpdateInput.Play_count, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetPlay_count() *int { return v.Play_count }
+
+// GetPlay_duration returns SceneUpdateInput.Play_duration, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetPlay_duration() *float64 { return v.Play_duration }
+
+// GetPrimary_file_id returns SceneUpdateInput.Primary_file_id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetPrimary_file_id() *string { return v.Primary_file_id }
+
+// GetRating100 returns SceneUpdateInput.Rating100, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetRating100() *int { return v.Rating100 }
+
+// GetResume_time returns SceneUpdateInput.Resume_time, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetResume_time() *float64 { return v.Resume_time }
+
+// GetStash_ids returns SceneUpdateInput.Stash_ids, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetStash_ids() []*StashIDInput { return v.Stash_ids }
+
+// GetStudio_id returns SceneUpdateInput.Studio_id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetStudio_id() *string { return v.Studio_id }
+
+// GetTag_ids returns SceneUpdateInput.Tag_ids, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetTag_ids() []string { return v.Tag_ids }
+
+// GetTitle returns SceneUpdateInput.Title, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetTitle() *string { return v.Title }
+
+// GetUrl returns SceneUpdateInput.Url, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetUrl() *string { return v.Url }
+
+// GetUrls returns SceneUpdateInput.Urls, and is useful for accessing the field via an interface.
+func (v *SceneUpdateInput) GetUrls() []string { return v.Urls }
 
 // SceneUpdateOrganizedResponse is returned by SceneUpdateOrganized on success.
 type SceneUpdateOrganizedResponse struct {
@@ -3650,6 +5069,24 @@ func (v *SceneUpdateOrganizedSceneUpdateScene) GetId() string { return v.Id }
 
 // GetOrganized returns SceneUpdateOrganizedSceneUpdateScene.Organized, and is useful for accessing the field via an interface.
 func (v *SceneUpdateOrganizedSceneUpdateScene) GetOrganized() bool { return v.Organized }
+
+// SceneUpdatePerformersVRResponse is returned by SceneUpdatePerformersVR on success.
+type SceneUpdatePerformersVRResponse struct {
+	SceneUpdate *SceneUpdatePerformersVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdatePerformersVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdatePerformersVRResponse) GetSceneUpdate() *SceneUpdatePerformersVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdatePerformersVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdatePerformersVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdatePerformersVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdatePerformersVRSceneUpdateScene) GetId() string { return v.Id }
 
 // SceneUpdateRating100Response is returned by SceneUpdateRating100 on success.
 type SceneUpdateRating100Response struct {
@@ -3687,6 +5124,60 @@ type SceneUpdateTagsSceneUpdateScene struct {
 // GetId returns SceneUpdateTagsSceneUpdateScene.Id, and is useful for accessing the field via an interface.
 func (v *SceneUpdateTagsSceneUpdateScene) GetId() string { return v.Id }
 
+// SceneUpdateTagsVRResponse is returned by SceneUpdateTagsVR on success.
+type SceneUpdateTagsVRResponse struct {
+	SceneUpdate *SceneUpdateTagsVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateTagsVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateTagsVRResponse) GetSceneUpdate() *SceneUpdateTagsVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateTagsVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateTagsVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateTagsVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateTagsVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateTitleVRResponse is returned by SceneUpdateTitleVR on success.
+type SceneUpdateTitleVRResponse struct {
+	SceneUpdate *SceneUpdateTitleVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateTitleVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateTitleVRResponse) GetSceneUpdate() *SceneUpdateTitleVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateTitleVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateTitleVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateTitleVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateTitleVRSceneUpdateScene) GetId() string { return v.Id }
+
+// SceneUpdateURLsVRResponse is returned by SceneUpdateURLsVR on success.
+type SceneUpdateURLsVRResponse struct {
+	SceneUpdate *SceneUpdateURLsVRSceneUpdateScene `json:"sceneUpdate"`
+}
+
+// GetSceneUpdate returns SceneUpdateURLsVRResponse.SceneUpdate, and is useful for accessing the field via an interface.
+func (v *SceneUpdateURLsVRResponse) GetSceneUpdate() *SceneUpdateURLsVRSceneUpdateScene {
+	return v.SceneUpdate
+}
+
+// SceneUpdateURLsVRSceneUpdateScene includes the requested fields of the GraphQL type Scene.
+type SceneUpdateURLsVRSceneUpdateScene struct {
+	Id string `json:"id"`
+}
+
+// GetId returns SceneUpdateURLsVRSceneUpdateScene.Id, and is useful for accessing the field via an interface.
+func (v *SceneUpdateURLsVRSceneUpdateScene) GetId() string { return v.Id }
+
 type SortDirectionEnum string
 
 const (
@@ -3698,6 +5189,21 @@ var AllSortDirectionEnum = []SortDirectionEnum{
 	SortDirectionEnumAsc,
 	SortDirectionEnumDesc,
 }
+
+type StashBoxDraftSubmissionInput struct {
+	Id                 string  `json:"id"`
+	Stash_box_endpoint *string `json:"stash_box_endpoint"`
+	Stash_box_index    *int    `json:"stash_box_index"`
+}
+
+// GetId returns StashBoxDraftSubmissionInput.Id, and is useful for accessing the field via an interface.
+func (v *StashBoxDraftSubmissionInput) GetId() string { return v.Id }
+
+// GetStash_box_endpoint returns StashBoxDraftSubmissionInput.Stash_box_endpoint, and is useful for accessing the field via an interface.
+func (v *StashBoxDraftSubmissionInput) GetStash_box_endpoint() *string { return v.Stash_box_endpoint }
+
+// GetStash_box_index returns StashBoxDraftSubmissionInput.Stash_box_index, and is useful for accessing the field via an interface.
+func (v *StashBoxDraftSubmissionInput) GetStash_box_index() *int { return v.Stash_box_index }
 
 type StashIDCriterionInput struct {
 	// If present, this value is treated as a predicate.
@@ -3715,6 +5221,21 @@ func (v *StashIDCriterionInput) GetModifier() CriterionModifier { return v.Modif
 
 // GetStash_id returns StashIDCriterionInput.Stash_id, and is useful for accessing the field via an interface.
 func (v *StashIDCriterionInput) GetStash_id() *string { return v.Stash_id }
+
+type StashIDInput struct {
+	Endpoint   string     `json:"endpoint"`
+	Stash_id   string     `json:"stash_id"`
+	Updated_at *time.Time `json:"updated_at"`
+}
+
+// GetEndpoint returns StashIDInput.Endpoint, and is useful for accessing the field via an interface.
+func (v *StashIDInput) GetEndpoint() string { return v.Endpoint }
+
+// GetStash_id returns StashIDInput.Stash_id, and is useful for accessing the field via an interface.
+func (v *StashIDInput) GetStash_id() string { return v.Stash_id }
+
+// GetUpdated_at returns StashIDInput.Updated_at, and is useful for accessing the field via an interface.
+func (v *StashIDInput) GetUpdated_at() *time.Time { return v.Updated_at }
 
 type StashIDsCriterionInput struct {
 	// If present, this value is treated as a predicate.
@@ -4299,6 +5820,22 @@ func (v *VideoFileFilterInput) GetResolution() *ResolutionCriterionInput { retur
 // GetVideo_codec returns VideoFileFilterInput.Video_codec, and is useful for accessing the field via an interface.
 func (v *VideoFileFilterInput) GetVideo_codec() *StringCriterionInput { return v.Video_codec }
 
+// __FindGalleriesForSceneEditorInput is used internally by genqlient
+type __FindGalleriesForSceneEditorInput struct {
+	Q *string `json:"q"`
+}
+
+// GetQ returns __FindGalleriesForSceneEditorInput.Q, and is useful for accessing the field via an interface.
+func (v *__FindGalleriesForSceneEditorInput) GetQ() *string { return v.Q }
+
+// __FindGroupsForSceneEditorInput is used internally by genqlient
+type __FindGroupsForSceneEditorInput struct {
+	Q *string `json:"q"`
+}
+
+// GetQ returns __FindGroupsForSceneEditorInput.Q, and is useful for accessing the field via an interface.
+func (v *__FindGroupsForSceneEditorInput) GetQ() *string { return v.Q }
+
 // __FindPerformerByNameInput is used internally by genqlient
 type __FindPerformerByNameInput struct {
 	Name string `json:"name"`
@@ -4326,6 +5863,14 @@ func (v *__FindPerformersWithSceneCountInput) GetMin_scene_count() int { return 
 
 // GetPer_page returns __FindPerformersWithSceneCountInput.Per_page, and is useful for accessing the field via an interface.
 func (v *__FindPerformersWithSceneCountInput) GetPer_page() int { return v.Per_page }
+
+// __FindSceneActivityInput is used internally by genqlient
+type __FindSceneActivityInput struct {
+	Id string `json:"id"`
+}
+
+// GetId returns __FindSceneActivityInput.Id, and is useful for accessing the field via an interface.
+func (v *__FindSceneActivityInput) GetId() string { return v.Id }
 
 // __FindSceneIdsByFilterInput is used internally by genqlient
 type __FindSceneIdsByFilterInput struct {
@@ -4411,6 +5956,18 @@ type __IsSceneOrganizedInput struct {
 // GetId returns __IsSceneOrganizedInput.Id, and is useful for accessing the field via an interface.
 func (v *__IsSceneOrganizedInput) GetId() *string { return v.Id }
 
+// __SceneAddOVRInput is used internally by genqlient
+type __SceneAddOVRInput struct {
+	Id    string      `json:"id"`
+	Times []time.Time `json:"times"`
+}
+
+// GetId returns __SceneAddOVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneAddOVRInput) GetId() string { return v.Id }
+
+// GetTimes returns __SceneAddOVRInput.Times, and is useful for accessing the field via an interface.
+func (v *__SceneAddOVRInput) GetTimes() []time.Time { return v.Times }
+
 // __SceneAddPlayDurationSecondsInput is used internally by genqlient
 type __SceneAddPlayDurationSecondsInput struct {
 	Id      string   `json:"id"`
@@ -4422,6 +5979,42 @@ func (v *__SceneAddPlayDurationSecondsInput) GetId() string { return v.Id }
 
 // GetSeconds returns __SceneAddPlayDurationSecondsInput.Seconds, and is useful for accessing the field via an interface.
 func (v *__SceneAddPlayDurationSecondsInput) GetSeconds() *float64 { return v.Seconds }
+
+// __SceneAddPlayVRInput is used internally by genqlient
+type __SceneAddPlayVRInput struct {
+	Id    string      `json:"id"`
+	Times []time.Time `json:"times"`
+}
+
+// GetId returns __SceneAddPlayVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneAddPlayVRInput) GetId() string { return v.Id }
+
+// GetTimes returns __SceneAddPlayVRInput.Times, and is useful for accessing the field via an interface.
+func (v *__SceneAddPlayVRInput) GetTimes() []time.Time { return v.Times }
+
+// __SceneAssignFileVRInput is used internally by genqlient
+type __SceneAssignFileVRInput struct {
+	Input *AssignSceneFileInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneAssignFileVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneAssignFileVRInput) GetInput() *AssignSceneFileInput { return v.Input }
+
+// __SceneClearStudioVRInput is used internally by genqlient
+type __SceneClearStudioVRInput struct {
+	Id string `json:"id"`
+}
+
+// GetId returns __SceneClearStudioVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneClearStudioVRInput) GetId() string { return v.Id }
+
+// __SceneCreateFromFileVRInput is used internally by genqlient
+type __SceneCreateFromFileVRInput struct {
+	Input *SceneCreateInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneCreateFromFileVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneCreateFromFileVRInput) GetInput() *SceneCreateInput { return v.Input }
 
 // __SceneDecrementOInput is used internally by genqlient
 type __SceneDecrementOInput struct {
@@ -4439,6 +6032,38 @@ type __SceneDecrementPlayCountInput struct {
 // GetId returns __SceneDecrementPlayCountInput.Id, and is useful for accessing the field via an interface.
 func (v *__SceneDecrementPlayCountInput) GetId() string { return v.Id }
 
+// __SceneDeleteFilesVRInput is used internally by genqlient
+type __SceneDeleteFilesVRInput struct {
+	Ids []string `json:"ids"`
+}
+
+// GetIds returns __SceneDeleteFilesVRInput.Ids, and is useful for accessing the field via an interface.
+func (v *__SceneDeleteFilesVRInput) GetIds() []string { return v.Ids }
+
+// __SceneDeleteOVRInput is used internally by genqlient
+type __SceneDeleteOVRInput struct {
+	Id    string      `json:"id"`
+	Times []time.Time `json:"times"`
+}
+
+// GetId returns __SceneDeleteOVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneDeleteOVRInput) GetId() string { return v.Id }
+
+// GetTimes returns __SceneDeleteOVRInput.Times, and is useful for accessing the field via an interface.
+func (v *__SceneDeleteOVRInput) GetTimes() []time.Time { return v.Times }
+
+// __SceneDeletePlayVRInput is used internally by genqlient
+type __SceneDeletePlayVRInput struct {
+	Id    string      `json:"id"`
+	Times []time.Time `json:"times"`
+}
+
+// GetId returns __SceneDeletePlayVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneDeletePlayVRInput) GetId() string { return v.Id }
+
+// GetTimes returns __SceneDeletePlayVRInput.Times, and is useful for accessing the field via an interface.
+func (v *__SceneDeletePlayVRInput) GetTimes() []time.Time { return v.Times }
+
 // __SceneDestroyInput is used internally by genqlient
 type __SceneDestroyInput struct {
 	Id string `json:"id"`
@@ -4446,6 +6071,26 @@ type __SceneDestroyInput struct {
 
 // GetId returns __SceneDestroyInput.Id, and is useful for accessing the field via an interface.
 func (v *__SceneDestroyInput) GetId() string { return v.Id }
+
+// __SceneGenerateScreenshotVRInput is used internally by genqlient
+type __SceneGenerateScreenshotVRInput struct {
+	Id string   `json:"id"`
+	At *float64 `json:"at"`
+}
+
+// GetId returns __SceneGenerateScreenshotVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneGenerateScreenshotVRInput) GetId() string { return v.Id }
+
+// GetAt returns __SceneGenerateScreenshotVRInput.At, and is useful for accessing the field via an interface.
+func (v *__SceneGenerateScreenshotVRInput) GetAt() *float64 { return v.At }
+
+// __SceneGenerateVRInput is used internally by genqlient
+type __SceneGenerateVRInput struct {
+	Input *GenerateMetadataInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneGenerateVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneGenerateVRInput) GetInput() *GenerateMetadataInput { return v.Input }
 
 // __SceneIncrementOInput is used internally by genqlient
 type __SceneIncrementOInput struct {
@@ -4487,6 +6132,22 @@ func (v *__SceneMarkerCreateInput) GetEnd_seconds() *float64 { return v.End_seco
 // GetTitle returns __SceneMarkerCreateInput.Title, and is useful for accessing the field via an interface.
 func (v *__SceneMarkerCreateInput) GetTitle() string { return v.Title }
 
+// __SceneMarkerCreateVRInput is used internally by genqlient
+type __SceneMarkerCreateVRInput struct {
+	Input *SceneMarkerCreateInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneMarkerCreateVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneMarkerCreateVRInput) GetInput() *SceneMarkerCreateInput { return v.Input }
+
+// __SceneMarkerDeleteVRInput is used internally by genqlient
+type __SceneMarkerDeleteVRInput struct {
+	Id string `json:"id"`
+}
+
+// GetId returns __SceneMarkerDeleteVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneMarkerDeleteVRInput) GetId() string { return v.Id }
+
 // __SceneMarkerUpdateInput is used internally by genqlient
 type __SceneMarkerUpdateInput struct {
 	Id          string   `json:"id"`
@@ -4511,6 +6172,14 @@ func (v *__SceneMarkerUpdateInput) GetEnd_seconds() *float64 { return v.End_seco
 // GetTitle returns __SceneMarkerUpdateInput.Title, and is useful for accessing the field via an interface.
 func (v *__SceneMarkerUpdateInput) GetTitle() string { return v.Title }
 
+// __SceneMarkerUpdateVRInput is used internally by genqlient
+type __SceneMarkerUpdateVRInput struct {
+	Input *SceneMarkerUpdateInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneMarkerUpdateVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneMarkerUpdateVRInput) GetInput() *SceneMarkerUpdateInput { return v.Input }
+
 // __SceneMarkersDestroyInput is used internally by genqlient
 type __SceneMarkersDestroyInput struct {
 	Ids []string `json:"ids"`
@@ -4518,6 +6187,190 @@ type __SceneMarkersDestroyInput struct {
 
 // GetIds returns __SceneMarkersDestroyInput.Ids, and is useful for accessing the field via an interface.
 func (v *__SceneMarkersDestroyInput) GetIds() []string { return v.Ids }
+
+// __SceneMergeVRInput is used internally by genqlient
+type __SceneMergeVRInput struct {
+	Input *SceneMergeInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneMergeVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneMergeVRInput) GetInput() *SceneMergeInput { return v.Input }
+
+// __SceneRescanVRInput is used internally by genqlient
+type __SceneRescanVRInput struct {
+	Input *ScanMetadataInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneRescanVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneRescanVRInput) GetInput() *ScanMetadataInput { return v.Input }
+
+// __SceneResetActivityVRInput is used internally by genqlient
+type __SceneResetActivityVRInput struct {
+	Id             string `json:"id"`
+	Reset_resume   *bool  `json:"reset_resume"`
+	Reset_duration *bool  `json:"reset_duration"`
+}
+
+// GetId returns __SceneResetActivityVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneResetActivityVRInput) GetId() string { return v.Id }
+
+// GetReset_resume returns __SceneResetActivityVRInput.Reset_resume, and is useful for accessing the field via an interface.
+func (v *__SceneResetActivityVRInput) GetReset_resume() *bool { return v.Reset_resume }
+
+// GetReset_duration returns __SceneResetActivityVRInput.Reset_duration, and is useful for accessing the field via an interface.
+func (v *__SceneResetActivityVRInput) GetReset_duration() *bool { return v.Reset_duration }
+
+// __SceneResetOVRInput is used internally by genqlient
+type __SceneResetOVRInput struct {
+	Id string `json:"id"`
+}
+
+// GetId returns __SceneResetOVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneResetOVRInput) GetId() string { return v.Id }
+
+// __SceneResetPlayVRInput is used internally by genqlient
+type __SceneResetPlayVRInput struct {
+	Id string `json:"id"`
+}
+
+// GetId returns __SceneResetPlayVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneResetPlayVRInput) GetId() string { return v.Id }
+
+// __SceneRevealFileVRInput is used internally by genqlient
+type __SceneRevealFileVRInput struct {
+	Id string `json:"id"`
+}
+
+// GetId returns __SceneRevealFileVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneRevealFileVRInput) GetId() string { return v.Id }
+
+// __SceneSetPrimaryFileVRInput is used internally by genqlient
+type __SceneSetPrimaryFileVRInput struct {
+	Scene_id string `json:"scene_id"`
+	File_id  string `json:"file_id"`
+}
+
+// GetScene_id returns __SceneSetPrimaryFileVRInput.Scene_id, and is useful for accessing the field via an interface.
+func (v *__SceneSetPrimaryFileVRInput) GetScene_id() string { return v.Scene_id }
+
+// GetFile_id returns __SceneSetPrimaryFileVRInput.File_id, and is useful for accessing the field via an interface.
+func (v *__SceneSetPrimaryFileVRInput) GetFile_id() string { return v.File_id }
+
+// __SceneSetStudioVRInput is used internally by genqlient
+type __SceneSetStudioVRInput struct {
+	Id        string `json:"id"`
+	Studio_id string `json:"studio_id"`
+}
+
+// GetId returns __SceneSetStudioVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneSetStudioVRInput) GetId() string { return v.Id }
+
+// GetStudio_id returns __SceneSetStudioVRInput.Studio_id, and is useful for accessing the field via an interface.
+func (v *__SceneSetStudioVRInput) GetStudio_id() string { return v.Studio_id }
+
+// __SceneSubmitStashBoxVRInput is used internally by genqlient
+type __SceneSubmitStashBoxVRInput struct {
+	Input *StashBoxDraftSubmissionInput `json:"input,omitempty"`
+}
+
+// GetInput returns __SceneSubmitStashBoxVRInput.Input, and is useful for accessing the field via an interface.
+func (v *__SceneSubmitStashBoxVRInput) GetInput() *StashBoxDraftSubmissionInput { return v.Input }
+
+// __SceneUpdateCodeVRInput is used internally by genqlient
+type __SceneUpdateCodeVRInput struct {
+	Id    string  `json:"id"`
+	Value *string `json:"value"`
+}
+
+// GetId returns __SceneUpdateCodeVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateCodeVRInput) GetId() string { return v.Id }
+
+// GetValue returns __SceneUpdateCodeVRInput.Value, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateCodeVRInput) GetValue() *string { return v.Value }
+
+// __SceneUpdateCoverImageVRInput is used internally by genqlient
+type __SceneUpdateCoverImageVRInput struct {
+	Id    string  `json:"id"`
+	Value *string `json:"value"`
+}
+
+// GetId returns __SceneUpdateCoverImageVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateCoverImageVRInput) GetId() string { return v.Id }
+
+// GetValue returns __SceneUpdateCoverImageVRInput.Value, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateCoverImageVRInput) GetValue() *string { return v.Value }
+
+// __SceneUpdateCustomFieldsVRInput is used internally by genqlient
+type __SceneUpdateCustomFieldsVRInput struct {
+	Id    string             `json:"id"`
+	Value *CustomFieldsInput `json:"value,omitempty"`
+}
+
+// GetId returns __SceneUpdateCustomFieldsVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateCustomFieldsVRInput) GetId() string { return v.Id }
+
+// GetValue returns __SceneUpdateCustomFieldsVRInput.Value, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateCustomFieldsVRInput) GetValue() *CustomFieldsInput { return v.Value }
+
+// __SceneUpdateDateVRInput is used internally by genqlient
+type __SceneUpdateDateVRInput struct {
+	Id    string  `json:"id"`
+	Value *string `json:"value"`
+}
+
+// GetId returns __SceneUpdateDateVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateDateVRInput) GetId() string { return v.Id }
+
+// GetValue returns __SceneUpdateDateVRInput.Value, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateDateVRInput) GetValue() *string { return v.Value }
+
+// __SceneUpdateDetailsVRInput is used internally by genqlient
+type __SceneUpdateDetailsVRInput struct {
+	Id    string  `json:"id"`
+	Value *string `json:"value"`
+}
+
+// GetId returns __SceneUpdateDetailsVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateDetailsVRInput) GetId() string { return v.Id }
+
+// GetValue returns __SceneUpdateDetailsVRInput.Value, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateDetailsVRInput) GetValue() *string { return v.Value }
+
+// __SceneUpdateDirectorVRInput is used internally by genqlient
+type __SceneUpdateDirectorVRInput struct {
+	Id    string  `json:"id"`
+	Value *string `json:"value"`
+}
+
+// GetId returns __SceneUpdateDirectorVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateDirectorVRInput) GetId() string { return v.Id }
+
+// GetValue returns __SceneUpdateDirectorVRInput.Value, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateDirectorVRInput) GetValue() *string { return v.Value }
+
+// __SceneUpdateGalleryVRInput is used internally by genqlient
+type __SceneUpdateGalleryVRInput struct {
+	Id     string   `json:"id"`
+	Values []string `json:"values"`
+}
+
+// GetId returns __SceneUpdateGalleryVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateGalleryVRInput) GetId() string { return v.Id }
+
+// GetValues returns __SceneUpdateGalleryVRInput.Values, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateGalleryVRInput) GetValues() []string { return v.Values }
+
+// __SceneUpdateGroupsVRInput is used internally by genqlient
+type __SceneUpdateGroupsVRInput struct {
+	Id     string             `json:"id"`
+	Values []*SceneGroupInput `json:"values,omitempty"`
+}
+
+// GetId returns __SceneUpdateGroupsVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateGroupsVRInput) GetId() string { return v.Id }
+
+// GetValues returns __SceneUpdateGroupsVRInput.Values, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateGroupsVRInput) GetValues() []*SceneGroupInput { return v.Values }
 
 // __SceneUpdateOrganizedInput is used internally by genqlient
 type __SceneUpdateOrganizedInput struct {
@@ -4530,6 +6383,18 @@ func (v *__SceneUpdateOrganizedInput) GetId() string { return v.Id }
 
 // GetIsOrganized returns __SceneUpdateOrganizedInput.IsOrganized, and is useful for accessing the field via an interface.
 func (v *__SceneUpdateOrganizedInput) GetIsOrganized() *bool { return v.IsOrganized }
+
+// __SceneUpdatePerformersVRInput is used internally by genqlient
+type __SceneUpdatePerformersVRInput struct {
+	Id     string   `json:"id"`
+	Values []string `json:"values"`
+}
+
+// GetId returns __SceneUpdatePerformersVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdatePerformersVRInput) GetId() string { return v.Id }
+
+// GetValues returns __SceneUpdatePerformersVRInput.Values, and is useful for accessing the field via an interface.
+func (v *__SceneUpdatePerformersVRInput) GetValues() []string { return v.Values }
 
 // __SceneUpdateRating100Input is used internally by genqlient
 type __SceneUpdateRating100Input struct {
@@ -4554,6 +6419,42 @@ func (v *__SceneUpdateTagsInput) GetId() string { return v.Id }
 
 // GetTag_ids returns __SceneUpdateTagsInput.Tag_ids, and is useful for accessing the field via an interface.
 func (v *__SceneUpdateTagsInput) GetTag_ids() []string { return v.Tag_ids }
+
+// __SceneUpdateTagsVRInput is used internally by genqlient
+type __SceneUpdateTagsVRInput struct {
+	Id     string   `json:"id"`
+	Values []string `json:"values"`
+}
+
+// GetId returns __SceneUpdateTagsVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateTagsVRInput) GetId() string { return v.Id }
+
+// GetValues returns __SceneUpdateTagsVRInput.Values, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateTagsVRInput) GetValues() []string { return v.Values }
+
+// __SceneUpdateTitleVRInput is used internally by genqlient
+type __SceneUpdateTitleVRInput struct {
+	Id    string  `json:"id"`
+	Value *string `json:"value"`
+}
+
+// GetId returns __SceneUpdateTitleVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateTitleVRInput) GetId() string { return v.Id }
+
+// GetValue returns __SceneUpdateTitleVRInput.Value, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateTitleVRInput) GetValue() *string { return v.Value }
+
+// __SceneUpdateURLsVRInput is used internally by genqlient
+type __SceneUpdateURLsVRInput struct {
+	Id     string   `json:"id"`
+	Values []string `json:"values"`
+}
+
+// GetId returns __SceneUpdateURLsVRInput.Id, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateURLsVRInput) GetId() string { return v.Id }
+
+// GetValues returns __SceneUpdateURLsVRInput.Values, and is useful for accessing the field via an interface.
+func (v *__SceneUpdateURLsVRInput) GetValues() []string { return v.Values }
 
 // __TagCreateInput is used internally by genqlient
 type __TagCreateInput struct {
@@ -4697,6 +6598,80 @@ func FindCredentials(
 	}
 
 	data_ = &FindCredentialsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by FindGalleriesForSceneEditor.
+const FindGalleriesForSceneEditor_Operation = `
+query FindGalleriesForSceneEditor ($q: String) {
+	findGalleries(filter: {per_page:100,q:$q,sort:"title",direction:ASC}) {
+		galleries {
+			id
+			title
+		}
+	}
+}
+`
+
+func FindGalleriesForSceneEditor(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	q *string,
+) (data_ *FindGalleriesForSceneEditorResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindGalleriesForSceneEditor",
+		Query:  FindGalleriesForSceneEditor_Operation,
+		Variables: &__FindGalleriesForSceneEditorInput{
+			Q: q,
+		},
+	}
+
+	data_ = &FindGalleriesForSceneEditorResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by FindGroupsForSceneEditor.
+const FindGroupsForSceneEditor_Operation = `
+query FindGroupsForSceneEditor ($q: String) {
+	findGroups(filter: {per_page:100,q:$q,sort:"name",direction:ASC}) {
+		groups {
+			id
+			name
+		}
+	}
+}
+`
+
+func FindGroupsForSceneEditor(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	q *string,
+) (data_ *FindGroupsForSceneEditorResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindGroupsForSceneEditor",
+		Query:  FindGroupsForSceneEditor_Operation,
+		Variables: &__FindGroupsForSceneEditorInput{
+			Q: q,
+		},
+	}
+
+	data_ = &FindGroupsForSceneEditorResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -4895,6 +6870,44 @@ func FindSavedSceneFilters(
 	return data_, err_
 }
 
+// The query executed by FindSceneActivity.
+const FindSceneActivity_Operation = `
+query FindSceneActivity ($id: ID!) {
+	findScene(id: $id) {
+		play_history
+		o_history
+		play_duration
+		resume_time
+		last_played_at
+	}
+}
+`
+
+func FindSceneActivity(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+) (data_ *FindSceneActivityResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindSceneActivity",
+		Query:  FindSceneActivity_Operation,
+		Variables: &__FindSceneActivityInput{
+			Id: id,
+		},
+	}
+
+	data_ = &FindSceneActivityResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The query executed by FindSceneIdsByFilter.
 const FindSceneIdsByFilter_Operation = `
 query FindSceneIdsByFilter ($scene_filter: SceneFilterType, $filterOpts: FindFilterType) {
@@ -4952,6 +6965,10 @@ fragment SceneMarkerParts on SceneMarker {
 		id
 		name
 	}
+	tags {
+		id
+		name
+	}
 }
 `
 
@@ -4969,6 +6986,41 @@ func FindSceneMarkers(
 	}
 
 	data_ = &FindSceneMarkersResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by FindSceneStashBoxesVR.
+const FindSceneStashBoxesVR_Operation = `
+query FindSceneStashBoxesVR {
+	configuration {
+		general {
+			stashBoxes {
+				name
+				endpoint
+			}
+		}
+	}
+}
+`
+
+func FindSceneStashBoxesVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+) (data_ *FindSceneStashBoxesVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "FindSceneStashBoxesVR",
+		Query:  FindSceneStashBoxesVR_Operation,
+	}
+
+	data_ = &FindSceneStashBoxesVRResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -5042,15 +7094,33 @@ query FindScenes ($scene_ids: [Int!]) {
 fragment SceneParts on Scene {
 	id
 	title
+	code
+	details
+	director
 	rating100
 	created_at
+	updated_at
 	date
+	urls
+	custom_fields
 	files {
+		id
 		basename
 		duration
 		path
 		height
+		width
+		size
+		bit_rate
+		format
+		frame_rate
+		audio_codec
 		video_codec
+		mod_time
+		fingerprints {
+			type
+			value
+		}
 	}
 	studio {
 		id
@@ -5065,8 +7135,18 @@ fragment SceneParts on Scene {
 	}
 	groups {
 		group {
+			id
 			name
 		}
+		scene_index
+	}
+	galleries {
+		id
+		title
+	}
+	stash_ids {
+		endpoint
+		stash_id
 	}
 	play_count
 	o_counter
@@ -5098,6 +7178,10 @@ fragment SceneMarkerParts on SceneMarker {
 	end_seconds
 	title
 	primary_tag {
+		id
+		name
+	}
+	tags {
 		id
 		name
 	}
@@ -5384,6 +7468,43 @@ func IsSceneOrganized(
 	return data_, err_
 }
 
+// The mutation executed by SceneAddOVR.
+const SceneAddOVR_Operation = `
+mutation SceneAddOVR ($id: ID!, $times: [Timestamp!]) {
+	sceneAddO(id: $id, times: $times) {
+		count
+		history
+	}
+}
+`
+
+func SceneAddOVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	times []time.Time,
+) (data_ *SceneAddOVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneAddOVR",
+		Query:  SceneAddOVR_Operation,
+		Variables: &__SceneAddOVRInput{
+			Id:    id,
+			Times: times,
+		},
+	}
+
+	data_ = &SceneAddOVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The mutation executed by SceneAddPlayDurationSeconds.
 const SceneAddPlayDurationSeconds_Operation = `
 mutation SceneAddPlayDurationSeconds ($id: ID!, $seconds: Float) {
@@ -5407,6 +7528,143 @@ func SceneAddPlayDurationSeconds(
 	}
 
 	data_ = &SceneAddPlayDurationSecondsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneAddPlayVR.
+const SceneAddPlayVR_Operation = `
+mutation SceneAddPlayVR ($id: ID!, $times: [Timestamp!]) {
+	sceneAddPlay(id: $id, times: $times) {
+		count
+		history
+	}
+}
+`
+
+func SceneAddPlayVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	times []time.Time,
+) (data_ *SceneAddPlayVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneAddPlayVR",
+		Query:  SceneAddPlayVR_Operation,
+		Variables: &__SceneAddPlayVRInput{
+			Id:    id,
+			Times: times,
+		},
+	}
+
+	data_ = &SceneAddPlayVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneAssignFileVR.
+const SceneAssignFileVR_Operation = `
+mutation SceneAssignFileVR ($input: AssignSceneFileInput!) {
+	sceneAssignFile(input: $input)
+}
+`
+
+func SceneAssignFileVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *AssignSceneFileInput,
+) (data_ *SceneAssignFileVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneAssignFileVR",
+		Query:  SceneAssignFileVR_Operation,
+		Variables: &__SceneAssignFileVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneAssignFileVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneClearStudioVR.
+const SceneClearStudioVR_Operation = `
+mutation SceneClearStudioVR ($id: ID!) {
+	sceneUpdate(input: {id:$id,studio_id:null}) {
+		id
+	}
+}
+`
+
+func SceneClearStudioVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+) (data_ *SceneClearStudioVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneClearStudioVR",
+		Query:  SceneClearStudioVR_Operation,
+		Variables: &__SceneClearStudioVRInput{
+			Id: id,
+		},
+	}
+
+	data_ = &SceneClearStudioVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneCreateFromFileVR.
+const SceneCreateFromFileVR_Operation = `
+mutation SceneCreateFromFileVR ($input: SceneCreateInput!) {
+	sceneCreate(input: $input) {
+		id
+	}
+}
+`
+
+func SceneCreateFromFileVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *SceneCreateInput,
+) (data_ *SceneCreateFromFileVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneCreateFromFileVR",
+		Query:  SceneCreateFromFileVR_Operation,
+		Variables: &__SceneCreateFromFileVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneCreateFromFileVRResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -5486,6 +7744,112 @@ func SceneDecrementPlayCount(
 	return data_, err_
 }
 
+// The mutation executed by SceneDeleteFilesVR.
+const SceneDeleteFilesVR_Operation = `
+mutation SceneDeleteFilesVR ($ids: [ID!]!) {
+	deleteFiles(ids: $ids)
+}
+`
+
+func SceneDeleteFilesVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	ids []string,
+) (data_ *SceneDeleteFilesVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneDeleteFilesVR",
+		Query:  SceneDeleteFilesVR_Operation,
+		Variables: &__SceneDeleteFilesVRInput{
+			Ids: ids,
+		},
+	}
+
+	data_ = &SceneDeleteFilesVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneDeleteOVR.
+const SceneDeleteOVR_Operation = `
+mutation SceneDeleteOVR ($id: ID!, $times: [Timestamp!]) {
+	sceneDeleteO(id: $id, times: $times) {
+		count
+		history
+	}
+}
+`
+
+func SceneDeleteOVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	times []time.Time,
+) (data_ *SceneDeleteOVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneDeleteOVR",
+		Query:  SceneDeleteOVR_Operation,
+		Variables: &__SceneDeleteOVRInput{
+			Id:    id,
+			Times: times,
+		},
+	}
+
+	data_ = &SceneDeleteOVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneDeletePlayVR.
+const SceneDeletePlayVR_Operation = `
+mutation SceneDeletePlayVR ($id: ID!, $times: [Timestamp!]) {
+	sceneDeletePlay(id: $id, times: $times) {
+		count
+		history
+	}
+}
+`
+
+func SceneDeletePlayVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	times []time.Time,
+) (data_ *SceneDeletePlayVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneDeletePlayVR",
+		Query:  SceneDeletePlayVR_Operation,
+		Variables: &__SceneDeletePlayVRInput{
+			Id:    id,
+			Times: times,
+		},
+	}
+
+	data_ = &SceneDeletePlayVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The mutation executed by SceneDestroy.
 const SceneDestroy_Operation = `
 mutation SceneDestroy ($id: ID!) {
@@ -5507,6 +7871,72 @@ func SceneDestroy(
 	}
 
 	data_ = &SceneDestroyResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneGenerateScreenshotVR.
+const SceneGenerateScreenshotVR_Operation = `
+mutation SceneGenerateScreenshotVR ($id: ID!, $at: Float) {
+	sceneGenerateScreenshot(id: $id, at: $at)
+}
+`
+
+func SceneGenerateScreenshotVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	at *float64,
+) (data_ *SceneGenerateScreenshotVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneGenerateScreenshotVR",
+		Query:  SceneGenerateScreenshotVR_Operation,
+		Variables: &__SceneGenerateScreenshotVRInput{
+			Id: id,
+			At: at,
+		},
+	}
+
+	data_ = &SceneGenerateScreenshotVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneGenerateVR.
+const SceneGenerateVR_Operation = `
+mutation SceneGenerateVR ($input: GenerateMetadataInput!) {
+	metadataGenerate(input: $input)
+}
+`
+
+func SceneGenerateVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *GenerateMetadataInput,
+) (data_ *SceneGenerateVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneGenerateVR",
+		Query:  SceneGenerateVR_Operation,
+		Variables: &__SceneGenerateVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneGenerateVRResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -5628,6 +8058,72 @@ func SceneMarkerCreate(
 	return data_, err_
 }
 
+// The mutation executed by SceneMarkerCreateVR.
+const SceneMarkerCreateVR_Operation = `
+mutation SceneMarkerCreateVR ($input: SceneMarkerCreateInput!) {
+	sceneMarkerCreate(input: $input) {
+		id
+	}
+}
+`
+
+func SceneMarkerCreateVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *SceneMarkerCreateInput,
+) (data_ *SceneMarkerCreateVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneMarkerCreateVR",
+		Query:  SceneMarkerCreateVR_Operation,
+		Variables: &__SceneMarkerCreateVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneMarkerCreateVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneMarkerDeleteVR.
+const SceneMarkerDeleteVR_Operation = `
+mutation SceneMarkerDeleteVR ($id: ID!) {
+	sceneMarkerDestroy(id: $id)
+}
+`
+
+func SceneMarkerDeleteVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+) (data_ *SceneMarkerDeleteVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneMarkerDeleteVR",
+		Query:  SceneMarkerDeleteVR_Operation,
+		Variables: &__SceneMarkerDeleteVRInput{
+			Id: id,
+		},
+	}
+
+	data_ = &SceneMarkerDeleteVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The mutation executed by SceneMarkerUpdate.
 const SceneMarkerUpdate_Operation = `
 mutation SceneMarkerUpdate ($id: ID!, $tag_id: ID!, $seconds: Float!, $end_seconds: Float, $title: String!) {
@@ -5659,6 +8155,40 @@ func SceneMarkerUpdate(
 	}
 
 	data_ = &SceneMarkerUpdateResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneMarkerUpdateVR.
+const SceneMarkerUpdateVR_Operation = `
+mutation SceneMarkerUpdateVR ($input: SceneMarkerUpdateInput!) {
+	sceneMarkerUpdate(input: $input) {
+		id
+	}
+}
+`
+
+func SceneMarkerUpdateVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *SceneMarkerUpdateInput,
+) (data_ *SceneMarkerUpdateVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneMarkerUpdateVR",
+		Query:  SceneMarkerUpdateVR_Operation,
+		Variables: &__SceneMarkerUpdateVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneMarkerUpdateVRResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -5702,6 +8232,596 @@ func SceneMarkersDestroy(
 	return data_, err_
 }
 
+// The mutation executed by SceneMergeVR.
+const SceneMergeVR_Operation = `
+mutation SceneMergeVR ($input: SceneMergeInput!) {
+	sceneMerge(input: $input) {
+		id
+	}
+}
+`
+
+func SceneMergeVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *SceneMergeInput,
+) (data_ *SceneMergeVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneMergeVR",
+		Query:  SceneMergeVR_Operation,
+		Variables: &__SceneMergeVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneMergeVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneRescanVR.
+const SceneRescanVR_Operation = `
+mutation SceneRescanVR ($input: ScanMetadataInput!) {
+	metadataScan(input: $input)
+}
+`
+
+func SceneRescanVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *ScanMetadataInput,
+) (data_ *SceneRescanVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneRescanVR",
+		Query:  SceneRescanVR_Operation,
+		Variables: &__SceneRescanVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneRescanVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneResetActivityVR.
+const SceneResetActivityVR_Operation = `
+mutation SceneResetActivityVR ($id: ID!, $reset_resume: Boolean, $reset_duration: Boolean) {
+	sceneResetActivity(id: $id, reset_resume: $reset_resume, reset_duration: $reset_duration)
+}
+`
+
+func SceneResetActivityVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	reset_resume *bool,
+	reset_duration *bool,
+) (data_ *SceneResetActivityVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneResetActivityVR",
+		Query:  SceneResetActivityVR_Operation,
+		Variables: &__SceneResetActivityVRInput{
+			Id:             id,
+			Reset_resume:   reset_resume,
+			Reset_duration: reset_duration,
+		},
+	}
+
+	data_ = &SceneResetActivityVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneResetOVR.
+const SceneResetOVR_Operation = `
+mutation SceneResetOVR ($id: ID!) {
+	sceneResetO(id: $id)
+}
+`
+
+func SceneResetOVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+) (data_ *SceneResetOVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneResetOVR",
+		Query:  SceneResetOVR_Operation,
+		Variables: &__SceneResetOVRInput{
+			Id: id,
+		},
+	}
+
+	data_ = &SceneResetOVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneResetPlayVR.
+const SceneResetPlayVR_Operation = `
+mutation SceneResetPlayVR ($id: ID!) {
+	sceneResetPlayCount(id: $id)
+}
+`
+
+func SceneResetPlayVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+) (data_ *SceneResetPlayVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneResetPlayVR",
+		Query:  SceneResetPlayVR_Operation,
+		Variables: &__SceneResetPlayVRInput{
+			Id: id,
+		},
+	}
+
+	data_ = &SceneResetPlayVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneRevealFileVR.
+const SceneRevealFileVR_Operation = `
+mutation SceneRevealFileVR ($id: ID!) {
+	revealFileInFileManager(id: $id)
+}
+`
+
+func SceneRevealFileVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+) (data_ *SceneRevealFileVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneRevealFileVR",
+		Query:  SceneRevealFileVR_Operation,
+		Variables: &__SceneRevealFileVRInput{
+			Id: id,
+		},
+	}
+
+	data_ = &SceneRevealFileVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneSetPrimaryFileVR.
+const SceneSetPrimaryFileVR_Operation = `
+mutation SceneSetPrimaryFileVR ($scene_id: ID!, $file_id: ID!) {
+	sceneUpdate(input: {id:$scene_id,primary_file_id:$file_id}) {
+		id
+	}
+}
+`
+
+func SceneSetPrimaryFileVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	scene_id string,
+	file_id string,
+) (data_ *SceneSetPrimaryFileVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneSetPrimaryFileVR",
+		Query:  SceneSetPrimaryFileVR_Operation,
+		Variables: &__SceneSetPrimaryFileVRInput{
+			Scene_id: scene_id,
+			File_id:  file_id,
+		},
+	}
+
+	data_ = &SceneSetPrimaryFileVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneSetStudioVR.
+const SceneSetStudioVR_Operation = `
+mutation SceneSetStudioVR ($id: ID!, $studio_id: ID!) {
+	sceneUpdate(input: {id:$id,studio_id:$studio_id}) {
+		id
+	}
+}
+`
+
+func SceneSetStudioVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	studio_id string,
+) (data_ *SceneSetStudioVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneSetStudioVR",
+		Query:  SceneSetStudioVR_Operation,
+		Variables: &__SceneSetStudioVRInput{
+			Id:        id,
+			Studio_id: studio_id,
+		},
+	}
+
+	data_ = &SceneSetStudioVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneSubmitStashBoxVR.
+const SceneSubmitStashBoxVR_Operation = `
+mutation SceneSubmitStashBoxVR ($input: StashBoxDraftSubmissionInput!) {
+	submitStashBoxSceneDraft(input: $input)
+}
+`
+
+func SceneSubmitStashBoxVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	input *StashBoxDraftSubmissionInput,
+) (data_ *SceneSubmitStashBoxVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneSubmitStashBoxVR",
+		Query:  SceneSubmitStashBoxVR_Operation,
+		Variables: &__SceneSubmitStashBoxVRInput{
+			Input: input,
+		},
+	}
+
+	data_ = &SceneSubmitStashBoxVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateCodeVR.
+const SceneUpdateCodeVR_Operation = `
+mutation SceneUpdateCodeVR ($id: ID!, $value: String) {
+	sceneUpdate(input: {id:$id,code:$value}) {
+		id
+	}
+}
+`
+
+func SceneUpdateCodeVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	value *string,
+) (data_ *SceneUpdateCodeVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateCodeVR",
+		Query:  SceneUpdateCodeVR_Operation,
+		Variables: &__SceneUpdateCodeVRInput{
+			Id:    id,
+			Value: value,
+		},
+	}
+
+	data_ = &SceneUpdateCodeVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateCoverImageVR.
+const SceneUpdateCoverImageVR_Operation = `
+mutation SceneUpdateCoverImageVR ($id: ID!, $value: String) {
+	sceneUpdate(input: {id:$id,cover_image:$value}) {
+		id
+	}
+}
+`
+
+func SceneUpdateCoverImageVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	value *string,
+) (data_ *SceneUpdateCoverImageVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateCoverImageVR",
+		Query:  SceneUpdateCoverImageVR_Operation,
+		Variables: &__SceneUpdateCoverImageVRInput{
+			Id:    id,
+			Value: value,
+		},
+	}
+
+	data_ = &SceneUpdateCoverImageVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateCustomFieldsVR.
+const SceneUpdateCustomFieldsVR_Operation = `
+mutation SceneUpdateCustomFieldsVR ($id: ID!, $value: CustomFieldsInput!) {
+	sceneUpdate(input: {id:$id,custom_fields:$value}) {
+		id
+	}
+}
+`
+
+func SceneUpdateCustomFieldsVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	value *CustomFieldsInput,
+) (data_ *SceneUpdateCustomFieldsVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateCustomFieldsVR",
+		Query:  SceneUpdateCustomFieldsVR_Operation,
+		Variables: &__SceneUpdateCustomFieldsVRInput{
+			Id:    id,
+			Value: value,
+		},
+	}
+
+	data_ = &SceneUpdateCustomFieldsVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateDateVR.
+const SceneUpdateDateVR_Operation = `
+mutation SceneUpdateDateVR ($id: ID!, $value: String) {
+	sceneUpdate(input: {id:$id,date:$value}) {
+		id
+	}
+}
+`
+
+func SceneUpdateDateVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	value *string,
+) (data_ *SceneUpdateDateVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateDateVR",
+		Query:  SceneUpdateDateVR_Operation,
+		Variables: &__SceneUpdateDateVRInput{
+			Id:    id,
+			Value: value,
+		},
+	}
+
+	data_ = &SceneUpdateDateVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateDetailsVR.
+const SceneUpdateDetailsVR_Operation = `
+mutation SceneUpdateDetailsVR ($id: ID!, $value: String) {
+	sceneUpdate(input: {id:$id,details:$value}) {
+		id
+	}
+}
+`
+
+func SceneUpdateDetailsVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	value *string,
+) (data_ *SceneUpdateDetailsVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateDetailsVR",
+		Query:  SceneUpdateDetailsVR_Operation,
+		Variables: &__SceneUpdateDetailsVRInput{
+			Id:    id,
+			Value: value,
+		},
+	}
+
+	data_ = &SceneUpdateDetailsVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateDirectorVR.
+const SceneUpdateDirectorVR_Operation = `
+mutation SceneUpdateDirectorVR ($id: ID!, $value: String) {
+	sceneUpdate(input: {id:$id,director:$value}) {
+		id
+	}
+}
+`
+
+func SceneUpdateDirectorVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	value *string,
+) (data_ *SceneUpdateDirectorVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateDirectorVR",
+		Query:  SceneUpdateDirectorVR_Operation,
+		Variables: &__SceneUpdateDirectorVRInput{
+			Id:    id,
+			Value: value,
+		},
+	}
+
+	data_ = &SceneUpdateDirectorVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateGalleryVR.
+const SceneUpdateGalleryVR_Operation = `
+mutation SceneUpdateGalleryVR ($id: ID!, $values: [ID!]!) {
+	sceneUpdate(input: {id:$id,gallery_ids:$values}) {
+		id
+	}
+}
+`
+
+func SceneUpdateGalleryVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	values []string,
+) (data_ *SceneUpdateGalleryVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateGalleryVR",
+		Query:  SceneUpdateGalleryVR_Operation,
+		Variables: &__SceneUpdateGalleryVRInput{
+			Id:     id,
+			Values: values,
+		},
+	}
+
+	data_ = &SceneUpdateGalleryVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateGroupsVR.
+const SceneUpdateGroupsVR_Operation = `
+mutation SceneUpdateGroupsVR ($id: ID!, $values: [SceneGroupInput!]!) {
+	sceneUpdate(input: {id:$id,groups:$values}) {
+		id
+	}
+}
+`
+
+func SceneUpdateGroupsVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	values []*SceneGroupInput,
+) (data_ *SceneUpdateGroupsVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateGroupsVR",
+		Query:  SceneUpdateGroupsVR_Operation,
+		Variables: &__SceneUpdateGroupsVRInput{
+			Id:     id,
+			Values: values,
+		},
+	}
+
+	data_ = &SceneUpdateGroupsVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The mutation executed by SceneUpdateOrganized.
 const SceneUpdateOrganized_Operation = `
 mutation SceneUpdateOrganized ($id: ID!, $isOrganized: Boolean) {
@@ -5728,6 +8848,42 @@ func SceneUpdateOrganized(
 	}
 
 	data_ = &SceneUpdateOrganizedResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdatePerformersVR.
+const SceneUpdatePerformersVR_Operation = `
+mutation SceneUpdatePerformersVR ($id: ID!, $values: [ID!]!) {
+	sceneUpdate(input: {id:$id,performer_ids:$values}) {
+		id
+	}
+}
+`
+
+func SceneUpdatePerformersVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	values []string,
+) (data_ *SceneUpdatePerformersVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdatePerformersVR",
+		Query:  SceneUpdatePerformersVR_Operation,
+		Variables: &__SceneUpdatePerformersVRInput{
+			Id:     id,
+			Values: values,
+		},
+	}
+
+	data_ = &SceneUpdatePerformersVRResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
@@ -5800,6 +8956,117 @@ func SceneUpdateTags(
 	}
 
 	data_ = &SceneUpdateTagsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateTagsVR.
+const SceneUpdateTagsVR_Operation = `
+mutation SceneUpdateTagsVR ($id: ID!, $values: [ID!]!) {
+	sceneUpdate(input: {id:$id,tag_ids:$values}) {
+		id
+	}
+}
+`
+
+func SceneUpdateTagsVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	values []string,
+) (data_ *SceneUpdateTagsVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateTagsVR",
+		Query:  SceneUpdateTagsVR_Operation,
+		Variables: &__SceneUpdateTagsVRInput{
+			Id:     id,
+			Values: values,
+		},
+	}
+
+	data_ = &SceneUpdateTagsVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateTitleVR.
+const SceneUpdateTitleVR_Operation = `
+mutation SceneUpdateTitleVR ($id: ID!, $value: String) {
+	sceneUpdate(input: {id:$id,title:$value}) {
+		id
+	}
+}
+`
+
+// Each VR editor mutation explicitly names the one field it changes. Sending a
+// generated SceneUpdateInput as a GraphQL variable serializes its other fields
+// as null, which Stash correctly interprets as a request to clear them.
+func SceneUpdateTitleVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	value *string,
+) (data_ *SceneUpdateTitleVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateTitleVR",
+		Query:  SceneUpdateTitleVR_Operation,
+		Variables: &__SceneUpdateTitleVRInput{
+			Id:    id,
+			Value: value,
+		},
+	}
+
+	data_ = &SceneUpdateTitleVRResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The mutation executed by SceneUpdateURLsVR.
+const SceneUpdateURLsVR_Operation = `
+mutation SceneUpdateURLsVR ($id: ID!, $values: [String!]!) {
+	sceneUpdate(input: {id:$id,urls:$values}) {
+		id
+	}
+}
+`
+
+func SceneUpdateURLsVR(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	id string,
+	values []string,
+) (data_ *SceneUpdateURLsVRResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "SceneUpdateURLsVR",
+		Query:  SceneUpdateURLsVR_Operation,
+		Variables: &__SceneUpdateURLsVRInput{
+			Id:     id,
+			Values: values,
+		},
+	}
+
+	data_ = &SceneUpdateURLsVRResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(

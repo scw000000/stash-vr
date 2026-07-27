@@ -26,8 +26,20 @@ type CaptionRef struct {
 }
 
 type SceneMarker struct {
-	Seconds float64 `json:"seconds"`
-	Title   string  `json:"title"`
+	ID         string      `json:"id"`
+	Seconds    float64     `json:"seconds"`
+	EndSeconds *float64    `json:"endSeconds,omitempty"`
+	Title      string      `json:"title"`
+	PrimaryTag *EntityRef  `json:"primaryTag,omitempty"`
+	Tags       []EntityRef `json:"tags"`
+}
+
+// SceneGroupRef preserves the relationship position used by Stash's scene
+// editor instead of flattening groups into a display-only list.
+type SceneGroupRef struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	SceneIndex *int   `json:"sceneIndex,omitempty"`
 }
 
 // SidebarData holds the three lists that populate the sidebar.
@@ -159,6 +171,7 @@ type SceneState struct {
 	Rating1to5 int         `json:"rating1to5"`
 	IsFavorite bool        `json:"isFavorite"`
 	OCounter   int         `json:"oCounter"`
+	PlayCount  int         `json:"playCount"`
 	Organized  bool        `json:"organized"`
 	Tags       []EntityRef `json:"tags"`
 	Err        string      `json:"err,omitempty"`

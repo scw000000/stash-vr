@@ -26,6 +26,8 @@ func Router(libraryService *library.Service) http.Handler {
 	r.Get("/filter-catalog", h.filterCatalogHandler)
 	r.Get("/filter-matrix", h.filterMatrixHandler)
 	r.Get("/filter-options/{kind}", h.filterOptionsHandler)
+	r.Get("/scene-options/{kind}", h.sceneVREditOptionsHandler)
+	r.Get("/scene/{id}/stash-boxes", h.sceneVRStashBoxesHandler)
 	r.Get("/perf/{id}", h.entityHandler("perf"))
 	r.Get("/studio/{id}", h.entityHandler("studio"))
 	r.Get("/tag/{id}", h.entityHandler("tag"))
@@ -43,7 +45,17 @@ func Router(libraryService *library.Service) http.Handler {
 	r.Post("/scene/{id}/projection", h.sceneProjectionHandler)
 	r.Post("/scene/{id}/o/increment", h.sceneOIncrementHandler)
 	r.Post("/scene/{id}/o/decrement", h.sceneODecrementHandler)
+	r.Post("/scene/{id}/play/increment", h.scenePlayIncrementHandler)
 	r.Post("/scene/{id}/organized", h.sceneOrganizedHandler)
+	r.Post("/scene/{id}/update", h.sceneVRUpdateHandler)
+	r.Post("/scene/{id}/relations", h.sceneVRRelationsHandler)
+	r.Post("/scene/{id}/file/{fileID}/{action}", h.sceneVRFileActionHandler)
+	r.Post("/scene/{id}/marker", h.sceneVRMarkerHandler)
+	r.Post("/scene/{id}/marker/{markerID}", h.sceneVRMarkerHandler)
+	r.Post("/scene/{id}/marker/{markerID}/delete", h.sceneVRMarkerHandler)
+	r.Post("/scene/{id}/history/{kind}/{action}", h.sceneVRHistoryHandler)
+	r.Post("/scene/{id}/delete", h.sceneVRDeleteHandler)
+	r.Post("/scene/{id}/operation/{operation}", h.sceneVROperationHandler)
 
 	return r
 }

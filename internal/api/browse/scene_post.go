@@ -82,6 +82,9 @@ func buildSceneState(ctx context.Context, svc *library.Service, id string) (Scen
 	if vd.SceneParts.O_counter != nil {
 		state.OCounter = *vd.SceneParts.O_counter
 	}
+	if vd.SceneParts.Play_count != nil {
+		state.PlayCount = *vd.SceneParts.Play_count
+	}
 	state.Organized = vd.SceneParts.Organized
 	state.Tags, state.IsFavorite = projectTags(vd.SceneParts)
 	return state, nil
@@ -249,6 +252,17 @@ func (h *httpHandler) sceneODecrementHandler(w http.ResponseWriter, r *http.Requ
 	if err := h.libraryService.DecrementO(r.Context(), id); err != nil {
 		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: decrement O")
 		writeErr(w, http.StatusInternalServerError, "O decrement failed")
+		return
+	}
+	h.refreshSceneCache(r, id)
+	h.writeState(w, r, id)
+}
+
+func (h *httpHandler) scenePlayIncrementHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.libraryService.IncrementPlayCount(r.Context(), id); err != nil {
+		log.Ctx(r.Context()).Err(err).Str("id", id).Msg("browse: increment play count")
+		writeErr(w, http.StatusInternalServerError, "play increment failed")
 		return
 	}
 	h.refreshSceneCache(r, id)
