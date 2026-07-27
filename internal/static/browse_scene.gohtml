@@ -546,6 +546,14 @@ a.chip:hover { background: #3a3a3a; }
                   theta-start="222.5" theta-length="45.5" open-ended="true"
                   material="shader: flat; side: double; color: #182932; opacity: 1.0">
       </a-cylinder>
+      <!-- Behind the button rows, but in front of the visual shell: this
+           transparent surface owns thumbstick scrolling over empty detail
+           body space and through pass-through canvas labels. -->
+      <a-cylinder class="vr-detail-scroll-surface"
+                  radius="3.00" height="1.18" position="0 -0.51 3.02"
+                  theta-start="222.5" theta-length="45.5" open-ended="true"
+                  material="shader: flat; side: double; transparent: true; opacity: 0; depthWrite: false">
+      </a-cylinder>
       <!-- JS renders every header, metadata row, tag chip, and action as a
            concentric cylinder segment under this hub. Canvas-text labels
            keep CJK Stash metadata readable in Meta Browser. -->
@@ -1548,7 +1556,11 @@ a.chip:hover { background: #3a3a3a; }
         const isVisible = (v === true || v === 'true');
         if (isVisible) {
           parts.push('#' + id + ' .vr-btn');
-          if (id !== 'vrDetailPanel') parts.push('#' + id + ' .vr-panel-bg');
+          if (id === 'vrDetailPanel') {
+            parts.push('#' + id + ' .vr-detail-scroll-surface');
+          } else {
+            parts.push('#' + id + ' .vr-panel-bg');
+          }
         }
       });
       const selector = parts.join(', ');
@@ -1926,6 +1938,11 @@ a.chip:hover { background: #3a3a3a; }
       status: '',
       descriptionLines: [],
       descriptionOffset: 0,
+      // The content below the fixed title/toolbar/tabs is one continuous
+      // thumbstick-scrollable surface.  Keep its state independently from
+      // the browse grid so scrolling a long Stash detail never flips pages.
+      contentScrollY: 0,
+      contentScrollMax: 0,
       queueContinue: false,
       queueOffset: 0,
       textEntry: null,
@@ -2022,12 +2039,25 @@ a.chip:hover { background: #3a3a3a; }
     // grid and the right-side filters.
     const DETAIL_THETA_START = 222.5;
     const DETAIL_THETA_LENGTH = 45.5;
-    // The detail shell is radius 3.02. On this left-hand arc, decreasing
-    // the radius moves a row toward the camera. Keep the click surface well
-    // in front of the shell so the controller ray hits the row before the
-    // passive panel backdrop.
+    const DETAIL_THETA_END = DETAIL_THETA_START + DETAIL_THETA_LENGTH;
+    // The shell remains passive (not a raycast candidate); its interactive
+    // rows sit just in front of it. Labels only need a 2mm offset from their
+    // rows: the old 2cm gap read as floating text in-headset.
     const DETAIL_ROW_RADIUS = 2.92;
-    const DETAIL_TEXT_RADIUS = 2.90;
+    const DETAIL_TEXT_RADIUS = 2.919;
+    const DETAIL_CONTENT_TOP = 0.08;
+    const DETAIL_CONTENT_BOTTOM = -1.10;
+
+    // A-Frame's cylinder winding is reversed on the left extension compared
+    // with the logical Stash row order: increasing θ moves toward the user's
+    // left. Renderers can continue to describe a row naturally from logical
+    // left to right; this one conversion mirrors the segment on the left arc
+    // so 1,2,3,4,5 is seen as 1,2,3,4,5 in-headset.
+    function detailVisualThetaStart(logicalStart, thetaLength) {
+      const start = Number(logicalStart);
+      const length = Number(thetaLength);
+      return DETAIL_THETA_END - (start - DETAIL_THETA_START) - length;
+    }
 
     function attachDetailRowLabel(parent, value, opts) {
       const thetaStart = opts.thetaStart;
@@ -2112,12 +2142,15 @@ a.chip:hover { background: #3a3a3a; }
     function addDetailRow(root, opts) {
       const row = document.createElement('a-cylinder');
       const interactive = typeof opts.onClick === 'function';
+      const logicalThetaStart = opts.thetaStart == null ? DETAIL_THETA_START : opts.thetaStart;
+      const thetaLength = opts.thetaLength == null ? DETAIL_THETA_LENGTH : opts.thetaLength;
+      const visualThetaStart = detailVisualThetaStart(logicalThetaStart, thetaLength);
       if (interactive) row.classList.add('vr-btn');
       row.setAttribute('radius', DETAIL_ROW_RADIUS);
       row.setAttribute('height', (opts.height || 0.10).toFixed(3));
       row.setAttribute('open-ended', 'true');
-      row.setAttribute('theta-start', (opts.thetaStart == null ? DETAIL_THETA_START : opts.thetaStart).toFixed(3));
-      row.setAttribute('theta-length', (opts.thetaLength == null ? DETAIL_THETA_LENGTH : opts.thetaLength).toFixed(3));
+      row.setAttribute('theta-start', visualThetaStart.toFixed(3));
+      row.setAttribute('theta-length', Number(thetaLength).toFixed(3));
       row.setAttribute('position', '0 ' + opts.y.toFixed(3) + ' 0');
       if (opts.color) {
         row.setAttribute('material',
@@ -2129,9 +2162,18 @@ a.chip:hover { background: #3a3a3a; }
           'shader: flat; side: double; transparent: true; opacity: 0; depthWrite: false');
       }
       root.appendChild(row);
+      // Detail body rows are appended after their scroll parent exists. Match
+      // the grid's lifecycle handling: when A-Frame finishes creating the
+      // cylinder mesh, reapply the viewport state rather than relying on an
+      // early object3D mutation that it may overwrite during initialization.
+      if (root && root.id === 'vrDetailContent') {
+        row.addEventListener('loaded', function() {
+          setTimeout(updateDetailContentScroll, 0);
+        });
+      }
       attachDetailRowLabel(row, opts.label, {
-        thetaStart: opts.thetaStart == null ? DETAIL_THETA_START : opts.thetaStart,
-        thetaLength: opts.thetaLength == null ? DETAIL_THETA_LENGTH : opts.thetaLength,
+        thetaStart: visualThetaStart,
+        thetaLength: thetaLength,
         height: opts.height || 0.10,
         textColor: opts.textColor,
         align: opts.align,
@@ -2141,6 +2183,81 @@ a.chip:hover { background: #3a3a3a; }
       });
       if (interactive) row.addEventListener('click', opts.onClick);
       return row;
+    }
+
+    function resetDetailContentScroll() {
+      detailState.contentScrollY = 0;
+      detailState.contentScrollMax = 0;
+    }
+
+    // During the first A-Frame layout pass getAttribute('position') can still
+    // be the raw "x y z" string rather than the component's Vector3. Parse
+    // both forms; treating the string as an object was recording every row at
+    // y=0, which is why the first scroll implementation had no viewport.
+    function detailRowY(row) {
+      const position = row && row.getAttribute('position');
+      if (position && typeof position === 'object' && isFinite(Number(position.y))) {
+        return Number(position.y);
+      }
+      if (typeof position === 'string') {
+        const parts = position.trim().split(/\s+/);
+        const y = Number(parts[1]);
+        if (isFinite(y)) return y;
+      }
+      const objectY = row && row.object3D && Number(row.object3D.position.y);
+      return isFinite(objectY) ? objectY : 0;
+    }
+
+    // The fixed header, toolbar and tab strip remain stable while the tab
+    // body scrolls underneath them.  AFrame does not provide a scroll view,
+    // so we move the body root and hide whole rows outside its viewport. This
+    // keeps off-screen controls out of the controller raycaster as well.
+    function layoutDetailContentScroll(content) {
+      if (!content) return;
+      const rows = Array.from(content.children);
+      let lowest = Infinity;
+      rows.forEach(function(row) {
+        const y = detailRowY(row);
+        const height = Number(row.getAttribute('height')) || 0.10;
+        row.dataset.detailBaseY = String(y);
+        row.dataset.detailHalfHeight = String(height / 2);
+        lowest = Math.min(lowest, y - height / 2);
+      });
+      detailState.contentScrollMax = lowest === Infinity ? 0 :
+        Math.max(0, DETAIL_CONTENT_BOTTOM - lowest);
+      detailState.contentScrollY = Math.max(0, Math.min(
+        detailState.contentScrollMax, Number(detailState.contentScrollY) || 0));
+      updateDetailContentScroll(true);
+    }
+
+    function updateDetailContentScroll(persistVisibility) {
+      const content = document.getElementById('vrDetailContent');
+      if (!content || !content.object3D) return;
+      const offset = Number(detailState.contentScrollY) || 0;
+      content.object3D.position.y = offset;
+      Array.from(content.children).forEach(function(row) {
+        if (!row.object3D) return;
+        const y = Number(row.dataset.detailBaseY);
+        const halfHeight = Number(row.dataset.detailHalfHeight);
+        const rowY = (isFinite(y) ? y : 0) + offset;
+        const half = isFinite(halfHeight) ? halfHeight : 0.05;
+        const visible = rowY + half <= DETAIL_CONTENT_TOP &&
+          rowY - half >= DETAIL_CONTENT_BOTTOM;
+        // setAttribute is essential for the initial pass. It survives
+        // A-Frame's asynchronous component initialization, exactly as the
+        // grid's off-band rows do; later thumbstick ticks only touch
+        // object3D.visible for smooth, allocation-free scrolling.
+        if (persistVisibility) row.setAttribute('visible', visible);
+        row.object3D.visible = visible;
+        // Three.js raycasting ignores Object3D.visible. Disable the mesh
+        // raycast explicitly for rows clipped out of the scroll viewport so
+        // a hidden action can never steal a controller trigger.
+        const mesh = row.getObject3D('mesh');
+        if (mesh) {
+          if (!mesh._detailOriginalRaycast) mesh._detailOriginalRaycast = mesh.raycast;
+          mesh.raycast = visible ? mesh._detailOriginalRaycast : function() {};
+        }
+      });
     }
 
     function detailChipSpan(name) {
@@ -2163,14 +2280,41 @@ a.chip:hover { background: #3a3a3a; }
       return cursor;
     }
 
+    // Long tag lists are real content, not an arbitrary five-chip preview.
+    // Lay them out as successive curved rows so the detail body's thumbstick
+    // scroll can reveal every tag without a "More" button.
+    function renderDetailChipRows(root, refs, y, kind, color) {
+      let cursor = DETAIL_THETA_START;
+      let rowY = y;
+      (refs || []).forEach(function(ref) {
+        if (!ref || !ref.id || !ref.name) return;
+        const span = detailChipSpan(ref.name);
+        if (cursor + span > DETAIL_THETA_START + DETAIL_THETA_LENGTH) {
+          cursor = DETAIL_THETA_START;
+          rowY -= 0.125;
+        }
+        addDetailRow(root, {
+          y: rowY, height: 0.105, thetaStart: cursor, thetaLength: span,
+          color: color, textColor: '#10232e', label: ref.name, fontPx: 46,
+          onClick: function() { applyDetailFilter(kind, ref); }
+        });
+        cursor += span + 1.4;
+      });
+      return rowY;
+    }
+
     function renderEditableRelationChips(root, refs, y, kind, color) {
       let cursor = DETAIL_THETA_START;
+      let rowY = y;
       (refs || []).forEach(function(ref) {
         if (!ref || !ref.id || !ref.name) return;
         const span = detailChipSpan(ref.name + ' ×');
-        if (cursor + span > DETAIL_THETA_START + DETAIL_THETA_LENGTH) return;
+        if (cursor + span > DETAIL_THETA_START + DETAIL_THETA_LENGTH) {
+          cursor = DETAIL_THETA_START;
+          rowY -= 0.12;
+        }
         addDetailRow(root, {
-          y: y, height: 0.095, thetaStart: cursor, thetaLength: span,
+          y: rowY, height: 0.095, thetaStart: cursor, thetaLength: span,
           color: color, textColor: '#10232e', label: ref.name + '  ×', fontPx: 42,
           onClick: function() {
             requestDetailConfirmation('Remove ' + ref.name + ' from this scene?', function() {
@@ -2184,14 +2328,14 @@ a.chip:hover { background: #3a3a3a; }
         });
         cursor += span + 1.2;
       });
-      return cursor;
+      return rowY;
     }
 
     function addDetailCloseControl(root) {
       // This uses a direct click handler because these rows are created after
       // the static .vr-btn router is bound at scene startup.
       return addDetailRow(root, {
-        y: 1.00, height: 0.16, thetaStart: 262.0, thetaLength: 6.0,
+        y: 1.00, height: 0.16, thetaStart: 261.9, thetaLength: 6.1,
         color: '#a01010', textColor: '#ffffff', label: '✕', fontPx: 52,
         onClick: closeDetailPanel
       });
@@ -2227,6 +2371,7 @@ a.chip:hover { background: #3a3a3a; }
       if (!DETAIL_TABS.some(tab => tab.id === tabID) || !detailState.meta) return;
       detailState.activeTab = tabID;
       detailState.descriptionOffset = 0;
+      resetDetailContentScroll();
       detailState.status = '';
       renderCurvedDetailPanel(detailState.meta);
     }
@@ -2541,20 +2686,20 @@ a.chip:hover { background: #3a3a3a; }
         'Code: ' + (meta.code || '—') + '   Director: ' + (meta.director || '—'));
       detailRow(root, -0.22, 'Performers: ' + (performerNames.join(', ') || '—'));
       detailRow(root, -0.34, 'Description', { textColor: '#ffffff', bold: true, height: 0.08 });
-      const maxOffset = Math.max(0, detailState.descriptionLines.length - DETAIL_DESCRIPTION_VISIBLE_LINES);
-      detailState.descriptionOffset = Math.max(0, Math.min(detailState.descriptionOffset, maxOffset));
-      detailState.descriptionLines.slice(detailState.descriptionOffset,
-        detailState.descriptionOffset + DETAIL_DESCRIPTION_VISIBLE_LINES).forEach(function(line, index) {
-        detailRow(root, -0.46 - index * 0.10, line, { height: 0.085 });
+      let contentY = -0.46;
+      detailState.descriptionLines.forEach(function(line) {
+        detailRow(root, contentY, line, { height: 0.085 });
+        contentY -= 0.10;
       });
       const tags = (meta.tags || []).filter(tag => tag && tag.name);
       if (tags.length) {
-        renderDetailChips(root, tags.slice(0, 5), -0.72, 'tag', '#cad7e1');
+        detailRow(root, contentY - 0.02, 'Tags', { textColor: '#ffffff', bold: true, height: 0.075 });
+        contentY = renderDetailChipRows(root, tags, contentY - 0.14, 'tag', '#cad7e1');
       } else {
-        detailRow(root, -0.72, 'Tags: none', { textColor: '#8296a4' });
+        detailRow(root, contentY - 0.02, 'Tags: none', { textColor: '#8296a4' });
       }
       const isCurrentScene = String(detailState.sceneId || '') === String(sceneId || '');
-      detailRow(root, -1.03, isCurrentScene ? 'Close details' : '▶  Preview this scene', {
+      detailRow(root, contentY - 0.22, isCurrentScene ? 'Close details' : '▶  Preview this scene', {
         height: 0.16, thetaStart: 230.0, thetaLength: 30.0,
         color: '#267bb5', textColor: '#ffffff', fontScale: 0.36, bold: true,
         onClick: isCurrentScene ? closeDetailPanel : playDetailScene
@@ -2671,35 +2816,23 @@ a.chip:hover { background: #3a3a3a; }
       detailRow(root, -0.15, count ? 'Browse queue · ' + count + ' scenes' : 'No browse scenes are loaded yet', {
         textColor: '#a8bcc9', height: 0.08, fontScale: 0.34
       });
-      const maxOffset = Math.max(0, count - 4);
-      detailState.queueOffset = Math.max(0, Math.min(detailState.queueOffset, maxOffset));
-      items.slice(detailState.queueOffset, detailState.queueOffset + 4).forEach(function(item, index) {
+      // Show the complete filtered Stash queue in the scroll body. The
+      // arrow controls above remain playback Previous/Next, while the old
+      // Previous items / More items pagination is deliberately gone.
+      let queueY = -0.28;
+      items.forEach(function(item) {
         const current = String(item.id) === String(sceneId);
-        detailRow(root, -0.28 - index * 0.13, (current ? '● ' : '▶ ') + item.title, {
+        detailRow(root, queueY, (current ? '● ' : '▶ ') + item.title, {
           height: 0.10, color: current ? '#267bb5' : '#223944', textColor: '#ffffff', fontScale: 0.35,
           onClick: function() { playQueuedScene(item); }
         });
+        queueY -= 0.13;
       });
-      detailRow(root, -0.86, '↑ Previous items', {
-        height: 0.10, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', fontScale: 0.32,
-        onClick: function() { detailState.queueOffset = Math.max(0, detailState.queueOffset - 4); renderCurvedDetailPanel(meta); }
-      });
-      detailRow(root, -0.86, '↓ More items', {
-        height: 0.10, thetaStart: 246.2, thetaLength: 21.8, color: '#293a46', fontScale: 0.32,
-        onClick: function() {
-          if (detailState.queueOffset + 4 < count) {
-            detailState.queueOffset += 4;
-            renderCurvedDetailPanel(meta);
-          } else if (browseState.hasMore) {
-            fetchGrid(false).then(function() { renderCurvedDetailPanel(meta); });
-          }
-        }
-      });
-      detailRow(root, -1.03, '+ Add current to session queue', {
+      detailRow(root, queueY - 0.04, '+ Add current to session queue', {
         height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.30,
         onClick: queueCurrentScene
       });
-      detailRow(root, -1.03, 'Clear session additions', {
+      detailRow(root, queueY - 0.04, 'Clear session additions', {
         height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#722d2d', textColor: '#ffffff', fontScale: 0.30,
         onClick: function() { detailQueue.length = 0; renderCurvedDetailPanel(meta); }
       });
@@ -2860,7 +2993,7 @@ a.chip:hover { background: #3a3a3a; }
         detailRow(root, -0.16, 'No scene markers in Stash', { textColor: '#a8bcc9', height: 0.09 });
         return;
       }
-      markers.slice(0, 5).forEach(function(marker, index) {
+      markers.forEach(function(marker, index) {
         const name = marker.title || (marker.primaryTag && marker.primaryTag.name) || 'Marker';
         const y = -0.15 - index * 0.14;
         detailRow(root, y,
@@ -2880,7 +3013,7 @@ a.chip:hover { background: #3a3a3a; }
         });
       });
       if (detailState.markerLoop) {
-        detailRow(root, -0.92, 'Stop marker loop', {
+        detailRow(root, -0.15 - markers.length * 0.14 - 0.04, 'Stop marker loop', {
           height: 0.11, color: '#293a46', textColor: '#ffffff', fontScale: 0.34,
           onClick: function() { detailState.markerLoop = null; renderCurvedDetailPanel(meta); }
         });
@@ -2954,104 +3087,106 @@ a.chip:hover { background: #3a3a3a; }
 
     function renderDetailFiltersTab(root, meta) {
       const pages = [
-        { title: 'Video effects 1/3', fields: [['brightness', 'Brightness', 5], ['contrast', 'Contrast', 5], ['gamma', 'Gamma', 5], ['saturation', 'Saturation', 5], ['hue', 'Hue', 5]] },
-        { title: 'Video effects 2/3', fields: [['warmth', 'Warmth', 5], ['red', 'Red', 5], ['green', 'Green', 5], ['blue', 'Blue', 5], ['blur', 'Blur', 1]] },
-        { title: 'Transforms 3/3', fields: [['rotate', 'Rotate', 5], ['scale', 'Scale', 5], ['aspect', 'Aspect', 5]] }
+        { title: 'Video effects', reset: 'filters', fields: [['brightness', 'Brightness', 5], ['contrast', 'Contrast', 5], ['gamma', 'Gamma', 5], ['saturation', 'Saturation', 5], ['hue', 'Hue', 5]] },
+        { title: 'Color and clarity', reset: 'filters', fields: [['warmth', 'Warmth', 5], ['red', 'Red', 5], ['green', 'Green', 5], ['blue', 'Blue', 5], ['blur', 'Blur', 1]] },
+        { title: 'Transforms', reset: 'transforms', fields: [['rotate', 'Rotate', 5], ['scale', 'Scale', 5], ['aspect', 'Aspect', 5]] }
       ];
-      const page = pages[detailState.effectsPage] || pages[0];
-      detailRow(root, 0.02, page.title, { textColor: '#ffffff', bold: true, height: 0.09 });
-      page.fields.forEach(function(field, index) {
-        renderDetailEffectRow(root, -0.12 - index * 0.12, field[0], field[1], field[2]);
-      });
-      detailRow(root, -0.78, '‹ Previous', {
-        height: 0.12, thetaStart: 222.5, thetaLength: 14.5, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
-        onClick: function() { detailState.effectsPage = (detailState.effectsPage + pages.length - 1) % pages.length; renderCurvedDetailPanel(meta); }
-      });
-      detailRow(root, -0.78, 'Reset ' + (detailState.effectsPage === 2 ? 'transforms' : 'filters'), {
-        height: 0.12, thetaStart: 238.0, thetaLength: 14.5, color: '#267bb5', textColor: '#ffffff', fontScale: 0.30,
-        onClick: function() { resetDetailEffects(detailState.effectsPage === 2 ? 'transforms' : 'filters'); }
-      });
-      detailRow(root, -0.78, 'Next ›', {
-        height: 0.12, thetaStart: 254.0, thetaLength: 14.0, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
-        onClick: function() { detailState.effectsPage = (detailState.effectsPage + 1) % pages.length; renderCurvedDetailPanel(meta); }
-      });
-      if (detailState.effectsPage === 2) {
-        detailRow(root, -0.96, '↶ Rotate left + fit', {
-          height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.29,
-          onClick: function() { detailState.effects.rotate = (detailState.effects.rotate - 90 + 360) % 360; detailState.effects.scale = 100; applyVideoEffects(); renderCurvedDetailPanel(meta); }
+      let y = 0.02;
+      pages.forEach(function(page) {
+        detailRow(root, y, page.title, { textColor: '#ffffff', bold: true, height: 0.09 });
+        y -= 0.14;
+        page.fields.forEach(function(field) {
+          renderDetailEffectRow(root, y, field[0], field[1], field[2]);
+          y -= 0.12;
         });
-        detailRow(root, -0.96, '↷ Rotate right + fit', {
-          height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.29,
-          onClick: function() { detailState.effects.rotate = (detailState.effects.rotate + 90) % 360; detailState.effects.scale = 100; applyVideoEffects(); renderCurvedDetailPanel(meta); }
+        detailRow(root, y, 'Reset ' + page.reset, {
+          height: 0.11, color: '#267bb5', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() { resetDetailEffects(page.reset); }
         });
-      }
+        y -= 0.17;
+      });
+      detailRow(root, y, '↶ Rotate left + fit', {
+        height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.29,
+        onClick: function() { detailState.effects.rotate = (detailState.effects.rotate - 90 + 360) % 360; detailState.effects.scale = 100; applyVideoEffects(); renderCurvedDetailPanel(meta); }
+      });
+      detailRow(root, y, '↷ Rotate right + fit', {
+        height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.29,
+        onClick: function() { detailState.effects.rotate = (detailState.effects.rotate + 90) % 360; detailState.effects.scale = 100; applyVideoEffects(); renderCurvedDetailPanel(meta); }
+      });
     }
 
     function renderDetailFilesTab(root, meta) {
       const files = meta.files || [];
-      if (detailState.fileIndex >= files.length) detailState.fileIndex = Math.max(0, files.length - 1);
-      const file = files[detailState.fileIndex];
-      if (!file) {
+      if (!files.length) {
         detailRow(root, 0.02, 'No file information available', { textColor: '#a8bcc9' });
         return;
       }
-      detailRow(root, 0.02, (files.length > 1 ? '‹ ' : '') + 'File ' + (detailState.fileIndex + 1) + ' / ' + files.length + (files.length > 1 ? ' ›' : ''), {
-        height: 0.10, color: files.length > 1 ? '#293a46' : undefined, textColor: '#ffffff', bold: true, fontScale: 0.34,
-        onClick: files.length > 1 ? function() {
-          detailState.fileIndex = (detailState.fileIndex + 1) % files.length;
-          renderCurvedDetailPanel(meta);
-        } : undefined
-      });
-      detailRow(root, -0.11, file.basename || 'Video file', { textColor: '#ffffff', bold: true, height: 0.10 });
-      detailRow(root, -0.23, (file.width || '—') + ' × ' + (file.height || '—') +
-        '   ' + formatDetailDuration(file.duration) + '   ' + formatDetailFileSize(file.size));
-      detailRow(root, -0.35, 'Video: ' + (file.videoCodec || '—') + '   Audio: ' + (file.audioCodec || '—'));
-      detailRow(root, -0.47, 'Format: ' + (file.format || '—') + '   ' +
-        (Number(file.frameRate) ? Number(file.frameRate).toFixed(2) + ' fps' : '—'));
-      detailRow(root, -0.59, 'Bitrate: ' + (Number(file.bitRate) ? Math.round(file.bitRate / 1000) + ' kbps' : '—'));
-      const fingerprints = (file.fingerprints || []).map(function(fp) { return fp.type + ': ' + fp.value; }).join(' · ');
-      detailRow(root, -0.71, fingerprints || 'Modified: ' + formatDetailDate(file.modifiedAt), { textColor: '#a8bcc9', fontScale: 0.30 });
-      detailRow(root, -0.82, 'Reveal in file manager', {
-        height: 0.09, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
-        onClick: function() { postDetailMutation('/file/' + encodeURIComponent(file.id) + '/reveal'); }
-      });
-      if (files.length > 1 && detailState.fileIndex > 0) {
-        detailRow(root, -0.94, 'Make primary', {
-          height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.31,
-          onClick: function() { postDetailMutation('/file/' + encodeURIComponent(file.id) + '/primary'); }
+      // A multi-file scene exposes every file and its Stash actions in one
+      // scrollable body. Cycling through a hidden file index made destructive
+      // actions easy to miss and was unlike the desktop File Info tab.
+      let y = 0.02;
+      files.forEach(function(file, index) {
+        detailRow(root, y, 'File ' + (index + 1) + ' / ' + files.length, {
+          height: 0.10, textColor: '#ffffff', bold: true, fontScale: 0.34
         });
-      }
-      detailRow(root, -0.94, 'Reassign file', {
-        height: 0.11, thetaStart: files.length > 1 && detailState.fileIndex > 0 ? 246.2 : 222.5,
-        thetaLength: files.length > 1 && detailState.fileIndex > 0 ? 21.8 : 45.5, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
-        onClick: function() {
-          beginDetailTextEntry('Reassign file', '', function(targetSceneID) {
-            if (!String(targetSceneID || '').trim()) {
-              detailState.status = 'Enter the target Stash scene ID';
-              renderCurvedDetailPanel(meta);
-              return;
-            }
-            postDetailMutation('/file/' + encodeURIComponent(file.id) + '/reassign', { targetSceneID: targetSceneID.trim() });
-          }, 'Type the destination Stash scene ID');
+        y -= 0.13;
+        detailRow(root, y, file.basename || 'Video file', { textColor: '#ffffff', bold: true, height: 0.10 });
+        y -= 0.12;
+        detailRow(root, y, (file.width || '—') + ' × ' + (file.height || '—') +
+          '   ' + formatDetailDuration(file.duration) + '   ' + formatDetailFileSize(file.size));
+        y -= 0.12;
+        detailRow(root, y, 'Video: ' + (file.videoCodec || '—') + '   Audio: ' + (file.audioCodec || '—'));
+        y -= 0.12;
+        detailRow(root, y, 'Format: ' + (file.format || '—') + '   ' +
+          (Number(file.frameRate) ? Number(file.frameRate).toFixed(2) + ' fps' : '—'));
+        y -= 0.12;
+        detailRow(root, y, 'Bitrate: ' + (Number(file.bitRate) ? Math.round(file.bitRate / 1000) + ' kbps' : '—'));
+        y -= 0.12;
+        const fingerprints = (file.fingerprints || []).map(function(fp) { return fp.type + ': ' + fp.value; }).join(' · ');
+        detailRow(root, y, fingerprints || 'Modified: ' + formatDetailDate(file.modifiedAt), { textColor: '#a8bcc9', fontScale: 0.30 });
+        y -= 0.13;
+        detailRow(root, y, 'Reveal in file manager', {
+          height: 0.09, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+          onClick: function() { postDetailMutation('/file/' + encodeURIComponent(file.id) + '/reveal'); }
+        });
+        y -= 0.13;
+        if (index > 0) {
+          detailRow(root, y, 'Make primary', {
+            height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#267bb5', textColor: '#ffffff', fontScale: 0.31,
+            onClick: function() { postDetailMutation('/file/' + encodeURIComponent(file.id) + '/primary'); }
+          });
+          detailRow(root, y, 'Reassign file', {
+            height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+            onClick: function() { beginDetailTextEntry('Reassign file', '', function(targetSceneID) {
+              if (!String(targetSceneID || '').trim()) { detailState.status = 'Enter the target Stash scene ID'; renderCurvedDetailPanel(meta); return; }
+              postDetailMutation('/file/' + encodeURIComponent(file.id) + '/reassign', { targetSceneID: targetSceneID.trim() });
+            }, 'Type the destination Stash scene ID'); }
+          });
+        } else {
+          detailRow(root, y, 'Reassign file', {
+            height: 0.11, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
+            onClick: function() { beginDetailTextEntry('Reassign file', '', function(targetSceneID) {
+              if (!String(targetSceneID || '').trim()) { detailState.status = 'Enter the target Stash scene ID'; renderCurvedDetailPanel(meta); return; }
+              postDetailMutation('/file/' + encodeURIComponent(file.id) + '/reassign', { targetSceneID: targetSceneID.trim() });
+            }, 'Type the destination Stash scene ID'); }
+          });
         }
-      });
-      detailRow(root, -1.08, 'Split to new scene', {
-        height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.30,
-        onClick: function() {
-          beginDetailTextEntry('New scene title', file.basename || '', function(title) {
+        y -= 0.15;
+        detailRow(root, y, 'Split to new scene', {
+          height: 0.11, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.30,
+          onClick: function() { beginDetailTextEntry('New scene title', file.basename || '', function(title) {
             requestDetailConfirmation('Move this file into a new Stash scene?', function() {
               postDetailMutation('/file/' + encodeURIComponent(file.id) + '/split', { title: title });
             });
-          }, 'Type an optional title for the new scene');
-        }
-      });
-      detailRow(root, -1.08, 'Delete file', {
-        height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#a01010', textColor: '#ffffff', fontScale: 0.32,
-        onClick: function() {
-          requestDetailConfirmation('Delete this file through Stash? This can remove the underlying media.', function() {
+          }, 'Type an optional title for the new scene'); }
+        });
+        detailRow(root, y, 'Delete file', {
+          height: 0.11, thetaStart: 246.2, thetaLength: 21.8, color: '#a01010', textColor: '#ffffff', fontScale: 0.32,
+          onClick: function() { requestDetailConfirmation('Delete this file through Stash? This can remove the underlying media.', function() {
             postDetailMutation('/file/' + encodeURIComponent(file.id) + '/delete');
-          });
-        }
+          }); }
+        });
+        y -= 0.22;
       });
     }
 
@@ -3078,33 +3213,35 @@ a.chip:hover { background: #3a3a3a; }
         height: 0.11, thetaStart: 254.0, thetaLength: 14.0, color: '#8b5b23', textColor: '#ffffff', fontScale: 0.30,
         onClick: function() { postDetailMutation('/history/o/add'); }
       });
-      const recentPlay = playHistory.slice(0, 2);
-      const recentO = oHistory.slice(0, 2);
-      recentPlay.forEach(function(date, index) {
-        detailRow(root, -0.39 - index * 0.11, 'Play · ' + formatDetailDateTime(date) + '  ✕', {
+      let historyY = -0.39;
+      playHistory.forEach(function(date) {
+        detailRow(root, historyY, 'Play · ' + formatDetailDateTime(date) + '  ✕', {
           height: 0.09, color: '#223944', textColor: '#ffffff', fontScale: 0.30,
           onClick: function() { requestDetailConfirmation('Remove this play date?', function() { postDetailMutation('/history/play/remove', { time: date }); }); }
         });
+        historyY -= 0.11;
       });
-      recentO.forEach(function(date, index) {
-        detailRow(root, -0.62 - index * 0.11, 'O · ' + formatDetailDateTime(date) + '  ✕', {
+      oHistory.forEach(function(date) {
+        detailRow(root, historyY, 'O · ' + formatDetailDateTime(date) + '  ✕', {
           height: 0.09, color: '#223944', textColor: '#ffffff', fontScale: 0.30,
           onClick: function() { requestDetailConfirmation('Remove this O date?', function() { postDetailMutation('/history/o/remove', { time: date }); }); }
         });
+        historyY -= 0.11;
       });
-      detailRow(root, -0.88, 'Clear plays', {
+      historyY -= 0.04;
+      detailRow(root, historyY, 'Clear plays', {
         height: 0.10, thetaStart: 222.5, thetaLength: 10.7, color: '#722d2d', textColor: '#ffffff', fontScale: 0.27,
         onClick: function() { requestDetailConfirmation('Clear all play history?', function() { postDetailMutation('/history/play/clear'); }); }
       });
-      detailRow(root, -0.88, 'Reset resume', {
+      detailRow(root, historyY, 'Reset resume', {
         height: 0.10, thetaStart: 234.4, thetaLength: 10.7, color: '#293a46', textColor: '#ffffff', fontScale: 0.26,
         onClick: function() { postDetailMutation('/history/play/reset-resume'); }
       });
-      detailRow(root, -0.88, 'Reset duration', {
+      detailRow(root, historyY, 'Reset duration', {
         height: 0.10, thetaStart: 246.3, thetaLength: 10.7, color: '#293a46', textColor: '#ffffff', fontScale: 0.25,
         onClick: function() { postDetailMutation('/history/play/reset-duration'); }
       });
-      detailRow(root, -0.88, 'Clear O', {
+      detailRow(root, historyY, 'Clear O', {
         height: 0.10, thetaStart: 258.2, thetaLength: 9.8, color: '#722d2d', textColor: '#ffffff', fontScale: 0.27,
         onClick: function() { requestDetailConfirmation('Clear all O history?', function() { postDetailMutation('/history/o/clear'); }); }
       });
@@ -3188,103 +3325,100 @@ a.chip:hover { background: #3a3a3a; }
         renderDetailOperations(root, meta);
         return;
       }
-      const pages = ['Status', 'Info', 'People & tags', 'Galleries & groups'];
-      detailState.editPage = Math.max(0, Math.min(detailState.editPage, pages.length - 1));
-      detailRow(root, 0.02, 'Edit · ' + pages[detailState.editPage], { textColor: '#ffffff', bold: true, height: 0.09 });
-      if (detailState.editPage === 0) {
-        const rating = Math.max(0, Math.min(5, Number(meta.rating1to5) || 0));
-        renderDetailRatingButtons(root, -0.13, rating);
-        if (rating) {
-          detailRow(root, -0.34, 'Clear rating', {
-            height: 0.12, thetaStart: 222.5, thetaLength: 15.0, color: '#293a46', textColor: '#ffffff', fontScale: 0.30,
-            onClick: function() { postDetailMutation('/rating', { value: '0' }); }
-          });
-        }
-        detailRow(root, -0.34, (meta.isFavorite ? '♥ Favorited' : '♡ Favorite'), {
-          height: 0.12,
-          thetaStart: rating ? 239.2 : undefined, thetaLength: rating ? 28.8 : undefined,
-          color: meta.isFavorite ? '#8b2d53' : '#293a46', textColor: '#ffffff', fontScale: 0.34,
-          onClick: function() { postDetailMutation('/favorite'); }
-        });
-        detailRow(root, -0.49, meta.organized ? '✓ Organized' : 'Mark organized', {
-          height: 0.12, color: meta.organized ? '#2e6b53' : '#293a46', textColor: '#ffffff', fontScale: 0.34,
-          onClick: function() { postDetailMutation('/organized'); }
-        });
-        detailRow(root, -0.65, '− O', {
-          height: 0.12, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.36,
-          onClick: function() { postDetailMutation('/o/decrement'); }
-        });
-        detailRow(root, -0.65, '+ O', {
-          height: 0.12, thetaStart: 246.2, thetaLength: 21.8, color: '#8b5b23', textColor: '#ffffff', fontScale: 0.36,
-          onClick: function() { postDetailMutation('/o/increment'); }
-        });
-        detailRow(root, -0.86, '⋮ Scene operations', {
-          height: 0.12, color: '#293a46', textColor: '#ffffff', fontScale: 0.35,
-          onClick: function() { detailState.operationsOpen = true; renderCurvedDetailPanel(meta); }
-        });
-      } else if (detailState.editPage === 1) {
-        const fields = [
-          ['title', 'Title', meta.title || '', 'Type the full scene title'],
-          ['code', 'Code', meta.code || '', 'Type the studio or scene code'],
-          ['date', 'Date', meta.date || '', 'Type YYYY-MM-DD'],
-          ['director', 'Director', meta.director || '', 'Type the director name'],
-          ['urls', 'URLs', (meta.urls || []).join(', '), 'Separate URLs with commas'],
-          ['details', 'Details', meta.description || '', 'Type replacement details'],
-          ['coverImage', 'Cover image URL', '', 'Type an image URL or data URL'],
-          ['customFields', 'Custom fields JSON', JSON.stringify(meta.customFields || {}), 'Type a JSON object to replace custom fields']
-        ];
-        fields.forEach(function(field, index) {
-          detailRow(root, -0.12 - index * 0.12, field[1] + ': ' + (field[2] || '—'), {
-            height: 0.10, color: '#223944', textColor: '#ffffff', fontScale: 0.32,
-            onClick: function() { editSceneTextField(field[0], field[1], field[2], field[3]); }
-          });
-        });
-      } else if (detailState.editPage === 2) {
-        const studio = meta.studio ? [meta.studio] : [];
-        detailRow(root, -0.12, 'Studio', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
-        renderEditableRelationChips(root, studio, -0.22, 'studio', '#a8d9f5');
-        detailRow(root, -0.34, meta.studio ? 'Change / clear studio' : '+ Set studio', {
-          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
-          onClick: function() {
-            if (meta.studio) {
-              requestDetailConfirmation('Clear the studio from this scene?', function() { postDetailMutation('/relations', { kind: 'studio', action: 'clear' }); });
-            } else startRelationPicker('studio', 'set');
-          }
-        });
-        detailRow(root, -0.47, 'Performers', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
-        renderEditableRelationChips(root, meta.performers || [], -0.57, 'performer', '#d2e0e8');
-        detailRow(root, -0.69, '+ Add performer', {
-          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
-          onClick: function() { startRelationPicker('performer', 'add'); }
-        });
-        detailRow(root, -0.82, 'Tags', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
-        renderEditableRelationChips(root, meta.tags || [], -0.92, 'tag', '#cad7e1');
-        detailRow(root, -1.04, '+ Add tag', {
-          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
-          onClick: function() { startRelationPicker('tag', 'add'); }
-        });
-      } else {
-        detailRow(root, -0.12, 'Galleries', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
-        renderEditableRelationChips(root, meta.galleries || [], -0.22, 'gallery', '#d9cae8');
-        detailRow(root, -0.34, '+ Add gallery', {
-          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
-          onClick: function() { startRelationPicker('gallery', 'add'); }
-        });
-        detailRow(root, -0.49, 'Groups', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
-        renderEditableRelationChips(root, meta.groups || [], -0.59, 'group', '#d9cae8');
-        detailRow(root, -0.71, '+ Add group', {
-          height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31,
-          onClick: function() { startRelationPicker('group', 'add'); }
+      // Desktop Edit is one form. Keep that mental model in VR: all
+      // controls live in the same scroll body rather than being hidden
+      // behind Previous/Next pages.
+      let y = 0.02;
+      const heading = function(label) {
+        detailRow(root, y, label, { textColor: '#ffffff', bold: true, height: 0.09 });
+        y -= 0.14;
+      };
+      heading('Edit · Status');
+      const rating = Math.max(0, Math.min(5, Number(meta.rating1to5) || 0));
+      renderDetailRatingButtons(root, y, rating);
+      y -= 0.20;
+      if (rating) {
+        detailRow(root, y, 'Clear rating', {
+          height: 0.12, thetaStart: 222.5, thetaLength: 15.0, color: '#293a46', textColor: '#ffffff', fontScale: 0.30,
+          onClick: function() { postDetailMutation('/rating', { value: '0' }); }
         });
       }
-      detailRow(root, -1.18, '‹ Previous', {
-        height: 0.10, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
-        onClick: function() { detailState.editPage = (detailState.editPage + pages.length - 1) % pages.length; renderCurvedDetailPanel(meta); }
+      detailRow(root, y, (meta.isFavorite ? '♥ Favorited' : '♡ Favorite'), {
+        height: 0.12, thetaStart: rating ? 239.2 : undefined, thetaLength: rating ? 28.8 : undefined,
+        color: meta.isFavorite ? '#8b2d53' : '#293a46', textColor: '#ffffff', fontScale: 0.34,
+        onClick: function() { postDetailMutation('/favorite'); }
       });
-      detailRow(root, -1.18, 'Next ›', {
-        height: 0.10, thetaStart: 246.2, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.32,
-        onClick: function() { detailState.editPage = (detailState.editPage + 1) % pages.length; renderCurvedDetailPanel(meta); }
+      y -= 0.15;
+      detailRow(root, y, meta.organized ? '✓ Organized' : 'Mark organized', {
+        height: 0.12, color: meta.organized ? '#2e6b53' : '#293a46', textColor: '#ffffff', fontScale: 0.34,
+        onClick: function() { postDetailMutation('/organized'); }
       });
+      y -= 0.16;
+      detailRow(root, y, '− O', { height: 0.12, thetaStart: 222.5, thetaLength: 21.8, color: '#293a46', textColor: '#ffffff', fontScale: 0.36, onClick: function() { postDetailMutation('/o/decrement'); } });
+      detailRow(root, y, '+ O', { height: 0.12, thetaStart: 246.2, thetaLength: 21.8, color: '#8b5b23', textColor: '#ffffff', fontScale: 0.36, onClick: function() { postDetailMutation('/o/increment'); } });
+      y -= 0.19;
+      detailRow(root, y, '⋮ Scene operations', {
+        height: 0.12, color: '#293a46', textColor: '#ffffff', fontScale: 0.35,
+        onClick: function() { detailState.operationsOpen = true; resetDetailContentScroll(); renderCurvedDetailPanel(meta); }
+      });
+      y -= 0.20;
+
+      heading('Scene information');
+      const fields = [
+        ['title', 'Title', meta.title || '', 'Type the full scene title'],
+        ['code', 'Code', meta.code || '', 'Type the studio or scene code'],
+        ['date', 'Date', meta.date || '', 'Type YYYY-MM-DD'],
+        ['director', 'Director', meta.director || '', 'Type the director name'],
+        ['urls', 'URLs', (meta.urls || []).join(', '), 'Separate URLs with commas'],
+        ['details', 'Details', meta.description || '', 'Type replacement details'],
+        ['coverImage', 'Cover image URL', '', 'Type an image URL or data URL'],
+        ['customFields', 'Custom fields JSON', JSON.stringify(meta.customFields || {}), 'Type a JSON object to replace custom fields']
+      ];
+      fields.forEach(function(field) {
+        detailRow(root, y, field[1] + ': ' + (field[2] || '—'), {
+          height: 0.10, color: '#223944', textColor: '#ffffff', fontScale: 0.32,
+          onClick: function() { editSceneTextField(field[0], field[1], field[2], field[3]); }
+        });
+        y -= 0.12;
+      });
+      y -= 0.08;
+
+      heading('People and tags');
+      const studio = meta.studio ? [meta.studio] : [];
+      detailRow(root, y, 'Studio', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+      y -= 0.10;
+      y = renderEditableRelationChips(root, studio, y, 'studio', '#a8d9f5');
+      y -= 0.13;
+      detailRow(root, y, meta.studio ? 'Change / clear studio' : '+ Set studio', { height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31, onClick: function() {
+        if (meta.studio) requestDetailConfirmation('Clear the studio from this scene?', function() { postDetailMutation('/relations', { kind: 'studio', action: 'clear' }); });
+        else startRelationPicker('studio', 'set');
+      } });
+      y -= 0.15;
+      detailRow(root, y, 'Performers', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+      y -= 0.10;
+      y = renderEditableRelationChips(root, meta.performers || [], y, 'performer', '#d2e0e8');
+      y -= 0.13;
+      detailRow(root, y, '+ Add performer', { height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31, onClick: function() { startRelationPicker('performer', 'add'); } });
+      y -= 0.15;
+      detailRow(root, y, 'Tags', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+      y -= 0.10;
+      y = renderEditableRelationChips(root, meta.tags || [], y, 'tag', '#cad7e1');
+      y -= 0.13;
+      detailRow(root, y, '+ Add tag', { height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31, onClick: function() { startRelationPicker('tag', 'add'); } });
+      y -= 0.20;
+
+      heading('Galleries and groups');
+      detailRow(root, y, 'Galleries', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+      y -= 0.10;
+      y = renderEditableRelationChips(root, meta.galleries || [], y, 'gallery', '#d9cae8');
+      y -= 0.13;
+      detailRow(root, y, '+ Add gallery', { height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31, onClick: function() { startRelationPicker('gallery', 'add'); } });
+      y -= 0.15;
+      detailRow(root, y, 'Groups', { textColor: '#a8bcc9', height: 0.075, fontScale: 0.30 });
+      y -= 0.10;
+      y = renderEditableRelationChips(root, meta.groups || [], y, 'group', '#d9cae8');
+      y -= 0.13;
+      detailRow(root, y, '+ Add group', { height: 0.10, color: '#293a46', textColor: '#ffffff', fontScale: 0.31, onClick: function() { startRelationPicker('group', 'add'); } });
     }
 
     function renderDetailTabContent(root, meta) {
@@ -3310,7 +3444,11 @@ a.chip:hover { background: #3a3a3a; }
       const duration = formatDetailDuration(meta.durationSec);
       const rating = Math.max(0, Math.min(5, Number(meta.rating1to5) || 0));
 
-      addDetailRow(root, { y: 1.00, height: 0.16, color: '#1a365d', textColor: '#ffffff',
+      // Keep the blue studio ribbon and red close control as adjacent arc
+      // segments.  They used to overlap on the exact same curved surface,
+      // which is why Quest showed a red/blue z-fighting seam.
+      addDetailRow(root, { y: 1.00, height: 0.16, thetaStart: DETAIL_THETA_START, thetaLength: 38.8,
+        color: '#1a365d', textColor: '#ffffff',
         label: studioName, fontScale: 0.34, bold: true });
       addDetailCloseControl(root);
       addDetailRow(root, { y: 0.80, height: 0.14, textColor: '#ffffff',
@@ -3358,7 +3496,19 @@ a.chip:hover { background: #3a3a3a; }
         toolbarTheta += toolbarWidth + toolbarGap;
       });
       renderDetailTabs(root);
-      renderDetailTabContent(root, meta);
+      const content = document.createElement('a-entity');
+      content.id = 'vrDetailContent';
+      root.appendChild(content);
+      renderDetailTabContent(content, meta);
+      layoutDetailContentScroll(content);
+      // A-Frame upgrades newly-appended cylinders asynchronously. Re-run the
+      // same layout on the next task so its finalized transforms receive the
+      // viewport clipping too (WebXR pauses window.rAF, so use a task).
+      setTimeout(function() {
+        if (document.getElementById('vrDetailContent') !== content) return;
+        layoutDetailContentScroll(content);
+        updateRaycasterTargets();
+      }, 0);
       updateRaycasterTargets();
     }
 
@@ -3370,6 +3520,7 @@ a.chip:hover { background: #3a3a3a; }
       if (!meta) return;
       detailState.descriptionLines = wrapDetailDescription(meta.description, 52);
       detailState.descriptionOffset = 0;
+      resetDetailContentScroll();
       renderCurvedDetailPanel(meta);
     }
 
@@ -3435,6 +3586,7 @@ a.chip:hover { background: #3a3a3a; }
       detailState.status = '';
       detailState.descriptionLines = [];
       detailState.descriptionOffset = 0;
+      resetDetailContentScroll();
       detailState.textEntry = null;
       detailState.relationPicker = null;
       detailState.stashBoxPicker = null;
@@ -3447,7 +3599,8 @@ a.chip:hover { background: #3a3a3a; }
       setSubpanelVisible('vrDetailPanel', true);
       const root = clearDetailChildren('vrDetailRows');
       if (root) {
-        addDetailRow(root, { y: 1.0, height: 0.16, color: '#1a365d', textColor: '#ffffff',
+        addDetailRow(root, { y: 1.0, height: 0.16, thetaStart: DETAIL_THETA_START, thetaLength: 38.8,
+          color: '#1a365d', textColor: '#ffffff',
           label: 'STASH', fontPx: 56, bold: true });
         addDetailCloseControl(root);
         addDetailRow(root, { y: 0.10, height: 0.12, color: '#202c34', textColor: '#a8bcc9',
@@ -3466,7 +3619,8 @@ a.chip:hover { background: #3a3a3a; }
         if (detailState.sceneId !== String(sceneID)) return;
         const errorRoot = clearDetailChildren('vrDetailRows');
         if (errorRoot) {
-          addDetailRow(errorRoot, { y: 1.0, height: 0.16, color: '#1a365d', textColor: '#ffffff',
+          addDetailRow(errorRoot, { y: 1.0, height: 0.16, thetaStart: DETAIL_THETA_START, thetaLength: 38.8,
+            color: '#1a365d', textColor: '#ffffff',
             label: 'STASH', fontPx: 56, bold: true });
           addDetailCloseControl(errorRoot);
           addDetailRow(errorRoot, { y: 0.10, height: 0.12, color: '#202c34', textColor: '#ffb3b3',
@@ -3484,6 +3638,7 @@ a.chip:hover { background: #3a3a3a; }
       detailState.status = '';
       detailState.descriptionLines = [];
       detailState.descriptionOffset = 0;
+      resetDetailContentScroll();
       detailState.textEntry = null;
       detailState.relationPicker = null;
       detailState.stashBoxPicker = null;
@@ -5661,17 +5816,18 @@ a.chip:hover { background: #3a3a3a; }
       browseLastScrollTickMs = now;
 
       if (activeSurface === 'detail') {
-        const maxOffset = Math.max(0, detailState.descriptionLines.length - DETAIL_DESCRIPTION_VISIBLE_LINES);
-        if (maxOffset > 0 && Math.abs(ts.y) > 0.30) {
-          const previous = detailState.descriptionOffset;
-          // Stick down shows later detail lines; stick up returns toward the
-          // top, consistent with the browse grid's scroll direction.
-          detailState.descriptionOffset = Math.max(0, Math.min(maxOffset,
-            previous + ts.y * 3.5 * dt));
-          const rounded = Math.round(detailState.descriptionOffset);
-          if (rounded !== Math.round(previous)) {
-            detailState.descriptionOffset = rounded;
-            renderDetailDescription();
+        // Detail tabs are a continuous scroll view, not a sequence of
+        // Previous/Next pages. Stick down reveals lower controls; stick up
+        // returns toward the tab strip. Unlike the old description-only
+        // pagination this moves existing meshes, so button state is retained
+        // and no panel rerender is needed while scrolling.
+        if (detailState.contentScrollMax > 0 && Math.abs(ts.y) > SCROLL_DEADZONE) {
+          const previous = detailState.contentScrollY;
+          const speed = Math.abs(ts.y) >= SCROLL_FULL_THRESHOLD ? 1.55 : 0.65;
+          detailState.contentScrollY = Math.max(0, Math.min(detailState.contentScrollMax,
+            previous + ts.y * speed * dt));
+          if (Math.abs(detailState.contentScrollY - previous) > 0.0001) {
+            updateDetailContentScroll();
           }
         }
         gridSmoother.reset();
